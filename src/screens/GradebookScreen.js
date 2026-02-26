@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Alert, ScrollView, Dimensions } from 'react-native';
+import { LineChart } from 'react-native-chart-kit';
+
+const screenWidth = Dimensions.get('window').width;
 
 export default function GradebookScreen() {
     // Upgraded dummy data to include an array of past assignments
@@ -7,6 +10,7 @@ export default function GradebookScreen() {
         {
             id: '1', name: 'AP Computer Science', grade: 94.5, credits: 1.0, isAP: true,
             assignments: [
+                { id: 'a0', title: 'Intro Lab', score: 100, weight: 10 },
                 { id: 'a1', title: 'Array Project', score: 98, weight: 10 },
                 { id: 'a2', title: 'Midterm', score: 91, weight: 20 }
             ]
@@ -14,6 +18,7 @@ export default function GradebookScreen() {
         {
             id: '2', name: 'Honors English', grade: 88.2, credits: 1.0, isAP: false,
             assignments: [
+                { id: 'e0', title: 'Poetry Project', score: 95, weight: 15 },
                 { id: 'e1', title: 'Gatsby Essay', score: 85, weight: 25 },
                 { id: 'e2', title: 'Reading Quiz', score: 92, weight: 5 }
             ]
@@ -21,6 +26,7 @@ export default function GradebookScreen() {
         {
             id: '3', name: 'Calculus BC', grade: 91.0, credits: 1.0, isAP: true,
             assignments: [
+                { id: 'c0', title: 'Limits Quiz', score: 85, weight: 10 },
                 { id: 'c1', title: 'Ch 6 Test', score: 89, weight: 30 },
                 { id: 'c2', title: 'Derivatives HW', score: 100, weight: 5 }
             ]
@@ -60,8 +66,6 @@ export default function GradebookScreen() {
     };
 
     // --- LOGIC: Target Score (Reverse Math) ---
-    // If: TargetGrade = (CurrentGrade * 1 + NeededScore * Weight%) / (1 + Weight%)
-    // Then: NeededScore = (TargetGrade * (1 + Weight%) - CurrentGrade) / Weight%
     const calculateRequiredScore = () => {
         if (!selectedClass) return;
         const current = selectedClass.grade;
@@ -89,7 +93,6 @@ export default function GradebookScreen() {
             else if (c.grade >= 70) pts = 2.0;
             else if (c.grade >= 60) pts = 1.0;
 
-            // Add AP bump usually +1.0 for AP/Honors
             if (c.isAP && pts > 0) pts += 1.0;
 
             totalPoints += (pts * c.credits);
@@ -99,13 +102,40 @@ export default function GradebookScreen() {
         return (totalPoints / totalCredits).toFixed(2);
     };
 
+    // --- UI: Formatter for Charts ---
+    const getChartData = () => {
+        if (!selectedClass || selectedClass.assignments.length === 0) return null;
+
+        let cumulativeGrade = selectedClass.assignments[0].score;
+        let runningData = [cumulativeGrade];
+        let labels = [selectedClass.assignments[0].title.substring(0, 5) + '...'];
+
+        for (let i = 1; i < selectedClass.assignments.length; i++) {
+            const asm = selectedClass.assignments[i];
+            // Simulate a highly simplified cumulative grade change over time
+            cumulativeGrade = ((cumulativeGrade * i) + asm.score) / (i + 1);
+            runningData.push(cumulativeGrade);
+            labels.push(asm.title.substring(0, 5) + '...');
+        }
+
+        if (hypotheticalResult && viewMode === 'whatIf') {
+            runningData.push(parseFloat(hypotheticalResult));
+            labels.push('NEW');
+        }
+
+        return {
+            labels: labels,
+            datasets: [{ data: runningData }]
+        };
+    };
+
     // --- UI: Render Items ---
     const renderClassItem = ({ item }) => (
         <TouchableOpacity
             style={[styles.classCard, selectedClass?.id === item.id && styles.selectedCard]}
             onPress={() => {
                 setSelectedClass(item);
-                setViewMode('assignments'); // default to assignment view
+                setViewMode('assignments');
                 setHypotheticalResult(null);
                 setRequiredScore(null);
             }}
@@ -170,14 +200,40 @@ export default function GradebookScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Assignments View */}
+                        {/* Assignments View with Chart */}
                         {viewMode === 'assignments' && (
-                            <FlatList
-                                data={selectedClass.assignments}
-                                keyExtractor={item => item.id}
-                                renderItem={renderAssignmentItem}
-                                style={{ marginTop: 10 }}
-                            />
+                            <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 10 }}>
+                                {getChartData() && (
+                                    <View style={{ alignItems: 'center', marginBottom: 15, marginTop: 5 }}>
+                                        <LineChart
+                                            data={getChartData()}
+                                            width={screenWidth - 70}
+                                            height={180}
+                                            yAxisSuffix="%"
+                                            withDots={true}
+                                            withInnerLines={false}
+                                            chartConfig={{
+                                                backgroundColor: "#fff",
+                                                backgroundGradientFrom: "#fff",
+                                                backgroundGradientTo: "#fff",
+                                                decimalPlaces: 1,
+                                                color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+                                                labelColor: (opacity = 1) => `rgba(100, 100, 100, ${opacity})`,
+                                                style: { borderRadius: 16 }
+                                            }}
+                                            bezier
+                                            style={{ borderRadius: 16 }}
+                                        />
+                                    </View>
+                                )}
+                                <Text style={styles.sectionTitle}>Assignments Log</Text>
+                                <FlatList
+                                    data={selectedClass.assignments}
+                                    keyExtractor={item => item.id}
+                                    renderItem={renderAssignmentItem}
+                                    scrollEnabled={false}
+                                />
+                            </ScrollView>
                         )}
 
                         {/* What If Calculator View */}
