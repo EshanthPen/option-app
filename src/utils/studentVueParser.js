@@ -1,0 +1,109 @@
+import { XMLParser } from 'fast-xml-parser';
+
+export const parseStudentVueGradebook = (xmlString) => {
+    try {
+        const parser = new XMLParser({
+            ignoreAttributes: false,
+            attributeNamePrefix: "@_"
+        });
+
+        const jsonObj = parser.parse(xmlString);
+
+        // The SOAP response wraps the actual XML string inside a Result node.
+        // Navigate down to the actual Gradebook XML string
+        const gradebookXmlString = jsonObj?.['soap:Envelope']?.['soap:Body']?.['ProcessWebServiceRequestResponse']?.['ProcessWebServiceRequestResult'];
+
+        if (!gradebookXmlString) {
+            console.error("Could not find Gradebook raw XML inside SOAP response");
+            return [];
+        }
+
+        // Parse that inner XML string
+        const innerJson = parser.parse(gradebookXmlString);
+
+        let xmlCourses = innerJson?.Gradebook?.Courses?.Course;
+        if (!xmlCourses) return [];
+
+        // If taking only 1 class, it might not be an array
+        if (!Array.isArray(xmlCourses)) {
+            xmlCourses = [xmlCourses];
+        }
+
+        const formattedClasses = [];
+
+        xmlCourses.forEach(course => {
+            const courseTitle = course['@_Title'] || 'Unknown Class';
+
+            // Check if class is AP (for GPA math)
+            const isAP = courseTitle.toUpperCase().includes('AP ');
+
+            // Navigate to Marks to get the current Grade
+            let marks = course?.Marks?.Mark;
+            let currentGrade = 0;
+
+            if (marks) {
+                // If there are multiple marking periods (Q1, Q2, S1), usually we want the most recent or active one.
+                // We'll just grab the first one that has a calculated score for simplicity in this MVP.
+                let targetMark = Array.isArray(marks) ? marks[marks.length - 1] : marks;
+                if (targetMark?.['@_CalculatedScoreRaw']) {
+                    currentGrade = parseFloat(targetMark['@_CalculatedScoreRaw']);
+                }
+            }
+
+            // Extract Assignments
+            const formattedAssignments = [];
+
+            // Navigate to assignments (Marks -> Mark -> Assignments -> Assignment)
+            // Due to how schools configure it, assignments might be inside specific Marks.
+            // Let's aggregate all assignments from all marks for this class
+            let allMarks = Array.isArray(marks) ? marks : [marks];
+
+            allMarks.forEach(m => {
+                if (!m) return;
+                let assignments = m?.Assignments?.Assignment;
+                if (!assignments) return;
+
+                if (!Array.isArray(assignments)) assignments = [assignments];
+
+                assignments.forEach((asm, index) => {
+                    const pointsStr = asm['@_Points']; // e.g., "45.00 / 50.0000"
+
+                    let percentage = 0;
+                    if (pointsStr && pointsStr.includes('/')) {
+                        const parts = pointsStr.split('/');
+                        const earned = parseFloat(parts[0]);
+                        const pos = parseFloat(parts[1]);
+                        if (pos > 0 && !isNaN(earned)) {
+                            percentage = (earned / pos) * 100;
+                        }
+                    }
+
+                    formattedAssignments.push({
+                        id: asm['@_GradebookID'] || `${courseTitle}-asm-${index}`,
+                        title: asm['@_Measure'] || asm['@_Type'] || 'Assignment',
+                        score: parseFloat(percentage.toFixed(1)),
+                        // StudentVUE doesn't immediately expose assignment weights unless requested deeply.
+                        // Defaulting to 10 for the mock UI to function.
+                        weight: 10
+                    });
+                });
+            });
+
+            // Put it all together into the format GradebookScreen expects
+            formattedClasses.push({
+                id: course['@_ClassID'] || courseTitle,
+                name: courseTitle,
+                grade: currentGrade,
+                credits: 1.0,
+                isAP: isAP,
+                assignments: formattedAssignments
+            });
+        });
+
+        return formattedClasses;
+
+    } catch (err) {
+        console.error("Error parsing StudentVUE XML:", err);
+        return [];
+    }
+};

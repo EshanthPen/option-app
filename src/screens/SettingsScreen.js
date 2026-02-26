@@ -5,6 +5,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
+import { parseStudentVueGradebook } from '../utils/studentVueParser';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -165,8 +166,17 @@ export default function SettingsScreen() {
 
             if (xmlText.includes('Gradebook') || xmlText.includes('RT_ERROR') === false) {
                 console.log("SUCCESSFULLY FETCHED GRADES!");
-                console.log(xmlText.substring(0, 1500)); // Log the first chunk of the XML
-                Alert.alert("Success!", "Logged in and fetched your grades! They will appear in the Gradebook Tab.");
+
+                // Parse the mess of XML into the clean JSON array GradebookScreen needs
+                const formattedClasses = parseStudentVueGradebook(xmlText);
+
+                if (formattedClasses && formattedClasses.length > 0) {
+                    await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
+                    console.log("Successfully saved " + formattedClasses.length + " classes to AsyncStorage.");
+                    Alert.alert("Success!", `Logged in and fetched ${formattedClasses.length} classes! They will appear in the Gradebook Tab.`);
+                } else {
+                    Alert.alert("Partial Data", "Logged in, but couldn't completely parse your class list.");
+                }
             } else {
                 Alert.alert("Login Failed", "Could not authenticate. Check your URL, ID, and Password.");
             }

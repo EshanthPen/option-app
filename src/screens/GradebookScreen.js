@@ -1,37 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Alert, ScrollView, Dimensions } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 
 const screenWidth = Dimensions.get('window').width;
 
 export default function GradebookScreen() {
-    // Upgraded dummy data to include an array of past assignments
-    const [classes, setClasses] = useState([
-        {
-            id: '1', name: 'AP Computer Science', grade: 94.5, credits: 1.0, isAP: true,
-            assignments: [
-                { id: 'a0', title: 'Intro Lab', score: 100, weight: 10 },
-                { id: 'a1', title: 'Array Project', score: 98, weight: 10 },
-                { id: 'a2', title: 'Midterm', score: 91, weight: 20 }
-            ]
-        },
-        {
-            id: '2', name: 'Honors English', grade: 88.2, credits: 1.0, isAP: false,
-            assignments: [
-                { id: 'e0', title: 'Poetry Project', score: 95, weight: 15 },
-                { id: 'e1', title: 'Gatsby Essay', score: 85, weight: 25 },
-                { id: 'e2', title: 'Reading Quiz', score: 92, weight: 5 }
-            ]
-        },
-        {
-            id: '3', name: 'Calculus BC', grade: 91.0, credits: 1.0, isAP: true,
-            assignments: [
-                { id: 'c0', title: 'Limits Quiz', score: 85, weight: 10 },
-                { id: 'c1', title: 'Ch 6 Test', score: 89, weight: 30 },
-                { id: 'c2', title: 'Derivatives HW', score: 100, weight: 5 }
-            ]
-        }
-    ]);
+    // Classes state now starts empty and loads from real synced data
+    const [classes, setClasses] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useFocusEffect(
+        useCallback(() => {
+            const loadGrades = async () => {
+                try {
+                    const storedGrades = await AsyncStorage.getItem('studentVueGrades');
+                    if (storedGrades) {
+                        setClasses(JSON.parse(storedGrades));
+                    } else {
+                        setClasses([]);
+                    }
+                } catch (e) {
+                    console.error("Failed to load grades from storage:", e);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+            loadGrades();
+        }, [])
+    );
 
     const [selectedClass, setSelectedClass] = useState(null);
     const [viewMode, setViewMode] = useState('assignments'); // 'assignments', 'whatIf', 'target'
@@ -171,13 +169,19 @@ export default function GradebookScreen() {
 
             <View style={styles.listContainer}>
                 <Text style={styles.sectionTitle}>Your Classes</Text>
-                <FlatList
-                    data={classes}
-                    keyExtractor={item => item.id}
-                    renderItem={renderClassItem}
-                    horizontal={false}
-                    showsVerticalScrollIndicator={false}
-                />
+                {isLoading ? (
+                    <Text style={styles.placeholderText}>Loading grades...</Text>
+                ) : classes.length === 0 ? (
+                    <Text style={styles.placeholderText}>No grades found. Go to the Settings tab and click "Sync Grades Now" to import from StudentVUE.</Text>
+                ) : (
+                    <FlatList
+                        data={classes}
+                        keyExtractor={item => item.id.toString()}
+                        renderItem={renderClassItem}
+                        horizontal={false}
+                        showsVerticalScrollIndicator={false}
+                    />
+                )}
             </View>
 
             <View style={styles.detailsContainer}>
