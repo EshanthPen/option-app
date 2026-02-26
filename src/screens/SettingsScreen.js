@@ -22,14 +22,11 @@ export default function SettingsScreen() {
 
     const isWeb = typeof window !== 'undefined' && window.location;
 
-    // Web requires exact origins, so we'll bypass the AuthSession proxy logic if we are running the local web server
+    // For Web, we MUST use the exact window location origin without any proxies,
+    // otherwise the OAuth return redirect drops the hook state.
     const redirectUri = isWeb
         ? window.location.origin
-        : AuthSession.makeRedirectUri({
-            scheme: 'optionapp',
-            useProxy: true,
-            projectNameForProxy: '@anonymous/option-app'
-        });
+        : AuthSession.makeRedirectUri({ useProxy: true });
 
     console.log("Current built Redirect URI: ", redirectUri);
 
@@ -55,7 +52,26 @@ export default function SettingsScreen() {
         loadToken();
     }, []);
 
+    // MANUAL WEB FALLBACK: If AuthSession drops state on the redirect back from Google, 
+    // manually parse the URL hash to extract the access token.
     useEffect(() => {
+        if (typeof window !== 'undefined' && window.location.hash) {
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            const token = hashParams.get('access_token');
+            if (token) {
+                console.log("MANUALLY INTERCEPTED GOOGLE TOKEN FROM URL!");
+                setAccessToken(token);
+                window.localStorage.setItem('googleAccessToken', token);
+                AsyncStorage.setItem('googleAccessToken', token);
+                window.alert("Success! Successfully linked your Google Account.");
+                // Clear the hash from the URL so it doesn't linger
+                window.history.replaceState(null, '', window.location.pathname);
+            }
+        }
+    }, []);
+
+    useEffect(() => {
+        console.log("Google Auth Response:", response);
         if (response?.type === 'success') {
             const token = response.authentication.accessToken;
             setAccessToken(token);
@@ -221,15 +237,22 @@ export default function SettingsScreen() {
                     </View>
                 ) : (
                     <TouchableOpacity
-                        style={styles.googleBtn}
+                        style={[styles.googleBtn, !request && { opacity: 0.5 }]}
+                        disabled={!request}
                         onPress={() => {
                             console.log("GOOGLE BUTTON CLICKED!");
                             console.log("EXACT REDIRECT URI:", redirectUri);
-                            // Fire promptAsync IMMEDIATELY so the browser's popup blocker doesn't stop it 
-                            promptAsync();
+                            console.log("AUTH REQUEST STATE:", request);
+                            if (request) {
+                                promptAsync();
+                            } else {
+                                if (typeof window !== 'undefined') window.alert("Still loading authentication flow. Please wait a second and try again.");
+                            }
                         }}
                     >
-                        <Text style={styles.googleBtnText}>Sign In with Google</Text>
+                        <Text style={styles.googleBtnText}>
+                            {request ? "Sign In with Google" : "Loading Auth..."}
+                        </Text>
                     </TouchableOpacity>
                 )}
             </View>
