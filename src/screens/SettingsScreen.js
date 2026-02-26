@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView 
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
+import { supabase } from '../supabaseClient';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -18,17 +19,24 @@ export default function SettingsScreen() {
     // Auth State
     const [accessToken, setAccessToken] = useState(null);
 
-    const redirectUri = AuthSession.makeRedirectUri({
-        scheme: 'optionapp',
-        useProxy: true,
-        projectNameForProxy: '@anonymous/option-app'
-    });
+    const isWeb = typeof window !== 'undefined' && window.location;
+
+    // Web requires exact origins, so we'll bypass the AuthSession proxy logic if we are running the local web server
+    const redirectUri = isWeb
+        ? window.location.origin
+        : AuthSession.makeRedirectUri({
+            scheme: 'optionapp',
+            useProxy: true,
+            projectNameForProxy: '@anonymous/option-app'
+        });
+
+    console.log("Current built Redirect URI: ", redirectUri);
 
     // Initialize Google Auth with placeholder Client IDs
     const [request, response, promptAsync] = Google.useAuthRequest({
         expoClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
-        iosClientId: '983893359997-4721f2ajg0j9v4eb5igqqehqhfjkqgu8.apps.googleusercontent.com',
-        androidClientId: 'PLACEHOLDER_ANDROID_CLIENT_ID.apps.googleusercontent.com',
+        iosClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
+        androidClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
         webClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
         scopes: ['https://www.googleapis.com/auth/calendar.events'],
         redirectUri,
@@ -43,8 +51,34 @@ export default function SettingsScreen() {
         }
     }, [response]);
 
-    const handleSave = () => {
-        Alert.alert('Saved!', 'Your manual calendar URLs have been saved.');
+    // Fetch Settings from Supabase on load
+    useEffect(() => {
+        const fetchSettings = async () => {
+            const { data, error } = await supabase
+                .from('settings')
+                .select('*')
+                .eq('user_id', 'default_user')
+                .single();
+
+            if (data && data.schoology_url) {
+                setSchoologyUrl(data.schoology_url);
+            }
+        };
+        fetchSettings();
+    }, []);
+
+    const handleSave = async () => {
+        try {
+            const { error } = await supabase
+                .from('settings')
+                .upsert({ user_id: 'default_user', schoology_url: schoologyUrl }, { onConflict: 'user_id' });
+
+            if (error) throw error;
+            Alert.alert('Saved!', 'Your manual calendar URLs have been saved to Supabase.');
+        } catch (error) {
+            console.error(error);
+            Alert.alert('Error', 'Failed to save settings to Supabase.');
+        }
     };
 
     const handleStudentVueLogin = async () => {
@@ -61,7 +95,7 @@ export default function SettingsScreen() {
             if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
             if (!baseUrl.startsWith('http')) baseUrl = 'https://' + baseUrl;
 
-            const endpoint = `${baseUrl}/Service/PXPCommunication.asmx`;
+            const endpoint = `https://cors-anywhere.herokuapp.com/${baseUrl}/Service/PXPCommunication.asmx`;
 
             const soapPayload = `<?xml version="1.0" encoding="utf-8"?>
             <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
@@ -164,17 +198,31 @@ export default function SettingsScreen() {
                 ) : (
                     <TouchableOpacity
                         style={styles.googleBtn}
-                        disabled={!request}
                         onPress={() => {
+                            console.log("GOOGLE BUTTON CLICKED!");
                             console.log("EXACT REDIRECT URI:", redirectUri);
-                            Alert.alert(
-                                'Debug Redirect URI',
-                                `Ensure this EXACT url is copied into Google Cloud 'Authorized redirect URIs' before logging in:\n\n${redirectUri}`,
-                                [
-                                    { text: 'Cancel', style: 'cancel' },
-                                    { text: 'Continue to Login', onPress: () => promptAsync() }
-                                ]
-                            );
+                            // On Web, Alert.alert sometimes behaves weirdly or halts execution.
+                            // Let's directly call promptAsync after a tiny delay, or just call it directly.
+                            if (typeof window !== 'undefined' && window.location) {
+                                // For debugging this specific redirect_uri_mismatch error:
+                                Alert.alert(
+                                    'Google Auth Debug',
+                                    `Your exact web origin is:\n\n${redirectUri}\n\nPlease ensure this exact string is in your Google Cloud 'Authorized redirect URIs' List.`,
+                                    [
+                                        { text: 'Cancel', style: 'cancel' },
+                                        { text: 'Continue to Login', onPress: () => promptAsync() }
+                                    ]
+                                );
+                            } else {
+                                Alert.alert(
+                                    'Debug Redirect URI',
+                                    `Ensure this EXACT url is copied into Google Cloud 'Authorized redirect URIs' before logging in:\n\n${redirectUri}`,
+                                    [
+                                        { text: 'Cancel', style: 'cancel' },
+                                        { text: 'Continue to Login', onPress: () => promptAsync() }
+                                    ]
+                                );
+                            }
                         }}
                     >
                         <Text style={styles.googleBtnText}>Sign In with Google</Text>

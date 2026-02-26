@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, FlatList, Alert } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import ICAL from 'ical.js';
+import { supabase } from '../supabaseClient';
 
 export default function MatrixScreen() {
     const [tasks, setTasks] = useState([]);
@@ -13,11 +14,20 @@ export default function MatrixScreen() {
     const [importance, setImportance] = useState('5');
     const [duration, setDuration] = useState('60');
 
-    const handleAddTask = () => {
+    useEffect(() => {
+        fetchTasks();
+    }, []);
+
+    const fetchTasks = async () => {
+        const { data, error } = await supabase.from('tasks').select('*').order('created_at', { ascending: false });
+        if (data) setTasks(data);
+        if (error) console.error("Error fetching tasks:", error);
+    };
+
+    const handleAddTask = async () => {
         if (!title.trim()) return;
 
         const newTask = {
-            id: Date.now().toString(),
             title,
             urgency: parseInt(urgency) || 5,
             importance: parseInt(importance) || 5,
@@ -25,7 +35,17 @@ export default function MatrixScreen() {
             source: 'manual'
         };
 
-        setTasks([...tasks, newTask]);
+        const { data, error } = await supabase.from('tasks').insert([newTask]).select();
+
+        if (error) {
+            Alert.alert("Error", "Could not save task to Supabase.");
+            return;
+        }
+
+        if (data && data.length > 0) {
+            setTasks([...tasks, data[0]]);
+        }
+
         setModalVisible(false);
         setTitle('');
     };
@@ -78,8 +98,15 @@ export default function MatrixScreen() {
                 });
 
                 if (importedTasks.length > 0) {
-                    setTasks([...tasks, ...importedTasks]);
-                    Alert.alert('Success', `Imported ${importedTasks.length} Schoology assignments!`);
+                    const { data, error } = await supabase.from('tasks').insert(importedTasks).select();
+                    if (error) {
+                        Alert.alert('Error', 'Failed to save imported tasks to Supabase.');
+                        return;
+                    }
+                    if (data) {
+                        setTasks([...tasks, ...data]);
+                        Alert.alert('Success', `Imported ${data.length} Schoology assignments!`);
+                    }
                 } else {
                     Alert.alert('Empty', 'No events found in the Schoology calendar.');
                 }
