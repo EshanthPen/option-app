@@ -124,12 +124,17 @@ export default function SettingsScreen() {
 
     const handleStudentVueLogin = async () => {
         if (!svUrl || !svUser || !svPass) {
-            Alert.alert("Missing Fields", "Please enter your portal URL, Username, and Password.");
+            if (typeof window !== 'undefined') window.alert("Missing Fields: Please enter your portal URL, Username, and Password.");
+            else Alert.alert("Missing Fields", "Please enter your portal URL, Username, and Password.");
             return;
         }
 
         try {
-            Alert.alert("Syncing...", "Attempting to securely log into StudentVUE...");
+            if (typeof window === 'undefined') {
+                Alert.alert("Syncing...", "Attempting to securely log into StudentVUE...");
+            } else {
+                console.log("Syncing: Attempting to securely log into StudentVUE...");
+            }
 
             // Format URL to strip trailing slashes and ensure https
             let baseUrl = svUrl.trim();
@@ -173,16 +178,20 @@ export default function SettingsScreen() {
                 if (formattedClasses && formattedClasses.length > 0) {
                     await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
                     console.log("Successfully saved " + formattedClasses.length + " classes to AsyncStorage.");
-                    Alert.alert("Success!", `Logged in and fetched ${formattedClasses.length} classes! They will appear in the Gradebook Tab.`);
+                    if (typeof window !== 'undefined') window.alert(`Success! Logged in and fetched ${formattedClasses.length} classes! They will appear in the Gradebook Tab.`);
+                    else Alert.alert("Success!", `Logged in and fetched ${formattedClasses.length} classes! They will appear in the Gradebook Tab.`);
                 } else {
-                    Alert.alert("Partial Data", "Logged in, but couldn't completely parse your class list.");
+                    if (typeof window !== 'undefined') window.alert("Partial Data: Logged in, but couldn't completely parse your class list.");
+                    else Alert.alert("Partial Data", "Logged in, but couldn't completely parse your class list.");
                 }
             } else {
-                Alert.alert("Login Failed", "Could not authenticate. Check your URL, ID, and Password.");
+                if (typeof window !== 'undefined') window.alert("Login Failed: Could not authenticate. Check your URL, ID, and Password.");
+                else Alert.alert("Login Failed", "Could not authenticate. Check your URL, ID, and Password.");
             }
         } catch (error) {
             console.error(error);
-            Alert.alert("Network Error", "Could not reach the StudentVUE portal. Check the URL.");
+            if (typeof window !== 'undefined') window.alert("Network Error: Could not reach the StudentVUE portal. Check the URL.");
+            else Alert.alert("Network Error", "Could not reach the StudentVUE portal. Check the URL.");
         }
     };
 
