@@ -205,14 +205,8 @@ export default function SettingsScreen() {
                             // Let's directly call promptAsync after a tiny delay, or just call it directly.
                             if (typeof window !== 'undefined' && window.location) {
                                 // For debugging this specific redirect_uri_mismatch error:
-                                Alert.alert(
-                                    'Google Auth Debug',
-                                    `Your exact web origin is:\n\n${redirectUri}\n\nPlease ensure this exact string is in your Google Cloud 'Authorized redirect URIs' List.`,
-                                    [
-                                        { text: 'Cancel', style: 'cancel' },
-                                        { text: 'Continue to Login', onPress: () => promptAsync() }
-                                    ]
-                                );
+                                window.alert(`Google Auth Debug\n\nYour exact web origin is:\n\n${redirectUri}\n\nPlease ensure this exact string is in your Google Cloud 'Authorized redirect URIs' and 'Authorized JavaScript origins' List.\n\nClick OK to continue and open the login popup.`);
+                                promptAsync();
                             } else {
                                 Alert.alert(
                                     'Debug Redirect URI',
