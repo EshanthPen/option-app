@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
-import studentvue from 'studentvue.js';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -48,19 +47,49 @@ export default function SettingsScreen() {
         try {
             Alert.alert("Syncing...", "Attempting to securely log into StudentVUE...");
 
-            // Log in and create the client session
-            await studentvue.login(svUrl, svUser, svPass);
+            // Format URL to strip trailing slashes and ensure https
+            let baseUrl = svUrl.trim();
+            if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+            if (!baseUrl.startsWith('http')) baseUrl = 'https://' + baseUrl;
 
-            // If successful, fetch the gradebook XML payload
-            const gradebookData = await studentvue.getGradebook();
+            const endpoint = `${baseUrl}/Service/PXPCommunication.asmx`;
 
-            console.log("SUCCESSFULLY FETCHED GRADES!");
-            console.log(gradebookData);
+            const soapPayload = `<?xml version="1.0" encoding="utf-8"?>
+            <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+            <soap:Body>
+                <ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/">
+                <userID>${svUser}</userID>
+                <password>${svPass}</password>
+                <skipLoginLog>true</skipLoginLog>
+                <parent>false</parent>
+                <webServiceHandleName>PXPWebServices</webServiceHandleName>
+                <methodName>Gradebook</methodName>
+                <paramStr>&lt;Parms&gt;&lt;ChildIntID&gt;0&lt;/ChildIntID&gt;&lt;/Parms&gt;</paramStr>
+                </ProcessWebServiceRequest>
+            </soap:Body>
+            </soap:Envelope>`;
 
-            Alert.alert("Success!", "Logged in and fetched your grades! They will appear in the Gradebook Tab (Console Logging for safety right now).");
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/xml; charset=utf-8',
+                    'SOAPAction': 'http://edupoint.com/webservices/ProcessWebServiceRequest'
+                },
+                body: soapPayload
+            });
+
+            const xmlText = await response.text();
+
+            if (xmlText.includes('Gradebook') || xmlText.includes('RT_ERROR') === false) {
+                console.log("SUCCESSFULLY FETCHED GRADES!");
+                console.log(xmlText.substring(0, 1500)); // Log the first chunk of the XML
+                Alert.alert("Success!", "Logged in and fetched your grades! They will appear in the Gradebook Tab.");
+            } else {
+                Alert.alert("Login Failed", "Could not authenticate. Check your URL, ID, and Password.");
+            }
         } catch (error) {
             console.error(error);
-            Alert.alert("Login Failed", "Could not authenticate. Please double check your URL, ID, and Password.");
+            Alert.alert("Network Error", "Could not reach the StudentVUE portal. Check the URL.");
         }
     };
 
