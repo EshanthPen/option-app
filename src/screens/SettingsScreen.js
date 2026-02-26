@@ -225,22 +225,8 @@ export default function SettingsScreen() {
                         onPress={() => {
                             console.log("GOOGLE BUTTON CLICKED!");
                             console.log("EXACT REDIRECT URI:", redirectUri);
-                            // On Web, Alert.alert sometimes behaves weirdly or halts execution.
-                            // Let's directly call promptAsync after a tiny delay, or just call it directly.
-                            if (typeof window !== 'undefined' && window.location) {
-                                // For debugging this specific redirect_uri_mismatch error:
-                                window.alert(`Google Auth Debug\n\nYour exact web origin is:\n\n${redirectUri}\n\nPlease ensure this exact string is in your Google Cloud 'Authorized redirect URIs' and 'Authorized JavaScript origins' List.\n\nClick OK to continue and open the login popup.`);
-                                promptAsync();
-                            } else {
-                                Alert.alert(
-                                    'Debug Redirect URI',
-                                    `Ensure this EXACT url is copied into Google Cloud 'Authorized redirect URIs' before logging in:\n\n${redirectUri}`,
-                                    [
-                                        { text: 'Cancel', style: 'cancel' },
-                                        { text: 'Continue to Login', onPress: () => promptAsync() }
-                                    ]
-                                );
-                            }
+                            // Fire promptAsync IMMEDIATELY so the browser's popup blocker doesn't stop it 
+                            promptAsync();
                         }}
                     >
                         <Text style={styles.googleBtnText}>Sign In with Google</Text>
