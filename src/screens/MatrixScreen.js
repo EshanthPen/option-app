@@ -30,18 +30,21 @@ export default function MatrixScreen() {
         setTitle('');
     };
 
-    const importICS = async () => {
-        try {
-            const result = await DocumentPicker.getDocumentAsync({
-                type: ['text/calendar', 'application/ics', '*/*'],
-                copyToCacheDirectory: true,
-            });
+    const importICSFromUrl = async () => {
+        // In a real app we'd fetch the saved URL from Firebase/AsyncStorage.
+        // For this prototype, we ask the user to paste it here to test.
+        Alert.prompt('Import Schoology', 'Paste your Schoology webcal:// or https:// link here', async (url) => {
+            if (!url) return;
 
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-                const fileUri = result.assets[0].uri;
+            // Fix Apple webcal protocol to http for the fetch API
+            let fetchUrl = url.trim();
+            if (fetchUrl.startsWith('webcal://')) {
+                fetchUrl = fetchUrl.replace('webcal://', 'https://');
+            }
 
-                // Fetch the file contents
-                const response = await fetch(fileUri);
+            try {
+                const response = await fetch(fetchUrl);
+                if (!response.ok) throw new Error('Network response was not ok');
                 const icsData = await response.text();
 
                 // Parse the ICS data
@@ -51,28 +54,40 @@ export default function MatrixScreen() {
 
                 const importedTasks = vevents.map((vevent, index) => {
                     const event = new ICAL.Event(vevent);
+                    // Decide quadrant based on string matching (e.g. Test = high urgency/importance)
+                    const titleLowerCase = event.summary.toLowerCase();
+                    let urgencyVal = 5;
+                    let importanceVal = 5;
+
+                    if (titleLowerCase.includes('test') || titleLowerCase.includes('exam')) {
+                        urgencyVal = 9; importanceVal = 10;
+                    } else if (titleLowerCase.includes('project')) {
+                        urgencyVal = 7; importanceVal = 9;
+                    } else if (titleLowerCase.includes('hw') || titleLowerCase.includes('homework')) {
+                        urgencyVal = 8; importanceVal = 4;
+                    }
+
                     return {
                         id: `ics-${Date.now()}-${index}`,
                         title: event.summary,
-                        // Automatically estimating high importance/urgency for calendar events
-                        urgency: 8,
-                        importance: 8,
-                        duration: 60, // Default 1 hour if not calculable
-                        source: 'calendar_import'
+                        urgency: urgencyVal,
+                        importance: importanceVal,
+                        duration: 60, // Default 1 hour
+                        source: 'schoology_import'
                     };
                 });
 
                 if (importedTasks.length > 0) {
                     setTasks([...tasks, ...importedTasks]);
-                    Alert.alert('Success', `Imported ${importedTasks.length} tasks from calendar!`);
+                    Alert.alert('Success', `Imported ${importedTasks.length} Schoology assignments!`);
                 } else {
-                    Alert.alert('Empty', 'No events found in the selected file.');
+                    Alert.alert('Empty', 'No events found in the Schoology calendar.');
                 }
+            } catch (error) {
+                console.error("Error fetching Schoology URL:", error);
+                Alert.alert('Error', 'Failed to fetch the Schoology calendar. Ensure the link is public and valid.');
             }
-        } catch (error) {
-            console.error("Error parsing ICS:", error);
-            Alert.alert('Error', 'Failed to read the calendar file. Make sure it is a valid .ics file.');
-        }
+        });
     };
 
     // Helper to filter tasks by quadrant
@@ -137,8 +152,8 @@ export default function MatrixScreen() {
                     <Text style={styles.addButtonText}>+ Add Task manually</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.addButton, { backgroundColor: '#34C759' }]} onPress={importICS}>
-                    <Text style={styles.addButtonText}>📥 Import .ICS</Text>
+                <TouchableOpacity style={[styles.addButton, { backgroundColor: '#34C759' }]} onPress={importICSFromUrl}>
+                    <Text style={styles.addButtonText}>📥 Import Schoology</Text>
                 </TouchableOpacity>
             </View>
 
