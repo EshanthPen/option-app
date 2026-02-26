@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import * as AuthSession from 'expo-auth-session';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -17,12 +18,19 @@ export default function SettingsScreen() {
     // Auth State
     const [accessToken, setAccessToken] = useState(null);
 
+    const redirectUri = AuthSession.makeRedirectUri({
+        scheme: 'optionapp',
+        useProxy: true,
+    });
+
     // Initialize Google Auth with placeholder Client IDs
     const [request, response, promptAsync] = Google.useAuthRequest({
+        expoClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
         iosClientId: '983893359997-4721f2ajg0j9v4eb5igqqehqhfjkqgu8.apps.googleusercontent.com',
         androidClientId: 'PLACEHOLDER_ANDROID_CLIENT_ID.apps.googleusercontent.com',
         webClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
         scopes: ['https://www.googleapis.com/auth/calendar.events'],
+        redirectUri,
     });
 
     useEffect(() => {
@@ -156,7 +164,17 @@ export default function SettingsScreen() {
                     <TouchableOpacity
                         style={styles.googleBtn}
                         disabled={!request}
-                        onPress={() => promptAsync()}
+                        onPress={() => {
+                            console.log("EXACT REDIRECT URI:", redirectUri);
+                            Alert.alert(
+                                'Debug Redirect URI',
+                                `Ensure this EXACT url is copied into Google Cloud 'Authorized redirect URIs' before logging in:\n\n${redirectUri}`,
+                                [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    { text: 'Continue to Login', onPress: () => promptAsync() }
+                                ]
+                            );
+                        }}
                     >
                         <Text style={styles.googleBtnText}>Sign In with Google</Text>
                     </TouchableOpacity>
