@@ -2,50 +2,112 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Alert, ScrollView } from 'react-native';
 
 export default function GradebookScreen() {
+    // Upgraded dummy data to include an array of past assignments
     const [classes, setClasses] = useState([
-        { id: '1', name: 'AP Computer Science', grade: 94.5 },
-        { id: '2', name: 'Honors English', grade: 88.2 },
-        { id: '3', name: 'Calculus BC', grade: 91.0 }
+        {
+            id: '1', name: 'AP Computer Science', grade: 94.5, credits: 1.0, isAP: true,
+            assignments: [
+                { id: 'a1', title: 'Array Project', score: 98, weight: 10 },
+                { id: 'a2', title: 'Midterm', score: 91, weight: 20 }
+            ]
+        },
+        {
+            id: '2', name: 'Honors English', grade: 88.2, credits: 1.0, isAP: false,
+            assignments: [
+                { id: 'e1', title: 'Gatsby Essay', score: 85, weight: 25 },
+                { id: 'e2', title: 'Reading Quiz', score: 92, weight: 5 }
+            ]
+        },
+        {
+            id: '3', name: 'Calculus BC', grade: 91.0, credits: 1.0, isAP: true,
+            assignments: [
+                { id: 'c1', title: 'Ch 6 Test', score: 89, weight: 30 },
+                { id: 'c2', title: 'Derivatives HW', score: 100, weight: 5 }
+            ]
+        }
     ]);
 
     const [selectedClass, setSelectedClass] = useState(null);
+    const [viewMode, setViewMode] = useState('assignments'); // 'assignments', 'whatIf', 'target'
 
-    // Hypothetical Calculator State
-    const [currentWeight, setCurrentWeight] = useState('100');
+    // Hypothetical Calculator State (What If)
     const [newAssignmentScore, setNewAssignmentScore] = useState('');
     const [newAssignmentWeight, setNewAssignmentWeight] = useState('');
     const [hypotheticalResult, setHypotheticalResult] = useState(null);
 
+    // Reverse Calculator State (Target)
+    const [targetGrade, setTargetGrade] = useState('');
+    const [targetWeight, setTargetWeight] = useState('');
+    const [requiredScore, setRequiredScore] = useState(null);
+
+    // --- LOGIC: What If ---
     const calculateHypothetical = () => {
         if (!selectedClass) return;
-
         const currentGrade = selectedClass.grade;
         const score = parseFloat(newAssignmentScore);
         const weight = parseFloat(newAssignmentWeight);
 
         if (isNaN(score) || isNaN(weight)) {
-            Alert.alert('Invalid Input', 'Please enter valid numbers for score and weight.');
-            return;
+            Alert.alert('Invalid Input', 'Please enter valid numbers.'); return;
         }
 
-        // Extremely simplified points/weight calculation for demonstration
-        // Assuming current grade represents (currentWeight)% of the class
-        // and the new assignment represents (weight)% of the new total.
         const currentPoints = currentGrade * 1;
         const newPoints = score * (weight / 100);
         const newTotalWeight = 1 + (weight / 100);
-
         const newGrade = (currentPoints + newPoints) / newTotalWeight;
 
         setHypotheticalResult(newGrade.toFixed(2));
     };
 
+    // --- LOGIC: Target Score (Reverse Math) ---
+    // If: TargetGrade = (CurrentGrade * 1 + NeededScore * Weight%) / (1 + Weight%)
+    // Then: NeededScore = (TargetGrade * (1 + Weight%) - CurrentGrade) / Weight%
+    const calculateRequiredScore = () => {
+        if (!selectedClass) return;
+        const current = selectedClass.grade;
+        const target = parseFloat(targetGrade);
+        const weight = parseFloat(targetWeight) / 100;
+
+        if (isNaN(target) || isNaN(weight) || weight <= 0) {
+            Alert.alert('Invalid Input', 'Please enter valid target numbers.'); return;
+        }
+
+        const needed = (target * (1 + weight) - current) / weight;
+        setRequiredScore(needed.toFixed(1));
+    };
+
+    // --- LOGIC: Overall GPA ---
+    const calculateOverallGPA = () => {
+        if (classes.length === 0) return "0.00";
+        let totalPoints = 0;
+        let totalCredits = 0;
+
+        classes.forEach(c => {
+            let pts = 0;
+            if (c.grade >= 90) pts = 4.0;
+            else if (c.grade >= 80) pts = 3.0;
+            else if (c.grade >= 70) pts = 2.0;
+            else if (c.grade >= 60) pts = 1.0;
+
+            // Add AP bump usually +1.0 for AP/Honors
+            if (c.isAP && pts > 0) pts += 1.0;
+
+            totalPoints += (pts * c.credits);
+            totalCredits += c.credits;
+        });
+
+        return (totalPoints / totalCredits).toFixed(2);
+    };
+
+    // --- UI: Render Items ---
     const renderClassItem = ({ item }) => (
         <TouchableOpacity
             style={[styles.classCard, selectedClass?.id === item.id && styles.selectedCard]}
             onPress={() => {
                 setSelectedClass(item);
+                setViewMode('assignments'); // default to assignment view
                 setHypotheticalResult(null);
+                setRequiredScore(null);
             }}
         >
             <Text style={styles.className}>{item.name}</Text>
@@ -58,9 +120,24 @@ export default function GradebookScreen() {
         </TouchableOpacity>
     );
 
+    const renderAssignmentItem = ({ item }) => (
+        <View style={styles.assignmentCard}>
+            <View>
+                <Text style={styles.assignmentTitle}>{item.title}</Text>
+                <Text style={styles.assignmentWeight}>Weight: {item.weight}%</Text>
+            </View>
+            <Text style={styles.assignmentScore}>{item.score}%</Text>
+        </View>
+    );
+
     return (
         <View style={styles.container}>
-            <Text style={styles.header}>Gradebook</Text>
+            <View style={styles.headerRow}>
+                <Text style={styles.header}>Gradebook</Text>
+                <View style={styles.gpaBadge}>
+                    <Text style={styles.gpaText}>GPA: {calculateOverallGPA()}</Text>
+                </View>
+            </View>
 
             <View style={styles.listContainer}>
                 <Text style={styles.sectionTitle}>Your Classes</Text>
@@ -73,54 +150,83 @@ export default function GradebookScreen() {
                 />
             </View>
 
-            <View style={styles.calculatorContainer}>
-                <Text style={styles.sectionTitle}>"What If" Calculator</Text>
-
+            <View style={styles.detailsContainer}>
                 {!selectedClass ? (
-                    <Text style={styles.placeholderText}>Select a class above to calculate hypothetical grades.</Text>
+                    <Text style={styles.placeholderText}>Select a class above to view assignments or calculate hypotheticals.</Text>
                 ) : (
-                    <ScrollView ScrollView showsVerticalScrollIndicator={false}>
-                        <Text style={styles.selectedClassText}>
-                            Calculating for: <Text style={{ fontWeight: 'bold' }}>{selectedClass.name}</Text>
-                        </Text>
-                        <Text style={styles.currentGradeText}>
-                            Current Grade: {selectedClass.grade}%
-                        </Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.selectedClassText}>{selectedClass.name} - {selectedClass.grade}%</Text>
 
-                        <Text style={styles.label}>Grade on new assignment (0-100%):</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="e.g. 95"
-                            keyboardType="numeric"
-                            value={newAssignmentScore}
-                            onChangeText={setNewAssignmentScore}
-                        />
+                        {/* Tab Buttons */}
+                        <View style={styles.tabRow}>
+                            <TouchableOpacity style={[styles.tabBtn, viewMode === 'assignments' && styles.tabBtnActive]} onPress={() => setViewMode('assignments')}>
+                                <Text style={[styles.tabText, viewMode === 'assignments' && styles.tabTextActive]}>Assignments</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.tabBtn, viewMode === 'whatIf' && styles.tabBtnActive]} onPress={() => setViewMode('whatIf')}>
+                                <Text style={[styles.tabText, viewMode === 'whatIf' && styles.tabTextActive]}>What If?</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.tabBtn, viewMode === 'target' && styles.tabBtnActive]} onPress={() => setViewMode('target')}>
+                                <Text style={[styles.tabText, viewMode === 'target' && styles.tabTextActive]}>Target</Text>
+                            </TouchableOpacity>
+                        </View>
 
-                        <Text style={styles.label}>Weight of new assignment (approx % of total grade):</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="e.g. 10"
-                            keyboardType="numeric"
-                            value={newAssignmentWeight}
-                            onChangeText={setNewAssignmentWeight}
-                        />
-
-                        <TouchableOpacity style={styles.calcButton} onPress={calculateHypothetical}>
-                            <Text style={styles.calcButtonText}>Calculate New Grade</Text>
-                        </TouchableOpacity>
-
-                        {hypotheticalResult && (
-                            <View style={styles.resultBox}>
-                                <Text style={styles.resultLabel}>If you score {newAssignmentScore}%, your new grade will be:</Text>
-                                <Text style={[
-                                    styles.resultValue,
-                                    { color: parseFloat(hypotheticalResult) >= selectedClass.grade ? '#34C759' : '#FF3B30' }
-                                ]}>
-                                    {hypotheticalResult}%
-                                </Text>
-                            </View>
+                        {/* Assignments View */}
+                        {viewMode === 'assignments' && (
+                            <FlatList
+                                data={selectedClass.assignments}
+                                keyExtractor={item => item.id}
+                                renderItem={renderAssignmentItem}
+                                style={{ marginTop: 10 }}
+                            />
                         )}
-                    </ScrollView>
+
+                        {/* What If Calculator View */}
+                        {viewMode === 'whatIf' && (
+                            <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 10 }}>
+                                <Text style={styles.label}>Grade on new assignment (0-100%):</Text>
+                                <TextInput style={styles.input} placeholder="e.g. 95" keyboardType="numeric" value={newAssignmentScore} onChangeText={setNewAssignmentScore} />
+
+                                <Text style={styles.label}>Weight of new assignment (%):</Text>
+                                <TextInput style={styles.input} placeholder="e.g. 10" keyboardType="numeric" value={newAssignmentWeight} onChangeText={setNewAssignmentWeight} />
+
+                                <TouchableOpacity style={styles.calcButton} onPress={calculateHypothetical}>
+                                    <Text style={styles.calcButtonText}>Calculate</Text>
+                                </TouchableOpacity>
+
+                                {hypotheticalResult && (
+                                    <View style={styles.resultBox}>
+                                        <Text style={styles.resultLabel}>If you score {newAssignmentScore}%, your new grade is:</Text>
+                                        <Text style={styles.resultValue}>{hypotheticalResult}%</Text>
+                                    </View>
+                                )}
+                            </ScrollView>
+                        )}
+
+                        {/* Target Calculator View */}
+                        {viewMode === 'target' && (
+                            <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 10 }}>
+                                <Text style={styles.label}>What overall grade do you want? (%)</Text>
+                                <TextInput style={styles.input} placeholder="e.g. 90" keyboardType="numeric" value={targetGrade} onChangeText={setTargetGrade} />
+
+                                <Text style={styles.label}>How much is this next test worth? (%):</Text>
+                                <TextInput style={styles.input} placeholder="e.g. 20" keyboardType="numeric" value={targetWeight} onChangeText={setTargetWeight} />
+
+                                <TouchableOpacity style={styles.calcButton} onPress={calculateRequiredScore}>
+                                    <Text style={styles.calcButtonText}>Find Needed Score</Text>
+                                </TouchableOpacity>
+
+                                {requiredScore && (
+                                    <View style={styles.resultBox}>
+                                        <Text style={styles.resultLabel}>To end up with a {targetGrade}%, you need at least:</Text>
+                                        <Text style={[styles.resultValue, { color: parseFloat(requiredScore) > 100 ? '#FF3B30' : '#34C759' }]}>
+                                            {requiredScore}%
+                                        </Text>
+                                        {parseFloat(requiredScore) > 100 && <Text style={{ color: '#FF3B30', fontSize: 12, marginTop: 5 }}>Warning: This requires extra credit!</Text>}
+                                    </View>
+                                )}
+                            </ScrollView>
+                        )}
+                    </View>
                 )}
             </View>
         </View>
@@ -128,27 +234,39 @@ export default function GradebookScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#f9f9f9' },
-    header: { fontSize: 28, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: '#333' },
+    container: { flex: 1, padding: 20, backgroundColor: '#f9f9f9', paddingTop: 50 },
+    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    header: { fontSize: 28, fontWeight: 'bold', color: '#333' },
+    gpaBadge: { backgroundColor: '#333', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15 },
+    gpaText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
     sectionTitle: { fontSize: 18, fontWeight: '600', marginBottom: 10, color: '#444' },
 
-    listContainer: { flex: 0.4, marginBottom: 20 },
+    listContainer: { flex: 0.35, marginBottom: 15 },
     classCard: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2, borderWidth: 1, borderColor: 'transparent' },
     selectedCard: { borderColor: '#007AFF', backgroundColor: '#f0f8ff' },
     className: { fontSize: 16, fontWeight: '500', color: '#333' },
     classGrade: { fontSize: 16, fontWeight: 'bold' },
 
-    calculatorContainer: { flex: 0.6, backgroundColor: '#fff', padding: 20, borderRadius: 15, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
-    placeholderText: { color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: 20 },
-    selectedClassText: { fontSize: 16, marginBottom: 5, color: '#333' },
-    currentGradeText: { fontSize: 16, marginBottom: 20, color: '#666' },
-    label: { fontSize: 14, color: '#555', marginBottom: 5 },
-    input: { backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, marginBottom: 15, fontSize: 16 },
+    detailsContainer: { flex: 0.65, backgroundColor: '#fff', padding: 15, borderRadius: 15, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
+    placeholderText: { color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: 40 },
+    selectedClassText: { fontSize: 20, fontWeight: 'bold', marginBottom: 15, color: '#333', textAlign: 'center' },
 
-    calcButton: { backgroundColor: '#007AFF', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 10 },
+    tabRow: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 8, padding: 4, marginBottom: 10 },
+    tabBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6 },
+    tabBtnActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
+    tabText: { fontSize: 14, color: '#666', fontWeight: '500' },
+    tabTextActive: { color: '#007AFF', fontWeight: 'bold' },
+
+    assignmentCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
+    assignmentTitle: { fontSize: 15, fontWeight: '500', color: '#333' },
+    assignmentWeight: { fontSize: 12, color: '#888', marginTop: 2 },
+    assignmentScore: { fontSize: 16, fontWeight: '600', color: '#007AFF' },
+
+    label: { fontSize: 14, color: '#555', marginBottom: 5, marginTop: 10 },
+    input: { backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 16 },
+    calcButton: { backgroundColor: '#007AFF', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 20 },
     calcButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-
     resultBox: { marginTop: 20, padding: 15, backgroundColor: '#f0f8ff', borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#cce5ff' },
     resultLabel: { fontSize: 14, color: '#555', marginBottom: 5, textAlign: 'center' },
-    resultValue: { fontSize: 32, fontWeight: 'bold' }
+    resultValue: { fontSize: 32, fontWeight: 'bold', color: '#333' }
 });
