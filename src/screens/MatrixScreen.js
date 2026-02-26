@@ -122,11 +122,13 @@ export default function MatrixScreen() {
         try {
             const token = await AsyncStorage.getItem('googleAccessToken');
             if (!token) {
-                Alert.alert('Not Signed In', 'Please go to the Settings tab and sign in with Google first.');
+                if (typeof window !== 'undefined') window.alert('Please go to the Settings tab and sign in with Google first.');
+                else Alert.alert('Not Signed In', 'Please go to the Settings tab and sign in with Google first.');
                 return;
             }
 
-            Alert.alert("Scheduling...", `Blocking ${task.duration} minutes for "${task.title}"...`);
+            if (typeof window !== 'undefined') window.alert(`Blocking ${task.duration} minutes for "${task.title}"...`);
+            else Alert.alert("Scheduling...", `Blocking ${task.duration} minutes for "${task.title}"...`);
 
             const startTime = new Date();
             const endTime = new Date(startTime.getTime() + task.duration * 60 * 1000);
@@ -148,15 +150,18 @@ export default function MatrixScreen() {
             });
 
             if (res.ok) {
-                Alert.alert('Success!', `Successfully scheduled "${task.title}" on your Google Calendar!`);
+                if (typeof window !== 'undefined') window.alert(`Successfully scheduled "${task.title}" on your Google Calendar!`);
+                else Alert.alert('Success!', `Successfully scheduled "${task.title}" on your Google Calendar!`);
             } else {
                 const errorData = await res.json();
                 console.error("Google Calendar Error:", errorData);
                 if (errorData.error && errorData.error.code === 401) {
-                    Alert.alert('Session Expired', 'Your Google session expired. Please re-authenticate in Settings.');
+                    if (typeof window !== 'undefined') window.alert('Your Google session expired. Please re-authenticate in Settings.');
+                    else Alert.alert('Session Expired', 'Your Google session expired. Please re-authenticate in Settings.');
                     AsyncStorage.removeItem('googleAccessToken');
                 } else {
-                    Alert.alert('Calendar Error', 'Failed to insert the event.');
+                    if (typeof window !== 'undefined') window.alert('Failed to insert the event.');
+                    else Alert.alert('Calendar Error', 'Failed to insert the event.');
                 }
             }
         } catch (error) {
