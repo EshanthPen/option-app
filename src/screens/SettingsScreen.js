@@ -14,9 +14,9 @@ export default function SettingsScreen() {
 
     // Initialize Google Auth with placeholder Client IDs
     const [request, response, promptAsync] = Google.useAuthRequest({
-        iosClientId: 'PLACEHOLDER_IOS_CLIENT_ID.apps.googleusercontent.com',
+        iosClientId: '983893359997-4721f2ajg0j9v4eb5igqqehqhfjkqgu8.apps.googleusercontent.com',
         androidClientId: 'PLACEHOLDER_ANDROID_CLIENT_ID.apps.googleusercontent.com',
-        webClientId: 'PLACEHOLDER_WEB_CLIENT_ID.apps.googleusercontent.com',
+        webClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
         scopes: ['https://www.googleapis.com/auth/calendar.events'],
     });
 
