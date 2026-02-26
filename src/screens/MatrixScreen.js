@@ -120,7 +120,11 @@ export default function MatrixScreen() {
 
     const blockTaskOnCalendar = async (task) => {
         try {
-            const token = await AsyncStorage.getItem('googleAccessToken');
+            let token = await AsyncStorage.getItem('googleAccessToken');
+            if (!token && typeof window !== 'undefined') {
+                token = window.localStorage.getItem('googleAccessToken');
+            }
+
             if (!token) {
                 if (typeof window !== 'undefined') window.alert('Please go to the Settings tab and sign in with Google first.');
                 else Alert.alert('Not Signed In', 'Please go to the Settings tab and sign in with Google first.');

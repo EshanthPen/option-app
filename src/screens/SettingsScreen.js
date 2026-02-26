@@ -46,7 +46,10 @@ export default function SettingsScreen() {
     useEffect(() => {
         // Load the stored token if it exists
         const loadToken = async () => {
-            const storedToken = await AsyncStorage.getItem('googleAccessToken');
+            let storedToken = await AsyncStorage.getItem('googleAccessToken');
+            if (!storedToken && typeof window !== 'undefined') {
+                storedToken = window.localStorage.getItem('googleAccessToken');
+            }
             if (storedToken) setAccessToken(storedToken);
         };
         loadToken();
@@ -56,12 +59,19 @@ export default function SettingsScreen() {
         if (response?.type === 'success') {
             const token = response.authentication.accessToken;
             setAccessToken(token);
-            // Save token securely for use in other screens
+            // Save token securely for use in other screens (both Native and Web Fallback)
+            if (typeof window !== 'undefined') {
+                window.localStorage.setItem('googleAccessToken', token);
+            }
             AsyncStorage.setItem('googleAccessToken', token).then(() => {
-                Alert.alert("Success", "Successfully linked your Google Account!");
+                if (typeof window !== 'undefined') window.alert("Success! Successfully linked your Google Account.");
+                else Alert.alert("Success", "Successfully linked your Google Account!");
+            }).catch(() => {
+                if (typeof window !== 'undefined') window.alert("Warning: Saved token to browser but native storage failed.");
             });
         } else if (response?.type === 'error') {
-            Alert.alert("Error", "Could not sign in right now. Note: Client IDs need to be configured.");
+            if (typeof window !== 'undefined') window.alert("Could not sign in right now. Note: Client IDs need to be configured.");
+            else Alert.alert("Error", "Could not sign in right now. Note: Client IDs need to be configured.");
         }
     }, [response]);
 
