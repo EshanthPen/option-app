@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView 
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -43,9 +44,22 @@ export default function SettingsScreen() {
     });
 
     useEffect(() => {
+        // Load the stored token if it exists
+        const loadToken = async () => {
+            const storedToken = await AsyncStorage.getItem('googleAccessToken');
+            if (storedToken) setAccessToken(storedToken);
+        };
+        loadToken();
+    }, []);
+
+    useEffect(() => {
         if (response?.type === 'success') {
-            setAccessToken(response.authentication.accessToken);
-            Alert.alert("Success", "Successfully linked your Google Account!");
+            const token = response.authentication.accessToken;
+            setAccessToken(token);
+            // Save token securely for use in other screens
+            AsyncStorage.setItem('googleAccessToken', token).then(() => {
+                Alert.alert("Success", "Successfully linked your Google Account!");
+            });
         } else if (response?.type === 'error') {
             Alert.alert("Error", "Could not sign in right now. Note: Client IDs need to be configured.");
         }

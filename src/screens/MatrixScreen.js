@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, FlatList, Alert } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ICAL from 'ical.js';
 import { supabase } from '../supabaseClient';
 
@@ -117,6 +118,53 @@ export default function MatrixScreen() {
         });
     };
 
+    const blockTaskOnCalendar = async (task) => {
+        try {
+            const token = await AsyncStorage.getItem('googleAccessToken');
+            if (!token) {
+                Alert.alert('Not Signed In', 'Please go to the Settings tab and sign in with Google first.');
+                return;
+            }
+
+            Alert.alert("Scheduling...", `Blocking ${task.duration} minutes for "${task.title}"...`);
+
+            const startTime = new Date();
+            const endTime = new Date(startTime.getTime() + task.duration * 60 * 1000);
+
+            const event = {
+                summary: `Option App: ${task.title} 📚`,
+                description: 'Automatically scheduled task block by Option.',
+                start: { dateTime: startTime.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York' },
+                end: { dateTime: endTime.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York' },
+            };
+
+            const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(event),
+            });
+
+            if (res.ok) {
+                Alert.alert('Success!', `Successfully scheduled "${task.title}" on your Google Calendar!`);
+            } else {
+                const errorData = await res.json();
+                console.error("Google Calendar Error:", errorData);
+                if (errorData.error && errorData.error.code === 401) {
+                    Alert.alert('Session Expired', 'Your Google session expired. Please re-authenticate in Settings.');
+                    AsyncStorage.removeItem('googleAccessToken');
+                } else {
+                    Alert.alert('Calendar Error', 'Failed to insert the event.');
+                }
+            }
+        } catch (error) {
+            console.error(error);
+            Alert.alert('Error', 'Network issue reaching Google.');
+        }
+    };
+
     // Helper to filter tasks by quadrant
     const getTasksForQuadrant = (minU, minI, maxU, maxI) => {
         return tasks.filter(t => t.urgency >= minU && t.urgency <= maxU && t.importance >= minI && t.importance <= maxI);
@@ -134,7 +182,14 @@ export default function MatrixScreen() {
                     <FlatList
                         data={getTasksForQuadrant(6, 6, 10, 10)}
                         keyExtractor={item => item.id}
-                        renderItem={({ item }) => <Text style={styles.taskItem}>• {item.title}</Text>}
+                        renderItem={({ item }) => (
+                            <View style={styles.taskItemContainer}>
+                                <Text style={styles.taskItem}>• {item.title}</Text>
+                                <TouchableOpacity style={styles.blockTimeBtn} onPress={() => blockTaskOnCalendar(item)}>
+                                    <Text style={styles.blockTimeText}>📅 Block Time</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     />
                 </View>
 
@@ -145,7 +200,14 @@ export default function MatrixScreen() {
                     <FlatList
                         data={getTasksForQuadrant(6, 1, 10, 5)}
                         keyExtractor={item => item.id}
-                        renderItem={({ item }) => <Text style={styles.taskItem}>• {item.title}</Text>}
+                        renderItem={({ item }) => (
+                            <View style={styles.taskItemContainer}>
+                                <Text style={styles.taskItem}>• {item.title}</Text>
+                                <TouchableOpacity style={styles.blockTimeBtn} onPress={() => blockTaskOnCalendar(item)}>
+                                    <Text style={styles.blockTimeText}>📅 Block Time</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     />
                 </View>
             </View>
@@ -158,7 +220,14 @@ export default function MatrixScreen() {
                     <FlatList
                         data={getTasksForQuadrant(1, 6, 5, 10)}
                         keyExtractor={item => item.id}
-                        renderItem={({ item }) => <Text style={styles.taskItem}>• {item.title}</Text>}
+                        renderItem={({ item }) => (
+                            <View style={styles.taskItemContainer}>
+                                <Text style={styles.taskItem}>• {item.title}</Text>
+                                <TouchableOpacity style={styles.blockTimeBtn} onPress={() => blockTaskOnCalendar(item)}>
+                                    <Text style={styles.blockTimeText}>📅 Block Time</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     />
                 </View>
 
@@ -169,7 +238,14 @@ export default function MatrixScreen() {
                     <FlatList
                         data={getTasksForQuadrant(1, 1, 5, 5)}
                         keyExtractor={item => item.id}
-                        renderItem={({ item }) => <Text style={styles.taskItem}>• {item.title}</Text>}
+                        renderItem={({ item }) => (
+                            <View style={styles.taskItemContainer}>
+                                <Text style={styles.taskItem}>• {item.title}</Text>
+                                <TouchableOpacity style={styles.blockTimeBtn} onPress={() => blockTaskOnCalendar(item)}>
+                                    <Text style={styles.blockTimeText}>📅 Block Time</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     />
                 </View>
             </View>
@@ -221,7 +297,10 @@ const styles = StyleSheet.create({
     quadrant: { flex: 0.48, padding: 10, borderRadius: 10, overflow: 'hidden' },
     quadrantTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', textAlign: 'center' },
     quadrantDesc: { fontSize: 10, color: '#666', textAlign: 'center', marginBottom: 8 },
-    taskItem: { fontSize: 12, color: '#444', marginBottom: 4 },
+    taskItemContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingRight: 5 },
+    taskItem: { fontSize: 12, color: '#444', flex: 1, marginRight: 5 },
+    blockTimeBtn: { backgroundColor: '#4285F4', paddingVertical: 4, paddingHorizontal: 6, borderRadius: 4 },
+    blockTimeText: { color: 'white', fontSize: 9, fontWeight: 'bold' },
     buttonRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 10 },
     addButton: { backgroundColor: '#007AFF', padding: 15, borderRadius: 10, alignItems: 'center', flex: 0.45 },
     addButtonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
