@@ -2,12 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import studentvue from 'studentvue.js';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function SettingsScreen() {
     const [schoologyUrl, setSchoologyUrl] = useState('');
     const [googleUrl, setGoogleUrl] = useState('');
+
+    // StudentVUE State
+    const [svUrl, setSvUrl] = useState('');
+    const [svUser, setSvUser] = useState('');
+    const [svPass, setSvPass] = useState('');
 
     // Auth State
     const [accessToken, setAccessToken] = useState(null);
@@ -31,6 +37,31 @@ export default function SettingsScreen() {
 
     const handleSave = () => {
         Alert.alert('Saved!', 'Your manual calendar URLs have been saved.');
+    };
+
+    const handleStudentVueLogin = async () => {
+        if (!svUrl || !svUser || !svPass) {
+            Alert.alert("Missing Fields", "Please enter your portal URL, Username, and Password.");
+            return;
+        }
+
+        try {
+            Alert.alert("Syncing...", "Attempting to securely log into StudentVUE...");
+
+            // Log in and create the client session
+            await studentvue.login(svUrl, svUser, svPass);
+
+            // If successful, fetch the gradebook XML payload
+            const gradebookData = await studentvue.getGradebook();
+
+            console.log("SUCCESSFULLY FETCHED GRADES!");
+            console.log(gradebookData);
+
+            Alert.alert("Success!", "Logged in and fetched your grades! They will appear in the Gradebook Tab (Console Logging for safety right now).");
+        } catch (error) {
+            console.error(error);
+            Alert.alert("Login Failed", "Could not authenticate. Please double check your URL, ID, and Password.");
+        }
     };
 
     const blockOutTimeOnGoogleCalendar = async () => {
@@ -114,6 +145,45 @@ export default function SettingsScreen() {
                     onChangeText={setSchoologyUrl}
                     autoCapitalize="none"
                 />
+            </View>
+
+            {/* --- STUDENTVUE / SYNERGY --- */}
+            <View style={[styles.card, { borderColor: '#8E24AA', borderWidth: 2 }]}>
+                <Text style={styles.cardTitle}>StudentVUE Grades</Text>
+                <Text style={styles.instructions}>
+                    Connect your school's StudentVUE portal to automatically fetch and calculate your latest grades.
+                </Text>
+
+                <Text style={styles.label}>School Portal URL</Text>
+                <TextInput
+                    style={styles.input}
+                    placeholder="e.g. https://rtmsd.usplk12.org"
+                    value={svUrl}
+                    onChangeText={setSvUrl}
+                    autoCapitalize="none"
+                />
+
+                <Text style={styles.label}>Username / Student ID</Text>
+                <TextInput
+                    style={styles.input}
+                    placeholder="Student ID"
+                    value={svUser}
+                    onChangeText={setSvUser}
+                    autoCapitalize="none"
+                />
+
+                <Text style={styles.label}>Password</Text>
+                <TextInput
+                    style={styles.input}
+                    placeholder="Password"
+                    value={svPass}
+                    onChangeText={setSvPass}
+                    secureTextEntry
+                />
+
+                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#8E24AA', marginTop: 15 }]} onPress={handleStudentVueLogin}>
+                    <Text style={styles.actionBtnText}>Sync Grades Now</Text>
+                </TouchableOpacity>
             </View>
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
