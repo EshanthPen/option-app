@@ -21,6 +21,7 @@ export default function SettingsScreen() {
     const redirectUri = AuthSession.makeRedirectUri({
         scheme: 'optionapp',
         useProxy: true,
+        projectNameForProxy: '@anonymous/option-app'
     });
 
     // Initialize Google Auth with placeholder Client IDs
