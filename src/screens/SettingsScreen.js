@@ -173,7 +173,11 @@ export default function SettingsScreen() {
                 console.log("SUCCESSFULLY FETCHED GRADES!");
 
                 // Parse the mess of XML into the clean JSON array GradebookScreen needs
+                console.log("--- RAW XML DEBUG ---");
+                console.log(xmlText.substring(0, 2000));
+
                 const formattedClasses = parseStudentVueGradebook(xmlText);
+                console.log("PARSER RESULT:", formattedClasses);
 
                 if (formattedClasses && formattedClasses.length > 0) {
                     await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
