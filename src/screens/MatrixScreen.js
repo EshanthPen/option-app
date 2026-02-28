@@ -195,7 +195,7 @@ export default function MatrixScreen() {
         try {
             const token = await AsyncStorage.getItem('googleAccessToken');
             if (!token) { Alert.alert('Not Signed In', 'Go to Settings and sign in with Google.'); return; }
-            const start = new Date();
+            const start = task.due_date ? new Date(task.due_date + 'T12:00:00') : new Date();
             const end = new Date(start.getTime() + task.duration * 60 * 1000);
             const event = { summary: `Option: ${task.title} 📚`, start: { dateTime: start.toISOString(), timeZone: 'America/New_York' }, end: { dateTime: end.toISOString(), timeZone: 'America/New_York' } };
             const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(event) });
@@ -223,7 +223,7 @@ export default function MatrixScreen() {
         ? new Date(taskDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         : 'Select a date';
 
-    const selectedDayTasks = tasks.filter(t => t.date?.startsWith(selectedDate));
+    const selectedDayTasks = tasks.filter(t => t.due_date?.startsWith(selectedDate));
 
     return (
         <View style={styles.container}>
@@ -289,7 +289,7 @@ export default function MatrixScreen() {
                         <View style={styles.grid}>
                             {cells.map((d, i) => {
                                 const dateStr = d ? `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` : null;
-                                const dayTasks = d ? tasks.filter(t => t.date?.startsWith(dateStr)) : [];
+                                const dayTasks = d ? tasks.filter(t => t.due_date?.startsWith(dateStr)) : [];
                                 const isToday = d && d === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
 
                                 return (

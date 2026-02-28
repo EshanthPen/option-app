@@ -203,7 +203,7 @@ export default function SettingsScreen() {
                     urgency: u,
                     importance: im,
                     duration: 60,
-                    date: dueDate.toISOString().split('T')[0],
+                    due_date: dueDate.toISOString().split('T')[0],
                     source: 'schoology_import',
                     user_id: 'default_user'
                 };

@@ -50,10 +50,10 @@ export const syncAssignmentsToCalendar = async (accessToken, assignments) => {
     // Process sequentially to avoid rate limiting
     for (const assignment of assignments) {
         // Skip assignments without a date
-        if (!assignment.isoDate) continue;
+        if (!assignment.due_date) continue;
 
         // Try parsing the date
-        const dueDate = new Date(assignment.isoDate);
+        const dueDate = new Date(assignment.due_date);
         if (isNaN(dueDate)) continue;
 
         // Make it an all-day event for the due date

@@ -9,7 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { ChevronDown, ChevronLeft, RefreshCw, ChevronRight, LayoutGrid, Calendar, Filter, Clock } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { theme as staticTheme } from '../utils/theme';
-import { syncStudentVueGrades } from '../utils/studentVueAPI';
+import { parseStudentVueGradebook } from '../utils/studentVueParser';
 import { useNavigation } from '@react-navigation/native';
 
 const screenWidth = Dimensions.get('window').width;
@@ -128,27 +128,56 @@ export default function GradebookScreen() {
             }
 
             setIsSyncing(true);
-            const result = await syncStudentVueGrades(svUser, svPass, svUrl, periodIndex);
 
-            // result is now { grades, periods, period, periodIndex }
-            const grades = result.grades || result; // backwards compat if it's just an array
+            // Reconstruct the logic from SettingsScreen to safely proxy through Vercel
+            const finalTargetUrl = svUrl.endsWith('Service/PXPCommunication.asmx')
+                ? svUrl
+                : `${svUrl}/Service/PXPCommunication.asmx`;
+
+            const soapPayload = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/">
+      <userID>${svUser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</userID>
+      <password>${svPass.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</password>
+      <skipLoginLog>1</skipLoginLog>
+      <parent>0</parent>
+      <webServiceHandleName>PXPWebServices</webServiceHandleName>
+      <methodName>Gradebook</methodName>
+      <paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;0&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr>
+    </ProcessWebServiceRequest>
+  </soap:Body>
+</soap:Envelope>`;
+
+            // Always use the relative `/api` on the web or full domain in React Native App
+            const proxyBase = Platform.OS === 'web' ? '' : 'https://optionapp.online';
+            const response = await fetch(`${proxyBase}/api/studentvue`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload: soapPayload })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData?.cause || errData?.details || response.statusText);
+            }
+
+            const xmlText = await response.text();
+
+            if (!xmlText.includes('Gradebook') && xmlText.includes('RT_ERROR')) {
+                throw new Error("Connected but no grade data was found. Your account may have no grades for this period.");
+            }
+
+            const grades = parseStudentVueGradebook(xmlText);
 
             if (Array.isArray(grades) && grades.length > 0) {
                 setClasses(grades);
                 await AsyncStorage.setItem('studentVueGrades', JSON.stringify(grades));
 
-                if (result.periods) {
-                    setAvailablePeriods(result.periods);
-                    await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(result.periods));
-                }
-                if (result.period) {
-                    setCurrentPeriodName(result.period);
-                    await AsyncStorage.setItem('studentVuePeriodName', result.period);
-                }
-                if (result.periodIndex !== undefined) {
-                    setCurrentPeriodIndex(result.periodIndex);
-                    await AsyncStorage.setItem('studentVuePeriodIndex', String(result.periodIndex));
-                }
+                // Note: The original generic parser doesn't extract 'periods', so we clear them for now
+                setAvailablePeriods([]);
+                setCurrentPeriodName('Current Quarter');
+                setCurrentPeriodIndex(0);
 
                 setSelectedClass(null);
             } else {
