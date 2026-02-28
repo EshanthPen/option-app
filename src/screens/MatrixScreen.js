@@ -8,9 +8,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import ICAL from 'ical.js';
 import { supabase } from '../supabaseClient';
 import { theme } from '../utils/theme';
-import { ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Download, CalendarDays } from 'lucide-react-native';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+const { width: SCREEN_W, height: SCREEN_H_RAW } = Dimensions.get('window');
+const IS_WIDE = SCREEN_W > 800;
+const SIDEBAR_W = 320;
 
 // On web the sidebar is 220px wide; on mobile it's 72px.
 // The screen content area is already offset by the sidebar via sceneStyle paddingLeft.
@@ -33,6 +35,8 @@ export default function MatrixScreen() {
     const [saving, setSaving] = useState(false);
     const [month, setMonth] = useState(new Date().getMonth());
     const [year, setYear] = useState(new Date().getFullYear());
+    const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
+    const [selectedTaskIds, setSelectedTaskIds] = useState([]);
 
     // Form state
     const [title, setTitle] = useState('');
@@ -87,9 +91,10 @@ export default function MatrixScreen() {
         if (!schoologyUrl) return;
         setSaving(true);
         let fetchUrl = schoologyUrl.trim().replace(/^webcal:\/\//, 'https://');
+        const proxyUrl = `/api/schoology?url=${encodeURIComponent(fetchUrl)}`;
         try {
-            const response = await fetch(fetchUrl);
-            if (!response.ok) throw new Error('Network response was not ok');
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error('Proxy or Schoology failed');
             const icsData = await response.text();
             const comp = new ICAL.Component(ICAL.parse(icsData));
             const events = comp.getAllSubcomponents('vevent');
@@ -143,6 +148,29 @@ export default function MatrixScreen() {
             setSaving(false);
         }
     };
+    const handleRemoveSelected = async () => {
+        if (selectedTaskIds.length === 0) return;
+        setSaving(true);
+        try {
+            const { error } = await supabase.from('tasks').delete().in('id', selectedTaskIds);
+            if (error) throw error;
+            setTasks(prev => prev.filter(t => !selectedTaskIds.includes(t.id)));
+            setSelectedTaskIds([]);
+        } catch (error) {
+            console.error('Delete Error:', error);
+            // Local fallback
+            setTasks(prev => prev.filter(t => !selectedTaskIds.includes(t.id)));
+            setSelectedTaskIds([]);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const toggleTaskSelection = (id) => {
+        setSelectedTaskIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
 
     // Calendar grid
     const dim = new Date(year, month + 1, 0).getDate();
@@ -192,86 +220,141 @@ export default function MatrixScreen() {
         ? new Date(taskDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         : 'Select a date';
 
+    const selectedDayTasks = tasks.filter(t => t.date?.startsWith(selectedDate));
+
     return (
         <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.headerRow}>
-                <View>
-                    <Text style={styles.title}>Calendar</Text>
-                    <Text style={styles.subtitle}>{MN[month]} {year} · {tasks.length} tasks</Text>
-                </View>
-                <View style={styles.btnRow}>
-                    <TouchableOpacity style={styles.btnOut} onPress={() => setImportModalVisible(true)}>
-                        <Download color={theme.colors.ink2} size={14} />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.btnDark} onPress={() => setModalVisible(true)}>
-                        <Plus color="#fff" size={14} />
-                        <Text style={styles.btnDarkText}>Add Event</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            {/* Legend */}
-            <View style={styles.legend}>
-                <Text style={styles.legendTitle}>KEY</Text>
-                {[{ l: 'Do First', c: theme.colors.red }, { l: 'Schedule', c: theme.colors.orange }, { l: 'Delegate', c: theme.colors.green }, { l: 'Eliminate', c: theme.colors.blue }].map((item, i) => (
-                    <View key={i} style={styles.legendItem}>
-                        <View style={[styles.swatch, { backgroundColor: item.c + '20', borderColor: item.c }]} />
-                        <Text style={styles.legendText}>{item.l}</Text>
+            <View style={[styles.mainLayout, IS_WIDE && styles.layoutWide]}>
+                {/* Left: Calendar Grid */}
+                <View style={IS_WIDE ? { flex: 1.5 } : { width: '100%' }}>
+                    {/* Header */}
+                    <View style={styles.headerRow}>
+                        <View>
+                            <Text style={styles.title}>Calendar</Text>
+                            <Text style={styles.subtitle}>{MN[month]} {year} · {tasks.length} tasks</Text>
+                        </View>
+                        <View style={styles.btnRow}>
+                            <TouchableOpacity style={styles.btnOut} onPress={() => setImportModalVisible(true)}>
+                                <Download color={theme.colors.ink2} size={14} />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.btnDark} onPress={() => setModalVisible(true)}>
+                                <Plus color="#fff" size={14} />
+                                <Text style={styles.btnDarkText}>Add Event</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                ))}
-            </View>
 
-            {/* Month nav */}
-            <View style={styles.controlsRow}>
-                <TouchableOpacity onPress={() => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); }} style={styles.ctrlBtn}>
-                    <ChevronLeft color={theme.colors.ink2} size={16} />
-                </TouchableOpacity>
-                <Text style={styles.monthText}>{MN[month]} {year}</Text>
-                <TouchableOpacity onPress={() => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); }} style={styles.ctrlBtn}>
-                    <ChevronRight color={theme.colors.ink2} size={16} />
-                </TouchableOpacity>
-            </View>
-
-            {/* Day headers */}
-            <View style={styles.daysRow}>
-                {DAYS.map(d => <Text key={d} style={styles.dayText}>{d}</Text>)}
-            </View>
-
-            {/* Grid */}
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                <View style={styles.grid}>
-                    {cells.map((d, i) => {
-                        const dateStr = d ? `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` : null;
-                        const dayTasks = d ? tasks.filter(t => t.date?.startsWith(dateStr)) : [];
-                        const isToday = d && d === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
-
-                        return (
-                            <View
-                                key={i}
-                                style={[
-                                    styles.cell,
-                                    { width: CELL_W, height: CELL_H },
-                                    !d && styles.cellEmpty,
-                                    isToday && styles.cellToday,
-                                ]}
-                            >
-                                {d && <Text style={[styles.cellNum, isToday && styles.numToday]}>{d}</Text>}
-                                {dayTasks.slice(0, 2).map((t, idx) => {
-                                    const c = getPrio(t.urgency, t.importance);
-                                    return (
-                                        <TouchableOpacity key={idx} style={[styles.event, { backgroundColor: c.bg }]} onPress={() => blockTask(t)}>
-                                            <Text style={[styles.eventText, { color: c.text }]} numberOfLines={1}>{t.title}</Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                                {dayTasks.length > 2 && <Text style={styles.moreText}>+{dayTasks.length - 2}</Text>}
+                    {/* Legend */}
+                    <View style={styles.legend}>
+                        <Text style={styles.legendTitle}>KEY</Text>
+                        {[{ l: 'Do First', c: theme.colors.red }, { l: 'Schedule', c: theme.colors.orange }, { l: 'Delegate', c: theme.colors.green }, { l: 'Eliminate', c: theme.colors.blue }].map((item, i) => (
+                            <View key={i} style={styles.legendItem}>
+                                <View style={[styles.swatch, { backgroundColor: item.c + '20', borderColor: item.c }]} />
+                                <Text style={styles.legendText}>{item.l}</Text>
                             </View>
-                        );
-                    })}
+                        ))}
+                    </View>
+
+                    {/* Month nav */}
+                    <View style={styles.controlsRow}>
+                        <TouchableOpacity onPress={() => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); }} style={styles.ctrlBtn}>
+                            <ChevronLeft color={theme.colors.ink2} size={16} />
+                        </TouchableOpacity>
+                        <Text style={styles.monthText}>{MN[month]} {year}</Text>
+                        <TouchableOpacity onPress={() => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); }} style={styles.ctrlBtn}>
+                            <ChevronRight color={theme.colors.ink2} size={16} />
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Day headers */}
+                    <View style={styles.daysRow}>
+                        {DAYS.map(d => <Text key={d} style={styles.dayText}>{d}</Text>)}
+                    </View>
+
+                    {/* Grid */}
+                    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                        <View style={styles.grid}>
+                            {cells.map((d, i) => {
+                                const dateStr = d ? `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` : null;
+                                const dayTasks = d ? tasks.filter(t => t.date?.startsWith(dateStr)) : [];
+                                const isToday = d && d === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
+
+                                return (
+                                    <View
+                                        key={i}
+                                        style={[
+                                            styles.cell,
+                                            { width: IS_WIDE ? (SCREEN_W - SIDEBAR_W - 80) / 7 : CELL_W, height: CELL_H },
+                                            !d && styles.cellEmpty,
+                                            isToday && styles.cellToday,
+                                            selectedDate === dateStr && styles.cellSelected,
+                                        ]}
+                                        onPress={() => d && setSelectedDate(dateStr)}
+                                    >
+                                        {d && <Text style={[styles.cellNum, isToday && styles.numToday]}>{d}</Text>}
+                                        {dayTasks.slice(0, 2).map((t, idx) => {
+                                            const c = getPrio(t.urgency, t.importance);
+                                            return (
+                                                <TouchableOpacity key={idx} style={[styles.event, { backgroundColor: c.bg }]} onPress={() => blockTask(t)}>
+                                                    <Text style={[styles.eventText, { color: c.text }]} numberOfLines={1}>{t.title}</Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                        {dayTasks.length > 2 && <Text style={styles.moreText}>+{dayTasks.length - 2}</Text>}
+                                    </View>
+                                );
+                            })}
+                        </View>
+                        <View style={{ height: 80 }} />
+                    </ScrollView>
                 </View>
-                <View style={{ height: 80 }} />
-            </ScrollView>
+
+                {/* Right/Bottom Sidebar: Day Details */}
+                <View style={[styles.sidebar, IS_WIDE ? styles.sidebarWide : styles.sidebarMobile]}>
+                    <View style={styles.sidebarHeader}>
+                        <Text style={styles.sidebarTitle}>
+                            {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </Text>
+                        {selectedTaskIds.length > 0 && (
+                            <TouchableOpacity style={styles.removeBtn} onPress={handleRemoveSelected} disabled={saving}>
+                                <Text style={styles.removeBtnText}>Remove ({selectedTaskIds.length})</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                        {selectedDayTasks.length === 0 ? (
+                            <View style={styles.emptySidebar}>
+                                <Text style={styles.emptySidebarText}>No events for this day</Text>
+                            </View>
+                        ) : selectedDayTasks.map((t, idx) => {
+                            const prio = getPrio(t.urgency, t.importance);
+                            const isSelected = selectedTaskIds.includes(t.id);
+                            return (
+                                <TouchableOpacity
+                                    key={idx}
+                                    style={[styles.sidebarTask, isSelected && styles.sidebarTaskActive]}
+                                    onPress={() => toggleTaskSelection(t.id)}
+                                >
+                                    <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
+                                        {isSelected && <View style={styles.checkboxInner} />}
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.sidebarTaskTitle} numberOfLines={1}>{t.title}</Text>
+                                        <View style={styles.sidebarTaskMeta}>
+                                            <View style={[styles.miniSwatch, { backgroundColor: prio.text }]} />
+                                            <Text style={styles.sidebarTaskPrio}>{t.urgency}U · {t.importance}I</Text>
+                                        </View>
+                                    </View>
+                                    <TouchableOpacity style={styles.blockBtn} onPress={() => blockTask(t)}>
+                                        <CalendarDays size={14} color={theme.colors.ink3} />
+                                    </TouchableOpacity>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+            </View>
 
             {/* Add Event Modal */}
             <Modal visible={modalVisible} animationType="fade" transparent>
@@ -383,7 +466,10 @@ export default function MatrixScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40, paddingHorizontal: HPAD },
+    container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40 },
+    mainLayout: { flex: 1, paddingHorizontal: HPAD },
+    layoutWide: { flexDirection: 'row', gap: 30 },
+
     headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14 },
     title: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
     subtitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 },
@@ -411,6 +497,7 @@ const styles = StyleSheet.create({
     cellToday: { borderColor: theme.colors.ink, borderWidth: 2 },
     cellNum: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink2, marginBottom: 2 },
     numToday: { color: theme.colors.ink, fontWeight: '800' },
+    cellSelected: { backgroundColor: theme.colors.surface2, borderColor: theme.colors.ink3, borderWidth: 1 },
     event: { paddingVertical: 1, paddingHorizontal: 3, borderRadius: 2, marginBottom: 2 },
     eventText: { fontFamily: theme.fonts.s, fontSize: 7, fontWeight: '600' },
     moreText: { fontFamily: theme.fonts.m, fontSize: 7, color: theme.colors.ink3 },
@@ -434,4 +521,27 @@ const styles = StyleSheet.create({
     miniCellSelected: { backgroundColor: theme.colors.ink },
     miniCellNum: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink2 },
     miniCellNumSelected: { color: '#fff', fontWeight: '700' },
+
+    // Sidebar
+    sidebar: { backgroundColor: theme.colors.surface, borderLeftWidth: 1, borderTopWidth: 1, borderColor: theme.colors.border },
+    sidebarWide: { width: SIDEBAR_W, borderTopWidth: 0 },
+    sidebarMobile: { height: 280, borderLeftWidth: 0 },
+    sidebarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+    sidebarTitle: { fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink },
+    removeBtn: { backgroundColor: theme.colors.red + '15', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6 },
+    removeBtnText: { fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '600', color: theme.colors.red },
+
+    emptySidebar: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+    emptySidebarText: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 },
+
+    sidebarTask: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+    sidebarTaskActive: { backgroundColor: theme.colors.surface2 },
+    checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.border2, alignItems: 'center', justifyContent: 'center' },
+    checkboxActive: { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink },
+    checkboxInner: { width: 8, height: 8, borderRadius: 1.5, backgroundColor: '#fff' },
+    sidebarTaskTitle: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '500', color: theme.colors.ink },
+    sidebarTaskMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+    miniSwatch: { width: 6, height: 6, borderRadius: 3 },
+    sidebarTaskPrio: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase' },
+    blockBtn: { padding: 8, borderRadius: 6, backgroundColor: theme.colors.surface2 },
 });

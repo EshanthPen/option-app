@@ -101,141 +101,145 @@ export default function DashboardScreen() {
     const gpaColor = wgpa ? (parseFloat(wgpa) >= 3.7 ? theme.colors.green : parseFloat(wgpa) >= 3.0 ? theme.colors.blue : parseFloat(wgpa) >= 2.0 ? theme.colors.orange : theme.colors.red) : theme.colors.ink3;
 
     return (
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-            {/* Header */}
-            <View style={styles.headerContainer}>
-                <Text style={styles.greeting}>{getGreeting()}</Text>
-                <Text style={styles.header}>Dashboard</Text>
-                <Text style={styles.subtitle}>
-                    {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                    {periodName ? ` · ${periodName}` : ''}
-                </Text>
-            </View>
-
-            {/* GPA Card */}
-            {loaded && (
-                <View style={[styles.gpaCard, { borderLeftColor: gpaColor, borderLeftWidth: 5 }]}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.gpaCardLabel}>Weighted GPA</Text>
-                        <Text style={[styles.gpaCardValue, { color: gpaColor }]}>{wgpa ?? '—'}</Text>
-                        <Text style={styles.gpaCardSub}>Unweighted: {ugpa ?? '—'} · {classes.length} classes</Text>
-                    </View>
-                    <View style={styles.gpaBarWrap}>
-                        {classes.map((c, i) => (
-                            <View
-                                key={i}
-                                style={[styles.gpaBar, { backgroundColor: gradeColor(c.grade), flex: 1 }]}
-                                title={c.name}
-                            />
-                        ))}
-                    </View>
+        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.contentWrapper}>
+                {/* Header */}
+                <View style={styles.headerContainer}>
+                    <Text style={styles.greeting}>{getGreeting()}</Text>
+                    <Text style={styles.header}>Dashboard</Text>
+                    <Text style={styles.subtitle}>
+                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                        {periodName ? ` · ${periodName}` : ''}
+                    </Text>
                 </View>
-            )}
 
-            {/* Quick actions */}
-            <View style={styles.quickRow}>
-                <TouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Gradebook')}>
-                    <BookOpen size={18} color={theme.colors.ink} />
-                    <Text style={styles.quickLabel}>Gradebook</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Calendar')}>
-                    <CalendarDays size={18} color={theme.colors.ink} />
-                    <Text style={styles.quickLabel}>Calendar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Focus')}>
-                    <TrendingUp size={18} color={theme.colors.ink} />
-                    <Text style={styles.quickLabel}>Focus</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* Upcoming assignments */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Upcoming Assignments</Text>
-                {upcoming.length === 0 ? (
-                    <View style={styles.emptyBox}>
-                        <Text style={styles.emptyText}>{loaded ? 'No upcoming assignments. Sync grades in Settings.' : 'Loading…'}</Text>
-                    </View>
-                ) : upcoming.map((a, i) => {
-                    const days = daysUntil(a.isoDate);
-                    const urgentColor = days !== null && days <= 2 ? theme.colors.red : days !== null && days <= 5 ? theme.colors.orange : theme.colors.ink3;
-                    return (
-                        <View key={i} style={[styles.assignmentRow, { borderLeftColor: a.courseColor, borderLeftWidth: 3 }]}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.assignmentName} numberOfLines={1}>{a.name}</Text>
-                                <Text style={styles.assignmentCourse} numberOfLines={1}>{a.courseName}</Text>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <Text style={styles.assignmentDate}>{fmt(a.isoDate)}</Text>
-                                {days !== null && (
-                                    <Text style={[styles.assignmentDays, { color: urgentColor }]}>
-                                        {days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days}d`}
-                                    </Text>
-                                )}
-                            </View>
+                {/* GPA Card */}
+                {loaded && (
+                    <View style={[styles.gpaCard, { borderLeftColor: gpaColor, borderLeftWidth: 5 }]}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.gpaCardLabel}>Weighted GPA</Text>
+                            <Text style={[styles.gpaCardValue, { color: gpaColor }]}>{wgpa ?? '—'}</Text>
+                            <Text style={styles.gpaCardSub}>Unweighted: {ugpa ?? '—'} · {classes.length} classes</Text>
                         </View>
-                    );
-                })}
-            </View>
-
-            {/* At-Risk classes */}
-            {atRisk.length > 0 && (
-                <View style={styles.section}>
-                    <View style={styles.sectionTitleRow}>
-                        <AlertTriangle size={14} color={theme.colors.orange} />
-                        <Text style={[styles.sectionTitle, { color: theme.colors.orange }]}>Classes to Watch</Text>
+                        <View style={styles.gpaBarWrap}>
+                            {classes.map((c, i) => (
+                                <View
+                                    key={i}
+                                    style={[styles.gpaBar, { backgroundColor: gradeColor(c.grade), flex: 1 }]}
+                                    title={c.name}
+                                />
+                            ))}
+                        </View>
                     </View>
-                    <Text style={styles.sectionSub}>These classes are below a B and may impact your GPA.</Text>
-                    {atRisk.map((c, i) => {
-                        const color = gradeColor(c.grade);
-                        const letter = c.letter && c.letter !== 'N/A' ? c.letter : gradeLetter(c.grade);
-                        const pointsNeeded = (83 - c.grade).toFixed(1);
+                )}
+
+                {/* Quick actions */}
+                <View style={styles.quickRow}>
+                    <TouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Gradebook')}>
+                        <BookOpen size={18} color={theme.colors.ink} />
+                        <Text style={styles.quickLabel}>Gradebook</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Calendar')}>
+                        <CalendarDays size={18} color={theme.colors.ink} />
+                        <Text style={styles.quickLabel}>Calendar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Focus')}>
+                        <TrendingUp size={18} color={theme.colors.ink} />
+                        <Text style={styles.quickLabel}>Focus</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Upcoming assignments */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Upcoming Assignments</Text>
+                    {upcoming.length === 0 ? (
+                        <View style={styles.emptyBox}>
+                            <Text style={styles.emptyText}>{loaded ? 'No upcoming assignments. Sync grades in Settings.' : 'Loading…'}</Text>
+                        </View>
+                    ) : upcoming.map((a, i) => {
+                        const days = daysUntil(a.isoDate);
+                        const urgentColor = days !== null && days <= 2 ? theme.colors.red : days !== null && days <= 5 ? theme.colors.orange : theme.colors.ink3;
                         return (
-                            <View key={i} style={[styles.atRiskRow, { borderLeftColor: color, borderLeftWidth: 3 }]}>
+                            <View key={i} style={[styles.assignmentRow, { borderLeftColor: a.courseColor, borderLeftWidth: 3 }]}>
                                 <View style={{ flex: 1 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                        <Text style={styles.atRiskName} numberOfLines={1}>{c.name}</Text>
-                                        <View style={[styles.typeChip, c.type === 'AP' && { backgroundColor: theme.colors.ink }, c.type === 'HN' && { backgroundColor: '#4e4c47' }]}>
-                                            <Text style={[styles.typeChipText, (c.type === 'AP' || c.type === 'HN') && { color: '#fff' }]}>{c.type}</Text>
-                                        </View>
-                                    </View>
-                                    <Text style={styles.atRiskSub}>Needs +{pointsNeeded}% to reach a B</Text>
+                                    <Text style={styles.assignmentName} numberOfLines={1}>{a.name}</Text>
+                                    <Text style={styles.assignmentCourse} numberOfLines={1}>{a.courseName}</Text>
                                 </View>
                                 <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={[styles.atRiskLetter, { color }]}>{letter}</Text>
-                                    <Text style={[styles.atRiskPct, { color }]}>{c.grade}%</Text>
+                                    <Text style={styles.assignmentDate}>{fmt(a.isoDate)}</Text>
+                                    {days !== null && (
+                                        <Text style={[styles.assignmentDays, { color: urgentColor }]}>
+                                            {days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days}d`}
+                                        </Text>
+                                    )}
                                 </View>
                             </View>
                         );
                     })}
                 </View>
-            )}
 
-            {/* All-class overview bar */}
-            {classes.length > 0 && (
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Class Overview</Text>
-                    {[...classes].sort((a, b) => b.grade - a.grade).map((c, i) => (
-                        <View key={i} style={styles.overviewRow}>
-                            <Text style={styles.overviewName} numberOfLines={1}>{c.name}</Text>
-                            <View style={styles.overviewBarWrap}>
-                                <View style={[styles.overviewBar, {
-                                    width: `${c.grade}%`,
-                                    backgroundColor: gradeColor(c.grade),
-                                }]} />
-                            </View>
-                            <Text style={[styles.overviewPct, { color: gradeColor(c.grade) }]}>{c.grade}%</Text>
+                {/* At-Risk classes */}
+                {atRisk.length > 0 && (
+                    <View style={styles.section}>
+                        <View style={styles.sectionTitleRow}>
+                            <AlertTriangle size={14} color={theme.colors.orange} />
+                            <Text style={[styles.sectionTitle, { color: theme.colors.orange }]}>Classes to Watch</Text>
                         </View>
-                    ))}
-                </View>
-            )}
+                        <Text style={styles.sectionSub}>These classes are below a B and may impact your GPA.</Text>
+                        {atRisk.map((c, i) => {
+                            const color = gradeColor(c.grade);
+                            const letter = c.letter && c.letter !== 'N/A' ? c.letter : gradeLetter(c.grade);
+                            const pointsNeeded = (83 - c.grade).toFixed(1);
+                            return (
+                                <View key={i} style={[styles.atRiskRow, { borderLeftColor: color, borderLeftWidth: 3 }]}>
+                                    <View style={{ flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Text style={styles.atRiskName} numberOfLines={1}>{c.name}</Text>
+                                            <View style={[styles.typeChip, c.type === 'AP' && { backgroundColor: theme.colors.ink }, c.type === 'HN' && { backgroundColor: '#4e4c47' }]}>
+                                                <Text style={[styles.typeChipText, (c.type === 'AP' || c.type === 'HN') && { color: '#fff' }]}>{c.type}</Text>
+                                            </View>
+                                        </View>
+                                        <Text style={styles.atRiskSub}>Needs +{pointsNeeded}% to reach a B</Text>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={[styles.atRiskLetter, { color }]}>{letter}</Text>
+                                        <Text style={[styles.atRiskPct, { color }]}>{c.grade}%</Text>
+                                    </View>
+                                </View>
+                            );
+                        })}
+                    </View>
+                )}
 
-            <View style={{ height: 60 }} />
+                {/* All-class overview bar */}
+                {classes.length > 0 && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Class Overview</Text>
+                        {[...classes].sort((a, b) => b.grade - a.grade).map((c, i) => (
+                            <View key={i} style={styles.overviewRow}>
+                                <Text style={styles.overviewName} numberOfLines={1}>{c.name}</Text>
+                                <View style={styles.overviewBarWrap}>
+                                    <View style={[styles.overviewBar, {
+                                        width: `${c.grade}%`,
+                                        backgroundColor: gradeColor(c.grade),
+                                    }]} />
+                                </View>
+                                <Text style={[styles.overviewPct, { color: gradeColor(c.grade) }]}>{c.grade}%</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                <View style={{ height: 60 }} />
+            </View>
         </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40, paddingHorizontal: 20 },
+    container: { flex: 1, backgroundColor: theme.colors.bg },
+    scrollContent: { paddingTop: 40, paddingHorizontal: 20, alignItems: 'center' },
+    contentWrapper: { width: '100%', maxWidth: 1000 },
     headerContainer: { marginBottom: 20 },
     greeting: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5 },
     header: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5, marginTop: 2 },

@@ -275,17 +275,31 @@ export default function GradebookScreen() {
         if (!selectedClass || selectedClass.assignments.length === 0) return null;
         const scored = [...selectedClass.assignments]
             .filter(a => a.score !== undefined && a.total > 0)
-            .reverse()
-            .slice(0, 7);
+            .reverse();
+
         if (scored.length < 2) return null;
 
+        const last7 = scored.slice(-8); // Show up to 8 points for better context
+
+        // Calculate running average for the entire history but only graph the last few
+        let runningSum = 0;
+        let runningTotal = 0;
+        const allAvgs = scored.map(a => {
+            runningSum += a.score;
+            runningTotal += a.total;
+            return Math.round((runningSum / runningTotal) * 100);
+        });
+
+        const displayData = allAvgs.slice(-8);
+        const displayAsgns = scored.slice(-8);
+
         return {
-            labels: scored.map(() => ''),
+            labels: displayAsgns.map(() => ''),
             datasets: [{
-                data: scored.map(a => Math.round((a.score / a.total) * 100)),
-                fullNames: scored.map(a => a.name || a.title || 'Assignment'),
-                rawScores: scored.map(a => `${a.score}/${a.total}`),
-                dates: scored.map(a => a.date)
+                data: displayData,
+                fullNames: displayAsgns.map(a => a.name || a.title || 'Assignment'),
+                rawScores: displayAsgns.map(a => `${a.score}/${a.total}`),
+                dates: displayAsgns.map(a => a.date)
             }],
         };
     };
@@ -577,7 +591,9 @@ export default function GradebookScreen() {
                                         });
                                     }}
                                     bezier
-                                    style={{ borderRadius: 8 }}
+                                    fromZero={false}
+                                    segments={5}
+                                    style={{ borderRadius: 8, paddingRight: 40 }}
                                 />
 
                                 {selectedGraphAsgn && (
@@ -692,92 +708,94 @@ export default function GradebookScreen() {
     // ── Main render ─────────────────────────────────────────────
     return (
         <View style={styles.container}>
-            {/* Header */}
-            <View style={styles.headerRow}>
-                {selectedClass ? (
-                    /* When in detail view: show a big back button in place of title */
-                    <TouchableOpacity
-                        style={styles.headerBackBtn}
-                        onPress={() => setSelectedClass(null)}
-                        activeOpacity={0.6}
-                    >
-                        <ChevronLeft size={22} color={theme.colors.ink} />
+            <View style={styles.contentWrapper}>
+                {/* Header */}
+                <View style={styles.headerRow}>
+                    {selectedClass ? (
+                        /* When in detail view: show a big back button in place of title */
+                        <TouchableOpacity
+                            style={styles.headerBackBtn}
+                            onPress={() => setSelectedClass(null)}
+                            activeOpacity={0.6}
+                        >
+                            <ChevronLeft size={22} color={theme.colors.ink} />
+                            <View>
+                                <Text style={styles.header}>Gradebook</Text>
+                                <Text style={styles.headerSub}>← Back to all classes</Text>
+                            </View>
+                        </TouchableOpacity>
+                    ) : (
                         <View>
                             <Text style={styles.header}>Gradebook</Text>
-                            <Text style={styles.headerSub}>← Back to all classes</Text>
+                            <Text style={styles.headerSub}>
+                                {currentPeriodName || 'No period loaded'}
+                                {classes.length > 0 ? ` · ${classes.length} classes` : ''}
+                            </Text>
                         </View>
-                    </TouchableOpacity>
-                ) : (
-                    <View>
-                        <Text style={styles.header}>Gradebook</Text>
-                        <Text style={styles.headerSub}>
-                            {currentPeriodName || 'No period loaded'}
-                            {classes.length > 0 ? ` · ${classes.length} classes` : ''}
-                        </Text>
+                    )}
+                    <View style={styles.headerActions}>
+                        {/* Quarter selector */}
+                        <TouchableOpacity
+                            style={styles.periodSelector}
+                            onPress={() => setIsPeriodPickerOpen(true)}
+                        >
+                            <Text style={styles.periodSelectorText} numberOfLines={1}>
+                                {currentPeriodName || 'Select Quarter'}
+                            </Text>
+                            <ChevronDown size={14} color={theme.colors.ink3} />
+                        </TouchableOpacity>
+
+                        {/* Refresh button */}
+                        <TouchableOpacity
+                            style={styles.syncBtn}
+                            onPress={() => syncPeriod(currentPeriodIndex ?? 0)}
+                            disabled={isSyncing}
+                        >
+                            {isSyncing
+                                ? <ActivityIndicator size="small" color={theme.colors.ink} />
+                                : <RefreshCw size={16} color={theme.colors.ink} />
+                            }
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* GPA strip */}
+                {classes.length > 0 && (
+                    <View style={styles.gpaBanner}>
+                        <Text style={styles.gpaBannerLabel}>Weighted GPA</Text>
+                        <Text style={styles.gpaBannerValue}>{calculateOverallGPA()}</Text>
                     </View>
                 )}
-                <View style={styles.headerActions}>
-                    {/* Quarter selector */}
-                    <TouchableOpacity
-                        style={styles.periodSelector}
-                        onPress={() => setIsPeriodPickerOpen(true)}
-                    >
-                        <Text style={styles.periodSelectorText} numberOfLines={1}>
-                            {currentPeriodName || 'Select Quarter'}
-                        </Text>
-                        <ChevronDown size={14} color={theme.colors.ink3} />
-                    </TouchableOpacity>
 
-                    {/* Refresh button */}
-                    <TouchableOpacity
-                        style={styles.syncBtn}
-                        onPress={() => syncPeriod(currentPeriodIndex ?? 0)}
-                        disabled={isSyncing}
-                    >
-                        {isSyncing
-                            ? <ActivityIndicator size="small" color={theme.colors.ink} />
-                            : <RefreshCw size={16} color={theme.colors.ink} />
-                        }
-                    </TouchableOpacity>
-                </View>
+                {/* Content */}
+                {isLoading ? (
+                    <View style={styles.centeredState}>
+                        <ActivityIndicator size="large" color={theme.colors.ink} />
+                        <Text style={[styles.placeholderText, { marginTop: 12 }]}>Loading…</Text>
+                    </View>
+                ) : selectedClass ? (
+                    /* Detail view */
+                    <View style={styles.detailWrapper}>
+                        {renderDetail()}
+                    </View>
+                ) : classes.length === 0 ? (
+                    <View style={styles.centeredState}>
+                        <Text style={{ fontSize: 32, marginBottom: 12 }}>📚</Text>
+                        <Text style={styles.placeholderText}>No grades yet.</Text>
+                        <Text style={styles.placeholderSub}>Go to Settings, enter your StudentVUE credentials, and sync.</Text>
+                    </View>
+                ) : (
+                    /* Class list */
+                    <FlatList
+                        data={classes}
+                        keyExtractor={item => item.id.toString()}
+                        renderItem={renderClassItem}
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ paddingBottom: 40 }}
+                    />
+                )}
+
             </View>
-
-            {/* GPA strip */}
-            {classes.length > 0 && (
-                <View style={styles.gpaBanner}>
-                    <Text style={styles.gpaBannerLabel}>Weighted GPA</Text>
-                    <Text style={styles.gpaBannerValue}>{calculateOverallGPA()}</Text>
-                </View>
-            )}
-
-            {/* Content */}
-            {isLoading ? (
-                <View style={styles.centeredState}>
-                    <ActivityIndicator size="large" color={theme.colors.ink} />
-                    <Text style={[styles.placeholderText, { marginTop: 12 }]}>Loading…</Text>
-                </View>
-            ) : selectedClass ? (
-                /* Detail view */
-                <View style={styles.detailWrapper}>
-                    {renderDetail()}
-                </View>
-            ) : classes.length === 0 ? (
-                <View style={styles.centeredState}>
-                    <Text style={{ fontSize: 32, marginBottom: 12 }}>📚</Text>
-                    <Text style={styles.placeholderText}>No grades yet.</Text>
-                    <Text style={styles.placeholderSub}>Go to Settings, enter your StudentVUE credentials, and sync.</Text>
-                </View>
-            ) : (
-                /* Class list */
-                <FlatList
-                    data={classes}
-                    keyExtractor={item => item.id.toString()}
-                    renderItem={renderClassItem}
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ paddingBottom: 40 }}
-                />
-            )}
-
             {/* Period picker modal */}
             {renderPeriodPicker()}
         </View>
@@ -786,7 +804,8 @@ export default function GradebookScreen() {
 
 // ── Styles ───────────────────────────────────────────────────
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40, paddingHorizontal: 20 },
+    container: { flex: 1, backgroundColor: theme.colors.bg, alignItems: 'center' },
+    contentWrapper: { flex: 1, width: '100%', maxWidth: 1000, paddingHorizontal: 20, paddingTop: 40 },
 
     // Header
     headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },

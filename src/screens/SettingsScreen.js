@@ -124,9 +124,10 @@ export default function SettingsScreen() {
         }
         setIsSchoologySyncing(true);
         let fetchUrl = schoologyUrl.trim().replace(/^webcal:\/\//, 'https://');
+        const proxyUrl = `/api/schoology?url=${encodeURIComponent(fetchUrl)}`;
         try {
-            const response = await fetch(fetchUrl);
-            if (!response.ok) throw new Error('Network response was not ok');
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error('Proxy or Schoology failed');
             const icsData = await response.text();
             const comp = new ICAL.Component(ICAL.parse(icsData));
             const events = comp.getAllSubcomponents('vevent');
