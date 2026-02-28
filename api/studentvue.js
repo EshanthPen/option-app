@@ -21,20 +21,50 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Missing targetUrl or soapPayload' });
         }
 
-        // Older StudentVUE servers often reject requests without a standard User-Agent 
-        const response = await fetch(targetUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'text/xml; charset=utf-8',
-                'SOAPAction': 'http://edupoint.com/webservices/ProcessWebServiceRequest',
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-                'Accept': '*/*, text/xml',
-                'Connection': 'keep-alive'
-            },
-            body: soapPayload
-        });
+        // Extract the base URL just in case the client hardcoded the wrong suffix
+        let baseUrl = targetUrl
+            .replace(/\/Service\/PXPCommunication\.asmx$/i, '')
+            .replace(/\/SVUE\/Service\/PXPCommunication\.asmx$/i, '')
+            .replace(/\/PXP2\/Service\/PXPCommunication\.asmx$/i, '');
 
-        const xmlText = await response.text();
+        const candidateEndpoints = [
+            `${baseUrl}/Service/PXPCommunication.asmx`,
+            `${baseUrl}/SVUE/Service/PXPCommunication.asmx`,
+            `${baseUrl}/PXP2/Service/PXPCommunication.asmx`
+        ];
+
+        let xmlText = '';
+        let successfulResponse = null;
+
+        for (const endpoint of candidateEndpoints) {
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/xml; charset=utf-8',
+                        'SOAPAction': 'http://edupoint.com/webservices/ProcessWebServiceRequest',
+                        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+                        'Accept': '*/*, text/xml',
+                        'Connection': 'keep-alive'
+                    },
+                    body: soapPayload
+                });
+
+                const text = await response.text();
+                // A valid SOAP response will rarely start with HTML unless it's an error page (like a 404 or SSO redirect)
+                if (!text.trimStart().toLowerCase().startsWith('<!doctype') && !text.trimStart().toLowerCase().startsWith('<html')) {
+                    xmlText = text;
+                    successfulResponse = response;
+                    break;
+                }
+            } catch (err) {
+                console.warn(`Endpoint ${endpoint} failed:`, err.message);
+            }
+        }
+
+        if (!xmlText) {
+            return res.status(502).json({ error: 'Failed to find a valid StudentVUE proxy endpoint for this district.' });
+        }
 
         // Vercel Serverless automatically applies CORS headers if configured in vercel.json, 
         // but we can explicitly set them here just to be safe.

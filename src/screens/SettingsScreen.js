@@ -185,7 +185,7 @@ export default function SettingsScreen() {
                 const desc = (ev.description || '').toLowerCase();
                 const dueDate = ev.startDate ? ev.startDate.toJSDate() : new Date();
 
-                if (desc.includes('completed') || desc.includes('submitted') || dueDate < now) return null;
+                if (desc.includes('completed') || desc.includes('submitted') || dueDate < new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)) return null;
 
                 const diffDays = (dueDate - now) / (1000 * 60 * 60 * 24);
                 const u = diffDays <= 7 ? 9 : 5;
@@ -212,11 +212,15 @@ export default function SettingsScreen() {
             if (imported.length > 0) {
                 const { error } = await supabase.from('tasks').insert(imported);
                 if (error) throw error;
-            }
 
-            const msg = `Sync Complete: Imported ${imported.length} upcoming assignments.`;
-            if (Platform.OS === 'web') window.alert(msg);
-            else Alert.alert('Sync Complete', msg);
+                const msg = `Sync Complete: Imported ${imported.length} upcoming or recent assignments.`;
+                if (Platform.OS === 'web') window.alert(msg);
+                else Alert.alert('Sync Complete', msg);
+            } else {
+                const emptyMsg = `No recent or upcoming assignments were found in your Schoology calendar.`;
+                if (Platform.OS === 'web') window.alert(emptyMsg);
+                else Alert.alert('No Assignments', emptyMsg);
+            }
         } catch (err) {
             console.error('Schoology Sync Error:', err);
             const errMsg = `Failed to sync: ${err.message}`;
