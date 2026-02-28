@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Alert, S
 import { LineChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import { colors, fonts, sizes } from '../theme';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -128,6 +129,13 @@ export default function GradebookScreen() {
     };
 
     // --- UI: Render Items ---
+    const getGradeColor = (grade) => {
+        if (grade >= 90) return colors.green;
+        if (grade >= 80) return colors.blue;
+        if (grade >= 70) return colors.orange;
+        return colors.red;
+    };
+
     const renderClassItem = ({ item }) => (
         <TouchableOpacity
             style={[styles.classCard, selectedClass?.id === item.id && styles.selectedCard]}
@@ -138,13 +146,13 @@ export default function GradebookScreen() {
                 setRequiredScore(null);
             }}
         >
-            <Text style={styles.className}>{item.name}</Text>
-            <Text style={[
-                styles.classGrade,
-                { color: item.grade >= 90 ? '#34C759' : item.grade >= 80 ? '#FF9500' : '#FF3B30' }
-            ]}>
-                {item.grade}%
-            </Text>
+            <View style={styles.classCardHeader}>
+                <Text style={styles.className} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.classGrade}>{item.grade}%</Text>
+            </View>
+            <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarFill, { width: `${Math.min(item.grade, 100)}%`, backgroundColor: getGradeColor(item.grade) }]} />
+            </View>
         </TouchableOpacity>
     );
 
@@ -161,9 +169,12 @@ export default function GradebookScreen() {
     return (
         <View style={styles.container}>
             <View style={styles.headerRow}>
-                <Text style={styles.header}>Gradebook</Text>
+                <View>
+                    <Text style={styles.header}>Gradebook</Text>
+                    <Text style={styles.subHeader}>StudentVUE Sync</Text>
+                </View>
                 <View style={styles.gpaBadge}>
-                    <Text style={styles.gpaText}>GPA: {calculateOverallGPA()}</Text>
+                    <Text style={styles.gpaText}>{calculateOverallGPA()} GPA</Text>
                 </View>
             </View>
 
@@ -294,39 +305,43 @@ export default function GradebookScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#f9f9f9', paddingTop: 50 },
+    container: { flex: 1, padding: 20, backgroundColor: colors.bg, paddingTop: 50 },
     headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    header: { fontSize: 28, fontWeight: 'bold', color: '#333' },
-    gpaBadge: { backgroundColor: '#333', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15 },
-    gpaText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-    sectionTitle: { fontSize: 18, fontWeight: '600', marginBottom: 10, color: '#444' },
+    header: { fontFamily: fonts.displayBold, fontSize: 26, color: colors.ink, letterSpacing: -0.5 },
+    subHeader: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: colors.ink3, marginTop: 4 },
+    gpaBadge: { backgroundColor: colors.ink, paddingHorizontal: 12, paddingVertical: 6, borderRadius: sizes.radius },
+    gpaText: { color: colors.surface, fontFamily: fonts.monoMedium, fontSize: 12, letterSpacing: 1 },
+    sectionTitle: { fontFamily: fonts.sansSemiBold, fontSize: 16, marginBottom: 10, color: colors.ink2, textTransform: 'uppercase', letterSpacing: 1 },
 
     listContainer: { flex: 0.35, marginBottom: 15 },
-    classCard: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2, borderWidth: 1, borderColor: 'transparent' },
-    selectedCard: { borderColor: '#007AFF', backgroundColor: '#f0f8ff' },
-    className: { fontSize: 16, fontWeight: '500', color: '#333' },
-    classGrade: { fontSize: 16, fontWeight: 'bold' },
+    classCard: { backgroundColor: colors.surface, padding: 15, borderRadius: sizes.radius, marginBottom: 10, borderWidth: 1, borderColor: colors.border },
+    selectedCard: { borderColor: colors.ink2, backgroundColor: colors.surface2 },
+    classCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    className: { fontFamily: fonts.sansMedium, fontSize: 13, color: colors.ink, flex: 1, paddingRight: 10 },
+    classGrade: { fontFamily: fonts.monoMedium, fontSize: 14, color: colors.ink },
+    progressBarBg: { height: 4, backgroundColor: colors.border2, borderRadius: 2, overflow: 'hidden' },
+    progressBarFill: { height: '100%', borderRadius: 2 },
 
-    detailsContainer: { flex: 0.65, backgroundColor: '#fff', padding: 15, borderRadius: 15, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
-    placeholderText: { color: '#888', fontStyle: 'italic', textAlign: 'center', marginTop: 40 },
-    selectedClassText: { fontSize: 20, fontWeight: 'bold', marginBottom: 15, color: '#333', textAlign: 'center' },
+    detailsContainer: { flex: 0.65, backgroundColor: colors.surface, padding: 15, borderRadius: sizes.radius, borderWidth: 1, borderColor: colors.border },
+    placeholderText: { fontFamily: fonts.sans, color: colors.ink3, fontStyle: 'italic', textAlign: 'center', marginTop: 40, lineHeight: 20 },
+    selectedClassText: { fontFamily: fonts.displayBold, fontSize: 18, marginBottom: 15, color: colors.ink, textAlign: 'center' },
 
-    tabRow: { flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 8, padding: 4, marginBottom: 10 },
-    tabBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6 },
-    tabBtnActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
-    tabText: { fontSize: 14, color: '#666', fontWeight: '500' },
-    tabTextActive: { color: '#007AFF', fontWeight: 'bold' },
+    tabRow: { flexDirection: 'row', backgroundColor: colors.surface2, borderRadius: sizes.radius, padding: 4, marginBottom: 10 },
+    tabBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 4 },
+    tabBtnActive: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border2 },
+    tabText: { fontFamily: fonts.sansMedium, fontSize: 12, color: colors.ink3 },
+    tabTextActive: { color: colors.ink },
 
-    assignmentCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
-    assignmentTitle: { fontSize: 15, fontWeight: '500', color: '#333' },
-    assignmentWeight: { fontSize: 12, color: '#888', marginTop: 2 },
-    assignmentScore: { fontSize: 16, fontWeight: '600', color: '#007AFF' },
+    assignmentCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+    assignmentTitle: { fontFamily: fonts.sansMedium, fontSize: 13, color: colors.ink },
+    assignmentWeight: { fontFamily: fonts.mono, fontSize: 10, color: colors.ink3, marginTop: 4 },
+    assignmentScore: { fontFamily: fonts.monoMedium, fontSize: 14, color: colors.blue },
 
-    label: { fontSize: 14, color: '#555', marginBottom: 5, marginTop: 10 },
-    input: { backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 12, fontSize: 16 },
-    calcButton: { backgroundColor: '#007AFF', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 20 },
-    calcButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-    resultBox: { marginTop: 20, padding: 15, backgroundColor: '#f0f8ff', borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#cce5ff' },
-    resultLabel: { fontSize: 14, color: '#555', marginBottom: 5, textAlign: 'center' },
-    resultValue: { fontSize: 32, fontWeight: 'bold', color: '#333' }
+    label: { fontFamily: fonts.sansMedium, fontSize: 13, color: colors.ink2, marginBottom: 5, marginTop: 10 },
+    input: { fontFamily: fonts.sans, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border, borderRadius: sizes.radius, padding: 12, fontSize: 14, color: colors.ink },
+    calcButton: { backgroundColor: colors.ink, padding: 15, borderRadius: sizes.radius, alignItems: 'center', marginTop: 20 },
+    calcButtonText: { fontFamily: fonts.sansMedium, color: colors.surface, fontSize: 14 },
+    resultBox: { marginTop: 20, padding: 15, backgroundColor: colors.surface2, borderRadius: sizes.radius, alignItems: 'center', borderWidth: 1, borderColor: colors.border2 },
+    resultLabel: { fontFamily: fonts.sans, fontSize: 13, color: colors.ink2, marginBottom: 5, textAlign: 'center' },
+    resultValue: { fontFamily: fonts.displayBold, fontSize: 28, color: colors.ink }
 });

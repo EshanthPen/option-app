@@ -4,6 +4,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ICAL from 'ical.js';
 import { supabase } from '../supabaseClient';
+import { colors, fonts, sizes } from '../theme';
 
 export default function MatrixScreen() {
     const [tasks, setTasks] = useState([]);
@@ -181,21 +182,24 @@ export default function MatrixScreen() {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.header}>Eisenhower Matrix</Text>
+            <View style={styles.pageHeader}>
+                <Text style={styles.header}>Eisenhower Matrix</Text>
+                <Text style={styles.subHeader}>Priority Task Management</Text>
+            </View>
 
             <View style={styles.grid}>
                 {/* Q1: Do First (Urgency: 6-10, Importance: 6-10) */}
-                <View style={[styles.quadrant, { backgroundColor: '#ffecec' }]}>
+                <View style={[styles.quadrant, styles.quadrantHigh]}>
                     <Text style={styles.quadrantTitle}>Do First</Text>
-                    <Text style={styles.quadrantDesc}>Urgent & Important</Text>
+                    <Text style={[styles.quadrantDesc, { color: colors.red }]}>Urgent & Important</Text>
                     <FlatList
                         data={getTasksForQuadrant(6, 6, 10, 10)}
                         keyExtractor={item => item.id}
                         renderItem={({ item }) => (
                             <View style={styles.taskItemContainer}>
-                                <Text style={styles.taskItem}>• {item.title}</Text>
+                                <Text style={styles.taskItem} numberOfLines={2}>• {item.title}</Text>
                                 <TouchableOpacity style={styles.blockTimeBtn} onPress={() => blockTaskOnCalendar(item)}>
-                                    <Text style={styles.blockTimeText}>📅 Block Time</Text>
+                                    <Text style={styles.blockTimeText}>📅 Block</Text>
                                 </TouchableOpacity>
                             </View>
                         )}
@@ -203,17 +207,17 @@ export default function MatrixScreen() {
                 </View>
 
                 {/* Q2: Schedule (Urgency: 1-5, Importance: 6-10) */}
-                <View style={[styles.quadrant, { backgroundColor: '#eef6fc' }]}>
+                <View style={[styles.quadrant, styles.quadrantTest]}>
                     <Text style={styles.quadrantTitle}>Schedule</Text>
-                    <Text style={styles.quadrantDesc}>Not Urgent, Important</Text>
+                    <Text style={[styles.quadrantDesc, { color: colors.blue }]}>Not Urgent, Important</Text>
                     <FlatList
                         data={getTasksForQuadrant(6, 1, 10, 5)}
                         keyExtractor={item => item.id}
                         renderItem={({ item }) => (
                             <View style={styles.taskItemContainer}>
-                                <Text style={styles.taskItem}>• {item.title}</Text>
+                                <Text style={styles.taskItem} numberOfLines={2}>• {item.title}</Text>
                                 <TouchableOpacity style={styles.blockTimeBtn} onPress={() => blockTaskOnCalendar(item)}>
-                                    <Text style={styles.blockTimeText}>📅 Block Time</Text>
+                                    <Text style={styles.blockTimeText}>📅 Block</Text>
                                 </TouchableOpacity>
                             </View>
                         )}
@@ -223,17 +227,17 @@ export default function MatrixScreen() {
 
             <View style={styles.grid}>
                 {/* Q3: Delegate (Urgency: 6-10, Importance: 1-5) */}
-                <View style={[styles.quadrant, { backgroundColor: '#fcf8ee' }]}>
+                <View style={[styles.quadrant, styles.quadrantMed]}>
                     <Text style={styles.quadrantTitle}>Delegate</Text>
-                    <Text style={styles.quadrantDesc}>Urgent, Not Important</Text>
+                    <Text style={[styles.quadrantDesc, { color: colors.orange }]}>Urgent, Not Important</Text>
                     <FlatList
                         data={getTasksForQuadrant(1, 6, 5, 10)}
                         keyExtractor={item => item.id}
                         renderItem={({ item }) => (
                             <View style={styles.taskItemContainer}>
-                                <Text style={styles.taskItem}>• {item.title}</Text>
+                                <Text style={styles.taskItem} numberOfLines={2}>• {item.title}</Text>
                                 <TouchableOpacity style={styles.blockTimeBtn} onPress={() => blockTaskOnCalendar(item)}>
-                                    <Text style={styles.blockTimeText}>📅 Block Time</Text>
+                                    <Text style={styles.blockTimeText}>📅 Block</Text>
                                 </TouchableOpacity>
                             </View>
                         )}
@@ -241,17 +245,17 @@ export default function MatrixScreen() {
                 </View>
 
                 {/* Q4: Eliminate (Urgency: 1-5, Importance: 1-5) */}
-                <View style={[styles.quadrant, { backgroundColor: '#f2f2f2' }]}>
+                <View style={[styles.quadrant, styles.quadrantLow]}>
                     <Text style={styles.quadrantTitle}>Eliminate</Text>
-                    <Text style={styles.quadrantDesc}>Not Urgent, Not Important</Text>
+                    <Text style={[styles.quadrantDesc, { color: colors.green }]}>Not Urgent, Not Important</Text>
                     <FlatList
                         data={getTasksForQuadrant(1, 1, 5, 5)}
                         keyExtractor={item => item.id}
                         renderItem={({ item }) => (
                             <View style={styles.taskItemContainer}>
-                                <Text style={styles.taskItem}>• {item.title}</Text>
+                                <Text style={styles.taskItem} numberOfLines={2}>• {item.title}</Text>
                                 <TouchableOpacity style={styles.blockTimeBtn} onPress={() => blockTaskOnCalendar(item)}>
-                                    <Text style={styles.blockTimeText}>📅 Block Time</Text>
+                                    <Text style={styles.blockTimeText}>📅 Block</Text>
                                 </TouchableOpacity>
                             </View>
                         )}
@@ -260,12 +264,12 @@ export default function MatrixScreen() {
             </View>
 
             <View style={styles.buttonRow}>
-                <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
-                    <Text style={styles.addButtonText}>+ Add Task manually</Text>
+                <TouchableOpacity style={styles.btnDark} onPress={() => setModalVisible(true)}>
+                    <Text style={styles.btnDarkText}>+ Add Task manually</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.addButton, { backgroundColor: '#34C759' }]} onPress={importICSFromUrl}>
-                    <Text style={styles.addButtonText}>📥 Import Schoology</Text>
+                <TouchableOpacity style={styles.btnOut} onPress={importICSFromUrl}>
+                    <Text style={styles.btnOutText}>📥 Import Schoology</Text>
                 </TouchableOpacity>
             </View>
 
@@ -276,19 +280,19 @@ export default function MatrixScreen() {
                         <Text style={styles.modalTitle}>New Task</Text>
 
                         <TextInput style={styles.input} placeholder="Task Title" value={title} onChangeText={setTitle} />
-                        <Text>Urgency (1-10)</Text>
+                        <Text style={styles.modalLabel}>Urgency (1-10)</Text>
                         <TextInput style={styles.input} placeholder="5" keyboardType="numeric" value={urgency} onChangeText={setUrgency} />
-                        <Text>Importance (1-10)</Text>
+                        <Text style={styles.modalLabel}>Importance (1-10)</Text>
                         <TextInput style={styles.input} placeholder="5" keyboardType="numeric" value={importance} onChangeText={setImportance} />
-                        <Text>Duration (minutes)</Text>
+                        <Text style={styles.modalLabel}>Duration (minutes)</Text>
                         <TextInput style={styles.input} placeholder="60" keyboardType="numeric" value={duration} onChangeText={setDuration} />
 
                         <View style={styles.modalButtons}>
                             <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
-                                <Text style={{ color: 'white' }}>Cancel</Text>
+                                <Text style={styles.cancelBtnText}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.saveBtn} onPress={handleAddTask}>
-                                <Text style={{ color: 'white' }}>Save Task</Text>
+                                <Text style={styles.saveBtnText}>Save Task</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -300,24 +304,44 @@ export default function MatrixScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-    header: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-    grid: { flex: 0.4, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
-    quadrant: { flex: 0.48, padding: 10, borderRadius: 10, overflow: 'hidden' },
-    quadrantTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', textAlign: 'center' },
-    quadrantDesc: { fontSize: 10, color: '#666', textAlign: 'center', marginBottom: 8 },
-    taskItemContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingRight: 5 },
-    taskItem: { fontSize: 12, color: '#444', flex: 1, marginRight: 5 },
-    blockTimeBtn: { backgroundColor: '#4285F4', paddingVertical: 4, paddingHorizontal: 6, borderRadius: 4 },
-    blockTimeText: { color: 'white', fontSize: 9, fontWeight: 'bold' },
-    buttonRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 10 },
-    addButton: { backgroundColor: '#007AFF', padding: 15, borderRadius: 10, alignItems: 'center', flex: 0.45 },
-    addButtonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+    container: { flex: 1, padding: 20, backgroundColor: colors.bg },
+    pageHeader: { marginBottom: 20 },
+    header: { fontFamily: fonts.displayBold, fontSize: 26, color: colors.ink, letterSpacing: -0.5 },
+    subHeader: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: colors.ink3, marginTop: 4 },
+
+    grid: { flex: 0.45, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+    quadrant: { flex: 0.48, padding: 12, borderRadius: sizes.radius, borderLeftWidth: 3 },
+    quadrantTitle: { fontFamily: fonts.sansSemiBold, fontSize: 14, color: colors.ink, marginBottom: 2 },
+    quadrantDesc: { fontFamily: fonts.monoMedium, fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+
+    quadrantHigh: { backgroundColor: '#fdf0f0', borderLeftColor: colors.red },
+    quadrantTest: { backgroundColor: '#eef2fb', borderLeftColor: colors.blue },
+    quadrantMed: { backgroundColor: '#fdf4ee', borderLeftColor: colors.orange },
+    quadrantLow: { backgroundColor: '#eef7f2', borderLeftColor: colors.green },
+
+    taskItemContainer: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 },
+    taskItem: { fontFamily: fonts.sans, fontSize: 12, color: colors.ink2, flex: 1, marginRight: 5, lineHeight: 16 },
+    blockTimeBtn: { backgroundColor: colors.ink, paddingVertical: 4, paddingHorizontal: 6, borderRadius: 4 },
+    blockTimeText: { fontFamily: fonts.sansMedium, color: colors.surface, fontSize: 9 },
+
+    buttonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+
+    btnDark: { backgroundColor: colors.ink, paddingVertical: 12, paddingHorizontal: 15, borderRadius: sizes.radius, alignItems: 'center', flex: 0.48 },
+    btnDarkText: { fontFamily: fonts.sansMedium, color: colors.surface, fontSize: 13 },
+
+    btnOut: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border2, paddingVertical: 12, paddingHorizontal: 15, borderRadius: sizes.radius, alignItems: 'center', flex: 0.48 },
+    btnOutText: { fontFamily: fonts.sansMedium, color: colors.ink2, fontSize: 13 },
+
     modalOverlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
-    modalView: { margin: 20, backgroundColor: 'white', borderRadius: 20, padding: 35, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, elevation: 5 },
-    modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
-    input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, marginBottom: 15 },
-    modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
-    cancelBtn: { backgroundColor: '#FF3B30', padding: 10, borderRadius: 8, flex: 0.45, alignItems: 'center' },
-    saveBtn: { backgroundColor: '#34C759', padding: 10, borderRadius: 8, flex: 0.45, alignItems: 'center' }
+    modalView: { margin: 20, backgroundColor: colors.surface, borderRadius: 10, padding: 25, borderWidth: 1, borderColor: colors.border },
+    modalTitle: { fontFamily: fonts.displayBold, fontSize: 20, marginBottom: 15, letterSpacing: -0.3, color: colors.ink },
+
+    input: { fontFamily: fonts.sans, borderWidth: 1, borderColor: colors.border, borderRadius: sizes.radius, padding: 10, marginBottom: 15, backgroundColor: colors.surface2, fontSize: 13 },
+    modalLabel: { fontFamily: fonts.monoMedium, fontSize: 10, color: colors.ink3, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 5 },
+
+    modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+    cancelBtn: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border2, padding: 12, borderRadius: sizes.radius, flex: 0.48, alignItems: 'center' },
+    cancelBtnText: { fontFamily: fonts.sansMedium, color: colors.ink2, fontSize: 13 },
+    saveBtn: { backgroundColor: colors.ink, padding: 12, borderRadius: sizes.radius, flex: 0.48, alignItems: 'center' },
+    saveBtnText: { fontFamily: fonts.sansMedium, color: colors.surface, fontSize: 13 }
 });

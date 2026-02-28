@@ -6,6 +6,7 @@ import * as AuthSession from 'expo-auth-session';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
 import { parseStudentVueGradebook } from '../utils/studentVueParser';
+import { colors, fonts, sizes } from '../theme';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -141,31 +142,33 @@ export default function SettingsScreen() {
             if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
             if (!baseUrl.startsWith('http')) baseUrl = 'https://' + baseUrl;
 
-            const endpoint = `https://cors-anywhere.herokuapp.com/${baseUrl}/Service/PXPCommunication.asmx`;
+            // Build the exact target URL
+            const finalTargetUrl = baseUrl.endsWith('Service/PXPCommunication.asmx')
+                ? baseUrl
+                : `${baseUrl}/Service/PXPCommunication.asmx`;
 
-            const soapPayload = `<?xml version="1.0" encoding="utf-8"?>
-            <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-            <soap:Body>
-                <ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/">
-                <userID>${svUser}</userID>
-                <password>${svPass}</password>
-                <skipLoginLog>true</skipLoginLog>
-                <parent>false</parent>
-                <webServiceHandleName>PXPWebServices</webServiceHandleName>
-                <methodName>Gradebook</methodName>
-                <paramStr>&lt;Parms&gt;&lt;ChildIntID&gt;0&lt;/ChildIntID&gt;&lt;/Parms&gt;</paramStr>
-                </ProcessWebServiceRequest>
-            </soap:Body>
-            </soap:Envelope>`;
+            // Use our secure Vercel Serverless Function to proxy the request and avoid CORS errors
+            const proxyEndpoint = '/api/studentvue';
 
-            const response = await fetch(endpoint, {
+            const response = await fetch(proxyEndpoint, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'text/xml; charset=utf-8',
-                    'SOAPAction': 'http://edupoint.com/webservices/ProcessWebServiceRequest'
+                    'Content-Type': 'application/json',
                 },
-                body: soapPayload
+                body: JSON.stringify({
+                    targetUrl: finalTargetUrl,
+                    soapPayload: soapPayload
+                })
             });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                console.error("PROXY ERROR RESPONSE:", errData);
+                const cause = errData?.cause || errData?.details || response.statusText;
+                if (typeof window !== 'undefined') window.alert(`Connection Error: ${cause}`);
+                else Alert.alert("Connection Error", String(cause));
+                return;
+            }
 
             const xmlText = await response.text();
 
@@ -241,11 +244,13 @@ export default function SettingsScreen() {
 
     return (
         <ScrollView style={styles.container}>
-            <Text style={styles.header}>Integrations & Sync</Text>
-            <Text style={styles.subtitle}>Connect outside apps to build your schedule.</Text>
+            <View style={styles.pageHeader}>
+                <Text style={styles.header}>Integrations & Sync</Text>
+                <Text style={styles.subtitle}>Connect outside apps to build your schedule.</Text>
+            </View>
 
             {/* --- GOOGLE LOGIN --- */}
-            <View style={[styles.card, { borderColor: '#4285F4', borderWidth: 2 }]}>
+            <View style={[styles.card, { borderColor: colors.blue }]}>
                 <Text style={styles.cardTitle}>Google Accounts</Text>
                 <Text style={styles.instructions}>
                     Sign in with Google to allow Option to automatically read your free time and insert task blocks into your calendar.
@@ -253,14 +258,14 @@ export default function SettingsScreen() {
 
                 {accessToken ? (
                     <View>
-                        <Text style={{ color: '#34C759', fontWeight: 'bold', marginBottom: 15 }}>✅ Account Linked and Authorized</Text>
+                        <Text style={{ fontFamily: fonts.monoMedium, color: colors.green, fontSize: 13, marginBottom: 15 }}>✅ Account Linked</Text>
                         <TouchableOpacity style={styles.actionBtn} onPress={blockOutTimeOnGoogleCalendar}>
-                            <Text style={styles.actionBtnText}>Test: Block 1 Hour Now</Text>
+                            <Text style={styles.actionBtnText}>Test: Block 1 Hour</Text>
                         </TouchableOpacity>
                     </View>
                 ) : (
                     <TouchableOpacity
-                        style={[styles.googleBtn, !request && { opacity: 0.5 }]}
+                        style={[styles.btnOutline, !request && { opacity: 0.5 }]}
                         disabled={!request}
                         onPress={() => {
                             console.log("GOOGLE BUTTON CLICKED!");
@@ -273,7 +278,7 @@ export default function SettingsScreen() {
                             }
                         }}
                     >
-                        <Text style={styles.googleBtnText}>
+                        <Text style={styles.btnOutlineText}>
                             {request ? "Sign In with Google" : "Loading Auth..."}
                         </Text>
                     </TouchableOpacity>
@@ -294,7 +299,7 @@ export default function SettingsScreen() {
             </View>
 
             {/* --- STUDENTVUE / SYNERGY --- */}
-            <View style={[styles.card, { borderColor: '#8E24AA', borderWidth: 2 }]}>
+            <View style={[styles.card, { borderColor: colors.orange }]}>
                 <Text style={styles.cardTitle}>StudentVUE Grades</Text>
                 <Text style={styles.instructions}>
                     Connect your school's StudentVUE portal to automatically fetch and calculate your latest grades.
@@ -322,12 +327,13 @@ export default function SettingsScreen() {
                 <TextInput
                     style={styles.input}
                     placeholder="Password"
+                    placeholderTextColor={colors.ink4}
                     value={svPass}
                     onChangeText={setSvPass}
                     secureTextEntry
                 />
 
-                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#8E24AA', marginTop: 15 }]} onPress={handleStudentVueLogin}>
+                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.ink, marginTop: 15 }]} onPress={handleStudentVueLogin}>
                     <Text style={styles.actionBtnText}>Sync Grades Now</Text>
                 </TouchableOpacity>
             </View>
@@ -341,19 +347,24 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#f9f9f9', paddingTop: 50 },
-    header: { fontSize: 28, fontWeight: 'bold', color: '#333' },
-    subtitle: { fontSize: 14, color: '#666', marginTop: 5, marginBottom: 25 },
-    card: { backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 3 },
-    cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 10 },
-    instructions: { fontSize: 13, color: '#555', lineHeight: 20, marginBottom: 15 },
-    input: { backgroundColor: '#f0f0f0', padding: 12, borderRadius: 8, fontSize: 14, borderWidth: 1, borderColor: '#ddd' },
-    saveButton: { backgroundColor: '#333', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 10, marginBottom: 40 },
-    saveButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+    container: { flex: 1, padding: 20, backgroundColor: colors.bg, paddingTop: 50 },
+    pageHeader: { marginBottom: 25 },
+    header: { fontFamily: fonts.displayBold, fontSize: 26, color: colors.ink, letterSpacing: -0.5 },
+    subtitle: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: colors.ink3, marginTop: 4 },
 
-    googleBtn: { backgroundColor: '#4285F4', padding: 15, borderRadius: 10, alignItems: 'center' },
-    googleBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+    card: { backgroundColor: colors.surface, padding: 20, borderRadius: sizes.radius, marginBottom: 20, borderWidth: 1, borderColor: colors.border },
+    cardTitle: { fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.ink, marginBottom: 8 },
+    instructions: { fontFamily: fonts.sans, fontSize: 13, color: colors.ink2, lineHeight: 20, marginBottom: 15 },
 
-    actionBtn: { backgroundColor: '#007AFF', padding: 12, borderRadius: 8, alignItems: 'center' },
-    actionBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' }
+    label: { fontFamily: fonts.monoMedium, fontSize: 10, color: colors.ink3, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 5, marginTop: 10 },
+    input: { fontFamily: fonts.sans, backgroundColor: colors.surface2, borderWidth: 1, borderColor: colors.border, borderRadius: sizes.radius, padding: 12, fontSize: 14, color: colors.ink, marginBottom: 5 },
+
+    saveButton: { backgroundColor: colors.ink, padding: 15, borderRadius: sizes.radius, alignItems: 'center', marginTop: 10, marginBottom: 40 },
+    saveButtonText: { fontFamily: fonts.sansMedium, color: colors.surface, fontSize: 14 },
+
+    btnOutline: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border2, padding: 12, borderRadius: sizes.radius, alignItems: 'center' },
+    btnOutlineText: { fontFamily: fonts.sansMedium, color: colors.ink2, fontSize: 14 },
+
+    actionBtn: { backgroundColor: colors.ink, padding: 12, borderRadius: sizes.radius, alignItems: 'center' },
+    actionBtnText: { fontFamily: fonts.sansMedium, color: colors.surface, fontSize: 14 }
 });

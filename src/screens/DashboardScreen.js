@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { LineChart, ProgressChart } from 'react-native-chart-kit';
+import { colors, fonts, sizes } from '../theme';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -54,7 +55,10 @@ export default function DashboardScreen() {
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-            <Text style={styles.header}>Welcome Back!</Text>
+            <View style={styles.pageHeader}>
+                <Text style={styles.header}>Welcome Back!</Text>
+                <Text style={styles.subtitle}>Let's get some work done.</Text>
+            </View>
 
             {/* --- POMODORO WIDGET --- */}
             <View style={styles.timerCard}>
@@ -72,11 +76,11 @@ export default function DashboardScreen() {
                 <Text style={styles.timeDisplay}>{formatTime(timeLeft)}</Text>
 
                 <View style={styles.timerButtonRow}>
-                    <TouchableOpacity style={[styles.timerBtn, { backgroundColor: isActive ? '#FF9500' : '#34C759' }]} onPress={toggleTimer}>
+                    <TouchableOpacity style={[styles.timerBtn, { backgroundColor: isActive ? colors.orange : colors.ink }]} onPress={toggleTimer}>
                         <Text style={styles.timerBtnText}>{isActive ? 'Pause' : 'Start'}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.timerBtn, { backgroundColor: '#FF3B30' }]} onPress={resetTimer}>
-                        <Text style={styles.timerBtnText}>Reset</Text>
+                    <TouchableOpacity style={styles.timerBtnOut} onPress={resetTimer}>
+                        <Text style={styles.timerBtnOutText}>Reset</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -93,14 +97,14 @@ export default function DashboardScreen() {
                 height={220}
                 yAxisSuffix="h"
                 chartConfig={{
-                    backgroundColor: "#007AFF",
-                    backgroundGradientFrom: "#007AFF",
-                    backgroundGradientTo: "#00c6ff",
-                    decimalPlaces: 1, // optional, defaults to 2dp
-                    color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                    labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                    style: { borderRadius: 16 },
-                    propsForDots: { r: "6", strokeWidth: "2", stroke: "#ffa726" }
+                    backgroundColor: colors.surface,
+                    backgroundGradientFrom: colors.surface,
+                    backgroundGradientTo: colors.surface,
+                    decimalPlaces: 1,
+                    color: (opacity = 1) => `rgba(13, 12, 10, ${opacity})`, // colors.ink rgb
+                    labelColor: (opacity = 1) => `rgba(13, 12, 10, ${opacity})`,
+                    style: { borderRadius: sizes.radius },
+                    propsForDots: { r: "5", strokeWidth: "2", stroke: colors.ink }
                 }}
                 bezier
                 style={styles.chart}
@@ -114,11 +118,11 @@ export default function DashboardScreen() {
                 strokeWidth={16}
                 radius={32}
                 chartConfig={{
-                    backgroundColor: "#fff",
-                    backgroundGradientFrom: "#fff",
-                    backgroundGradientTo: "#fff",
-                    color: (opacity = 1) => `rgba(52, 199, 89, ${opacity})`,
-                    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                    backgroundColor: colors.surface,
+                    backgroundGradientFrom: colors.surface,
+                    backgroundGradientTo: colors.surface,
+                    color: (opacity = 1) => `rgba(13, 12, 10, ${opacity})`, // colors.ink rgb
+                    labelColor: (opacity = 1) => `rgba(13, 12, 10, ${opacity})`,
                 }}
                 hideLegend={false}
                 style={styles.chart}
@@ -130,20 +134,27 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#f9f9f9', paddingTop: 50 },
-    header: { fontSize: 32, fontWeight: 'bold', color: '#333', marginBottom: 20 },
-    sectionTitle: { fontSize: 18, fontWeight: '600', color: '#444', marginBottom: 10, marginTop: 10 },
+    container: { flex: 1, padding: 20, backgroundColor: colors.bg, paddingTop: 50 },
+    pageHeader: { marginBottom: 25 },
+    header: { fontFamily: fonts.displayBold, fontSize: 32, color: colors.ink, letterSpacing: -0.5 },
+    subtitle: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: colors.ink3, marginTop: 4 },
 
-    timerCard: { backgroundColor: '#fff', padding: 20, borderRadius: 15, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4, marginBottom: 25, alignItems: 'center' },
+    sectionTitle: { fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.ink2, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, marginTop: 10 },
+
+    timerCard: { backgroundColor: colors.surface, padding: 25, borderRadius: sizes.radius, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 4, marginBottom: 25, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
     timerHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 15 },
-    timerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-    switchModeText: { color: '#007AFF', fontWeight: '600' },
-    timeDisplay: { fontSize: 64, fontWeight: 'bold', color: '#222', letterSpacing: 2 },
+    timerTitle: { fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.ink },
+    switchModeText: { fontFamily: fonts.sansMedium, color: colors.blue, fontSize: 13 },
+    timeDisplay: { fontFamily: fonts.displayBold, fontSize: 64, color: colors.ink, letterSpacing: -2 },
 
     timerButtonRow: { flexDirection: 'row', gap: 15, marginTop: 20 },
-    timerBtn: { paddingVertical: 12, paddingHorizontal: 30, borderRadius: 25 },
-    timerBtnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-    blockerAlert: { marginTop: 15, color: '#FF3B30', fontWeight: 'bold', fontSize: 14 },
+    timerBtn: { paddingVertical: 12, paddingHorizontal: 30, borderRadius: sizes.radius, minWidth: 100, alignItems: 'center' },
+    timerBtnText: { fontFamily: fonts.sansMedium, color: colors.surface, fontSize: 14 },
 
-    chart: { marginVertical: 8, borderRadius: 16, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 3 }
+    timerBtnOut: { paddingVertical: 12, paddingHorizontal: 30, borderRadius: sizes.radius, minWidth: 100, alignItems: 'center', backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border2 },
+    timerBtnOutText: { fontFamily: fonts.sansMedium, color: colors.ink2, fontSize: 14 },
+
+    blockerAlert: { fontFamily: fonts.sansMedium, marginTop: 15, color: colors.red, fontSize: 13 },
+
+    chart: { marginVertical: 8, borderRadius: sizes.radius, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 3, borderWidth: 1, borderColor: colors.border }
 });

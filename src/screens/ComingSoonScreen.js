@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { colors, fonts, sizes } from '../theme';
 
 export default function ComingSoonScreen() {
     const features = [
@@ -26,10 +27,11 @@ export default function ComingSoonScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#f5f5f5', paddingTop: 50 },
-    header: { fontSize: 32, fontWeight: 'bold', color: '#333' },
-    subtitle: { fontSize: 14, color: '#666', marginTop: 10, marginBottom: 25, lineHeight: 20 },
-    card: { backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 15, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2, borderLeftWidth: 4, borderLeftColor: '#007AFF' },
-    cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 5 },
-    cardDesc: { color: '#555', lineHeight: 20 }
+    container: { flex: 1, padding: 20, backgroundColor: colors.bg, paddingTop: 50 },
+    header: { fontFamily: fonts.displayBold, fontSize: 32, color: colors.ink, letterSpacing: -0.5 },
+    subtitle: { fontFamily: fonts.sansMedium, fontSize: 13, color: colors.ink2, marginTop: 10, marginBottom: 25, lineHeight: 20 },
+
+    card: { backgroundColor: colors.surface, padding: 20, borderRadius: sizes.radius, marginBottom: 15, borderWidth: 1, borderColor: colors.border, borderLeftWidth: 4, borderLeftColor: colors.blue },
+    cardTitle: { fontFamily: fonts.sansSemiBold, fontSize: 16, color: colors.ink, marginBottom: 6 },
+    cardDesc: { fontFamily: fonts.sans, color: colors.ink2, lineHeight: 20, fontSize: 13 }
 });

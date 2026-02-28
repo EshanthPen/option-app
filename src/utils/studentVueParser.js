@@ -10,15 +10,24 @@ export const parseStudentVueGradebook = (xmlString) => {
         const jsonObj = parser.parse(xmlString);
 
         // The SOAP response wraps the actual XML string inside a Result node.
-        // Navigate down to the actual Gradebook XML string
-        const gradebookXmlString = jsonObj?.['soap:Envelope']?.['soap:Body']?.['ProcessWebServiceRequestResponse']?.['ProcessWebServiceRequestResult'];
+        // Schools send different SOAP envelopes, so we extract the inner XML string manually.
+        const match = xmlString.match(/<ProcessWebServiceRequestResult>(.*?)<\/ProcessWebServiceRequestResult>/s);
+        let gradebookXmlString = match ? match[1] : null;
+
+        // Fallback: If the regex didn't catch it, maybe they returned raw XML without SOAP encoding
+        if (!gradebookXmlString && xmlString.includes('<Gradebook')) {
+            gradebookXmlString = xmlString;
+        }
 
         if (!gradebookXmlString) {
-            console.error("Could not find Gradebook raw XML inside SOAP response");
+            console.error("Could not find Gradebook raw XML inside response");
             return [];
         }
 
-        // Parse that inner XML string
+        // Unescape XML entities that SOAP might have injected (&lt;, &gt;)
+        gradebookXmlString = gradebookXmlString.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+        // Parse the inner Gradebook XML explicitly
         const innerJson = parser.parse(gradebookXmlString);
 
         let xmlCourses = innerJson?.Gradebook?.Courses?.Course;
