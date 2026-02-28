@@ -1,36 +1,48 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import TabNavigator from './src/navigation/TabNavigator';
-import * as Font from 'expo-font';
-import { PlayfairDisplay_400Regular, PlayfairDisplay_600SemiBold, PlayfairDisplay_700Bold, PlayfairDisplay_900Black, PlayfairDisplay_400Regular_Italic } from '@expo-google-fonts/playfair-display';
-import { DMMono_300Light, DMMono_400Regular, DMMono_500Medium } from '@expo-google-fonts/dm-mono';
-import { InstrumentSans_400Regular, InstrumentSans_500Medium, InstrumentSans_600SemiBold } from '@expo-google-fonts/instrument-sans';
+import { useFonts } from 'expo-font';
+import {
+  PlayfairDisplay_400Regular,
+  PlayfairDisplay_600SemiBold,
+  PlayfairDisplay_700Bold,
+  PlayfairDisplay_900Black,
+  PlayfairDisplay_400Regular_Italic,
+  PlayfairDisplay_900Black_Italic,
+} from '@expo-google-fonts/playfair-display';
+import {
+  DMMono_300Light,
+  DMMono_400Regular,
+  DMMono_500Medium,
+} from '@expo-google-fonts/dm-mono';
+import {
+  InstrumentSans_400Regular,
+  InstrumentSans_500Medium,
+  InstrumentSans_600SemiBold,
+  InstrumentSans_700Bold,
+} from '@expo-google-fonts/instrument-sans';
 import { ThemeProvider } from './src/context/ThemeContext';
-import { getTheme } from './src/utils/theme';
 
 export default function App() {
-  const [fontsLoaded, setFontsLoaded] = useState(false);
-
-  useEffect(() => {
-    async function loadFonts() {
-      await Font.loadAsync({
-        'Playfair Display': PlayfairDisplay_400Regular,
-        'Playfair Display_600SemiBold': PlayfairDisplay_600SemiBold,
-        'Playfair Display_700Bold': PlayfairDisplay_700Bold,
-        'Playfair Display_900Black': PlayfairDisplay_900Black,
-        'Playfair Display_Italic': PlayfairDisplay_400Regular_Italic,
-        'DM Mono': DMMono_400Regular,
-        'DM Mono_300Light': DMMono_300Light,
-        'DM Mono_500Medium': DMMono_500Medium,
-        'Instrument Sans': InstrumentSans_400Regular,
-        'Instrument Sans_500Medium': InstrumentSans_500Medium,
-        'Instrument Sans_600SemiBold': InstrumentSans_600SemiBold,
-      });
-      setFontsLoaded(true);
-    }
-    loadFonts();
-  }, []);
+  const [fontsLoaded] = useFonts({
+    'Playfair Display': PlayfairDisplay_400Regular,
+    'PlayfairDisplay': PlayfairDisplay_400Regular,
+    'PlayfairDisplay-SemiBold': PlayfairDisplay_600SemiBold,
+    'PlayfairDisplay-Bold': PlayfairDisplay_700Bold,
+    'PlayfairDisplay-Black': PlayfairDisplay_900Black,
+    'PlayfairDisplay-Italic': PlayfairDisplay_400Regular_Italic,
+    'PlayfairDisplay-BlackItalic': PlayfairDisplay_900Black_Italic,
+    'DM Mono': DMMono_400Regular,
+    'DMMono': DMMono_400Regular,
+    'DMMono-Light': DMMono_300Light,
+    'DMMono-Medium': DMMono_500Medium,
+    'Instrument Sans': InstrumentSans_400Regular,
+    'InstrumentSans': InstrumentSans_400Regular,
+    'InstrumentSans-Medium': InstrumentSans_500Medium,
+    'InstrumentSans-SemiBold': InstrumentSans_600SemiBold,
+    'InstrumentSans-Bold': InstrumentSans_700Bold,
+  });
 
   if (!fontsLoaded) {
     return (

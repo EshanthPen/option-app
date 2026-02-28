@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
@@ -14,6 +14,7 @@ import { loadMockGradebookData } from '../utils/mockStudentData';
 import ICAL from 'ical.js';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
+import { parseStudentVueGradebook } from '../utils/studentVueParser';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -31,7 +32,7 @@ export default function SettingsScreen() {
     const [customUrl, setCustomUrl] = useState('');
     const [isPickerVisible, setIsPickerVisible] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
-    const [syncResult, setSyncResult] = useState(null); // { type: 'success'|'error', message: string }
+    const [syncResult, setSyncResult] = useState(null);
     const [isMockLoading, setIsMockLoading] = useState(false);
     const [isSchoologySyncing, setIsSchoologySyncing] = useState(false);
 
@@ -40,13 +41,10 @@ export default function SettingsScreen() {
 
     const isWeb = typeof window !== 'undefined' && window.location;
 
-    // For Web, we MUST use the exact window location origin without any proxies,
-    // otherwise the OAuth return redirect drops the hook state.
     const redirectUri = isWeb
         ? window.location.origin
         : AuthSession.makeRedirectUri({ useProxy: true });
 
-    // Initialize Google Auth with placeholder Client IDs
     const [request, response, promptAsync] = Google.useAuthRequest({
         expoClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
         iosClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
@@ -57,18 +55,19 @@ export default function SettingsScreen() {
     });
 
     useEffect(() => {
-        // Load the stored token if it exists
         const loadToken = async () => {
             let storedToken = await AsyncStorage.getItem('googleAccessToken');
             if (!storedToken && typeof window !== 'undefined') {
                 storedToken = window.localStorage.getItem('googleAccessToken');
             }
             if (storedToken) setAccessToken(storedToken);
+
+            const savedSchoology = await AsyncStorage.getItem('schoologyUrl');
+            if (savedSchoology) setSchoologyUrl(savedSchoology);
         };
         loadToken();
     }, []);
 
-    // MANUAL WEB FALLBACK
     useEffect(() => {
         if (typeof window !== 'undefined' && window.location.hash) {
             const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -130,9 +129,6 @@ export default function SettingsScreen() {
         }
         setIsSchoologySyncing(true);
         let fetchUrl = schoologyUrl.trim().replace(/^webcal:\/\//, 'https://');
-
-        // Use a relative path for the proxy, but fallback to direct fetch if on web and proxy fails
-        // Note: For local development, /api/schoology may not be active.
         const proxyUrl = `/api/schoology?url=${encodeURIComponent(fetchUrl)}`;
 
         try {
@@ -142,7 +138,6 @@ export default function SettingsScreen() {
                 if (!response.ok) throw new Error('Proxy failed');
                 icsData = await response.text();
             } catch (proxyErr) {
-                console.warn('Proxy failed, attempting direct fetch (CORS may block this if not proxied):', proxyErr);
                 const directResponse = await fetch(fetchUrl);
                 if (!directResponse.ok) throw new Error('Direct fetch failed');
                 icsData = await directResponse.text();
@@ -206,12 +201,12 @@ export default function SettingsScreen() {
     };
 
     const handleStudentVueLogin = async () => {
-        let finalUrl = '';
+        let baseUrl = '';
         if (selectedDistrict) {
-            finalUrl = selectedDistrict.id === 'custom' ? customUrl : selectedDistrict.url;
+            baseUrl = selectedDistrict.id === 'custom' ? customUrl : selectedDistrict.url;
         }
 
-        if (!finalUrl || !svUser || !svPass) {
+        if (!baseUrl || !svUser || !svPass) {
             setSyncResult({ type: 'error', message: 'Please select your school district and enter your username and password.' });
             return;
         }
@@ -220,50 +215,59 @@ export default function SettingsScreen() {
         setIsSyncing(true);
 
         try {
-            // Persist credentials so GradebookScreen can re-sync by quarter independently
             await AsyncStorage.setItem('svUsername', svUser);
             await AsyncStorage.setItem('svPassword', svPass);
-            await AsyncStorage.setItem('svDistrictUrl', finalUrl);
+            await AsyncStorage.setItem('svDistrictUrl', baseUrl);
 
-            const result = await syncStudentVueGrades(svUser, svPass, finalUrl);
+            // Prioritize the logic from remote branch for 'auth' (Proxy + Parser)
+            const finalTargetUrl = baseUrl.endsWith('Service/PXPCommunication.asmx')
+                ? baseUrl
+                : `${baseUrl}/Service/PXPCommunication.asmx`;
 
-            // Handle both old (array) and new ({ grades, periods, period, periodIndex }) shapes
-            const formattedClasses = Array.isArray(result) ? result : (result.grades || []);
-            const periods = result.periods || [];
-            const periodName = result.period || '';
-            const periodIndex = result.periodIndex ?? 0;
+            const soapPayload = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/">
+      <userID>${svUser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</userID>
+      <password>${svPass.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</password>
+      <skipLoginLog>1</skipLoginLog>
+      <parent>0</parent>
+      <webServiceHandleName>PXPWebServices</webServiceHandleName>
+      <methodName>Gradebook</methodName>
+      <paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;0&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr>
+    </ProcessWebServiceRequest>
+  </soap:Body>
+</soap:Envelope>`;
 
-            if (formattedClasses && formattedClasses.length > 0) {
-                await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
-                if (periods.length > 0) await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(periods));
-                if (periodName) await AsyncStorage.setItem('studentVuePeriodName', periodName);
-                await AsyncStorage.setItem('studentVuePeriodIndex', String(periodIndex));
+            const proxyEndpoint = '/api/studentvue';
 
-                // Count total assignments imported
-                const totalAssignments = formattedClasses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
+            const response = await fetch(proxyEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload: soapPayload })
+            });
 
-                let calendarMsg = '';
-                if (accessToken) {
-                    let allAssignments = [];
-                    for (const course of formattedClasses) {
-                        if (course.assignments) {
-                            allAssignments = allAssignments.concat(
-                                course.assignments.map(a => ({ ...a, courseName: course.name }))
-                            );
-                        }
-                    }
-                    if (allAssignments.length > 0) {
-                        const syncCount = await syncAssignmentsToCalendar(accessToken, allAssignments);
-                        if (syncCount > 0) calendarMsg = ` ${syncCount} synced to Google Calendar.`
-                    }
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData?.cause || errData?.details || response.statusText);
+            }
+
+            const xmlText = await response.text();
+
+            if (xmlText.includes('Gradebook') || xmlText.includes('RT_ERROR') === false) {
+                const formattedClasses = parseStudentVueGradebook(xmlText);
+                if (formattedClasses && formattedClasses.length > 0) {
+                    await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
+
+                    const totalAssignments = formattedClasses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
+
+                    setSyncResult({
+                        type: 'success',
+                        message: `✅ Imported ${formattedClasses.length} classes with ${totalAssignments} assignments.`
+                    });
+                } else {
+                    throw new Error("Connected, but couldn't parse your class list.");
                 }
-
-                const periodMsg = periodName ? ` for ${periodName}` : '';
-                setSyncResult({
-                    type: 'success',
-                    message: `✅ Imported ${formattedClasses.length} classes with ${totalAssignments} assignments${periodMsg}.${calendarMsg}`,
-                    detail: periods.length > 1 ? `${periods.length} grading periods available — use the Gradebook tab to switch quarters.` : null,
-                });
             } else {
                 setSyncResult({ type: 'error', message: 'Connected but no grade data was found. Your account may have no grades for this period.' });
             }
@@ -356,7 +360,6 @@ export default function SettingsScreen() {
                 <Text style={styles.subtitle}>Connect outside apps to build your schedule.</Text>
             </View>
 
-            {/* --- APPEARANCE --- */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Appearance</Text>
                 <TouchableOpacity
@@ -379,8 +382,6 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* --- INTEGRATIONS --- */}
-            {/* --- GOOGLE LOGIN --- */}
             <View style={[styles.card, { borderColor: theme.colors.blue, borderWidth: 2 }]}>
                 <Text style={styles.cardTitle}>Google Accounts</Text>
                 <Text style={styles.instructions}>
@@ -426,7 +427,6 @@ export default function SettingsScreen() {
                 )}
             </View>
 
-            {/* --- SCHOOLOGY --- */}
             <View style={styles.card}>
                 <Text style={styles.cardTitle}>Schoology Calendar</Text>
                 <Text style={styles.instructions}>Paste your exported webcal/ics link here to auto-fetch assignments.</Text>
@@ -457,7 +457,6 @@ export default function SettingsScreen() {
                 </View>
             </View>
 
-            {/* --- STUDENTVUE / SYNERGY --- */}
             <View style={[styles.card, { borderColor: theme.colors.border2 }]}>
                 <Text style={styles.cardTitle}>StudentVUE</Text>
                 <Text style={styles.instructions}>
@@ -495,7 +494,6 @@ export default function SettingsScreen() {
                 <Text style={styles.label}>Password</Text>
                 <TextInput style={styles.input} placeholder="Password" placeholderTextColor={theme.colors.ink3} value={svPass} onChangeText={setSvPass} secureTextEntry />
 
-                {/* Sync button with loading state */}
                 <TouchableOpacity
                     style={[
                         styles.actionBtn,
@@ -514,14 +512,12 @@ export default function SettingsScreen() {
                     )}
                 </TouchableOpacity>
 
-                {/* Progress bar shown while syncing */}
                 {isSyncing && (
                     <View style={styles.progressBarTrack}>
                         <View style={styles.progressBarFill} />
                     </View>
                 )}
 
-                {/* In-screen result banner */}
                 {syncResult && (
                     <View style={[
                         styles.syncBanner,
@@ -533,15 +529,9 @@ export default function SettingsScreen() {
                         <Text style={[styles.syncBannerText, { color: syncResult.type === 'success' ? '#166534' : '#991b1b' }]}>
                             {syncResult.message}
                         </Text>
-                        {syncResult.detail ? (
-                            <Text style={[styles.syncBannerDetail, { color: syncResult.type === 'success' ? '#166534' : '#991b1b' }]}>
-                                {syncResult.detail}
-                            </Text>
-                        ) : null}
                     </View>
                 )}
 
-                {/* Beta: Demo data loader */}
                 <View style={styles.demoRow}>
                     <View style={{ flex: 1 }}>
                         <Text style={styles.demoLabel}>Beta Testing</Text>
@@ -558,7 +548,6 @@ export default function SettingsScreen() {
                             setSyncResult({
                                 type: 'success',
                                 message: `🎓 Demo data loaded! ${classCount} classes · ${assignmentCount} assignments`,
-                                detail: 'Open the Gradebook tab to explore. Quarter picker will show Q1–Q4.',
                             });
                         } catch (e) {
                             setSyncResult({ type: 'error', message: `Demo load failed: ${e.message}` });
@@ -579,14 +568,12 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
             </View>
 
-
             <DistrictPickerModal
                 visible={isPickerVisible}
                 onClose={() => setIsPickerVisible(false)}
                 onSelect={(district) => setSelectedDistrict(district)}
                 currentSelectionUrl={selectedDistrict?.url}
             />
-
         </ScrollView >
     );
 }
@@ -597,15 +584,21 @@ const getStyles = (theme) => StyleSheet.create({
     header: { fontFamily: theme.fonts.d, fontSize: 36, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
     subtitle: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginTop: 5 },
 
+    section: { marginBottom: 30 },
+    sectionTitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 15 },
+    settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.colors.surface, padding: 16, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border },
+    iconBox: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+    settingLabel: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink },
+    settingSub: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink3, marginTop: 2 },
+    toggleContainer: { width: 44, height: 24, borderRadius: 12, backgroundColor: theme.colors.surface2, padding: 2, justifyContent: 'center' },
+    toggleCircle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
+
     card: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 24, marginBottom: 20 },
     cardTitle: { fontFamily: theme.fonts.d, fontSize: 20, fontWeight: '600', color: theme.colors.ink, marginBottom: 10 },
     instructions: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, lineHeight: 20, marginBottom: 15 },
 
-    label: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 5 },
+    label: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 5, marginTop: 10 },
     input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, padding: 12, borderRadius: theme.radii.r, fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink, marginBottom: 15 },
-
-    saveButton: { backgroundColor: theme.colors.ink, padding: 16, borderRadius: theme.radii.lg, alignItems: 'center', marginTop: 20 },
-    saveButtonText: { color: '#fff', fontFamily: theme.fonts.s, fontWeight: '600' },
 
     googleBtn: { backgroundColor: theme.colors.blue, padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
     googleBtnText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15, fontWeight: '600' },
@@ -615,16 +608,12 @@ const getStyles = (theme) => StyleSheet.create({
     actionBtnLight: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
     actionBtnLightText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 15, fontWeight: '600' },
 
-    // Loading bar
     progressBarTrack: { height: 4, backgroundColor: theme.colors.border, borderRadius: 2, marginTop: 12, overflow: 'hidden' },
     progressBarFill: { height: 4, width: '60%', backgroundColor: theme.colors.ink, borderRadius: 2 },
 
-    // Result banner
     syncBanner: { marginTop: 14, padding: 14, borderRadius: theme.radii.r, borderWidth: 1 },
     syncBannerText: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', lineHeight: 20 },
-    syncBannerDetail: { fontFamily: theme.fonts.m, fontSize: 11, marginTop: 4, opacity: 0.8 },
 
-    // Demo / beta testing row
     demoRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 20, paddingTop: 18, borderTopWidth: 1, borderTopColor: theme.colors.border },
     demoLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: '#7c3aed', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 3 },
     demoSub: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, lineHeight: 16 },
