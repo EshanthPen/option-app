@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform, Modal } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
@@ -35,6 +35,7 @@ export default function SettingsScreen() {
     const [syncResult, setSyncResult] = useState(null);
     const [isMockLoading, setIsMockLoading] = useState(false);
     const [isSchoologySyncing, setIsSchoologySyncing] = useState(false);
+    const [isHelpVisible, setIsHelpVisible] = useState(false);
 
     // Auth State
     const [accessToken, setAccessToken] = useState(null);
@@ -123,13 +124,39 @@ export default function SettingsScreen() {
 
     const handleSchoologySync = async () => {
         if (!schoologyUrl) {
+            /*
+             ## UI & Stability Overhaul
+            - **Monochromatic "Option" Aesthetic**: Overhauled all primary buttons (Google, StudentVUE, Schoology) to a clean white background with bold black text. This provides a high-end, premium feel that works perfectly in both light and dark modes.
+            - **Robust Sync Intelligence**: Implemented a Regex-based URL extractor for Schoology. It can now find your valid calendar link *anywhere* in the input box, effectively ignoring any extra text or code that might have been accidentally pasted.
+            - **Theme-Reactive Inputs**: Restored and refined all input and label styles. Text color and background color now explicitly sync with your theme, ensuring perfect visibility at all times.
+            - **Global Consistency**: Standardized these new aesthetic patterns across both the Settings and Gradebook screens.
+            */
             if (Platform.OS === 'web') window.alert('Please enter your Schoology calendar link first.');
             else Alert.alert('Missing URL', 'Please enter your Schoology calendar link first.');
             return;
         }
+        // The following markdown text is likely a changelog entry and should not be in a JS file.
+        // If this was intended as a comment, please format it as such.
         setIsSchoologySyncing(true);
-        let fetchUrl = schoologyUrl.trim().replace(/^webcal:\/\//, 'https://');
-        const proxyUrl = `/api/schoology?url=${encodeURIComponent(fetchUrl)}`;
+
+        // Robust URL Extraction: Find anything that looks like a calendar link
+        // This regex looks for webcal or http(s) links that contain '.ics'
+        const input = schoologyUrl.trim();
+        const urlRegex = /(?:webcal|https?):\/\/[^\s"'<>]+\.ics[^\s"'<>]*|https?:\/\/[^\s"'<>]+\/calendar\/feed\/ical\/[^\s"'<>]+/gi;
+        const matches = input.match(urlRegex);
+
+        let cleanUrl = matches ? matches[matches.length - 1] : input;
+
+        // If it looks like a relative or doubled up path, recover it
+        if (!cleanUrl.includes('://') && cleanUrl.includes('.ics')) {
+            cleanUrl = 'https://' + cleanUrl.split('http').pop().replace(/^\/+/, '');
+        }
+
+        let fetchUrl = cleanUrl.replace(/^webcal:\/\//, 'https://');
+
+        // Use absolute URL for web environment to ensure proxy is reached correctly
+        const baseUrl = Platform.OS === 'web' ? window.location.origin : 'http://localhost:8081';
+        const proxyUrl = `${baseUrl}/api/schoology?url=${encodeURIComponent(fetchUrl)}`;
 
         try {
             let icsData = '';
@@ -144,7 +171,7 @@ export default function SettingsScreen() {
             }
 
             if (!icsData || !icsData.includes('BEGIN:VCALENDAR')) {
-                throw new Error('Invalid calendar data received.');
+                throw new Error('No valid calendar data (BEGIN:VCALENDAR missing). If this is a Schoology link, ensure it starts with https://schoology.your-school.org/calendar/feed/...');
             }
 
             const jcalData = ICAL.parse(icsData);
@@ -382,6 +409,86 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
             </View>
 
+            <View style={[styles.card, { borderLeftColor: theme.colors.blue, borderLeftWidth: 4 }]}>
+                <Text style={styles.cardTitle}>Google Calendar</Text>
+                <Text style={styles.instructions}>
+                    Sync your assignments directly to your Google Calendar.
+                </Text>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity
+                        style={[styles.actionBtn, { flex: 2 }]}
+                        onPress={() => promptAsync()}
+                        disabled={!request}
+                    >
+                        <RefreshCw size={18} color="#000" />
+                        <Text style={styles.actionBtnText}>
+                            {accessToken ? 'Re-link Account' : 'Link Google Account'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.actionBtnLight, { flex: 1 }]}
+                        onPress={() => setIsHelpVisible(true)}
+                    >
+                        <Text style={styles.actionBtnLightText}>Help</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {accessToken && (
+                    <TouchableOpacity
+                        style={[styles.actionBtn, { marginTop: 15, width: '100%' }]}
+                        onPress={async () => {
+                            try {
+                                setIsSyncing(true);
+                                await syncAssignmentsToCalendar(accessToken);
+                                if (Platform.OS === 'web') window.alert('Calendar sync complete!');
+                                else Alert.alert('Success', 'Calendar sync complete!');
+                            } catch (err) {
+                                if (Platform.OS === 'web') window.alert('Sync failed: ' + err.message);
+                                else Alert.alert('Error', 'Sync failed: ' + err.message);
+                            } finally {
+                                setIsSyncing(false);
+                            }
+                        }}
+                        disabled={isSyncing}
+                    >
+                        {isSyncing ? <ActivityIndicator size="small" color="#000" /> : <Text style={styles.actionBtnText}>Sync Now</Text>}
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {/* Help Modal */}
+            <Modal visible={isHelpVisible} transparent animationType="slide" onRequestClose={() => setIsHelpVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.periodPickerContainer, { maxWidth: 500 }]}>
+                        <Text style={styles.periodPickerTitle}>Google Calendar Setup</Text>
+                        <ScrollView style={{ maxHeight: 400 }}>
+                            <Text style={styles.helpStep}>1. Go to Google Cloud Console</Text>
+                            <Text style={styles.helpDesc}>Create a project and enable the "Google Calendar API".</Text>
+
+                            <Text style={styles.helpStep}>2. Create OAuth Credentials</Text>
+                            <Text style={styles.helpDesc}>Create an "OAuth client ID" for a Web application.</Text>
+
+                            <Text style={styles.helpStep}>3. Set Authorized Redirect URIs</Text>
+                            <Text style={styles.helpDesc}>Add the following URI to your Authorized Redirect URIs in the Google Console:</Text>
+                            <View style={styles.uriBox}>
+                                <Text style={styles.uriText} selectable>{redirectUri}</Text>
+                            </View>
+
+                            <Text style={styles.helpStep}>4. Client ID</Text>
+                            <Text style={styles.helpDesc}>Ensure your Client ID is correctly set in the app configuration.</Text>
+
+                            <Text style={styles.helpStep}>5. Link & Sync</Text>
+                            <Text style={styles.helpDesc}>Click "Link Google Account" and authorize the app to manage your calendar events.</Text>
+                        </ScrollView>
+                        <TouchableOpacity style={[styles.saveBtn, { marginTop: 20 }]} onPress={() => setIsHelpVisible(false)}>
+                            <Text style={styles.saveBtnText}>Got it</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
             <View style={[styles.card, { borderColor: theme.colors.blue, borderWidth: 2 }]}>
                 <Text style={styles.cardTitle}>Google Accounts</Text>
                 <Text style={styles.instructions}>
@@ -393,7 +500,7 @@ export default function SettingsScreen() {
                         <Text style={{ fontFamily: theme.fonts.s, color: theme.colors.green, fontWeight: '600', marginBottom: 15 }}>✅ Account Linked</Text>
                         <View style={{ gap: 10 }}>
                             <TouchableOpacity style={styles.actionBtn} onPress={syncGoogleCalendarManual} disabled={isSyncing}>
-                                {isSyncing ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.actionBtnText}>Sync Gradebook to Google</Text>}
+                                {isSyncing ? <ActivityIndicator size="small" color="#000" /> : <Text style={styles.actionBtnText}>Sync Gradebook to Google</Text>}
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.actionBtnLight}
@@ -406,14 +513,14 @@ export default function SettingsScreen() {
                 ) : (
                     <View>
                         <TouchableOpacity
-                            style={[styles.googleBtn, !request && { opacity: 0.5 }]}
+                            style={[styles.actionBtn, { width: '100%' }, !request && { opacity: 0.5 }]}
                             disabled={!request}
                             onPress={() => {
                                 if (request) promptAsync();
                                 else if (typeof window !== 'undefined') window.alert("Still loading authentication flow. Please wait a second and try again.");
                             }}
                         >
-                            <Text style={styles.googleBtnText}>
+                            <Text style={styles.actionBtnText}>
                                 {request ? "Sign In with Google" : "Loading Auth..."}
                             </Text>
                         </TouchableOpacity>
@@ -446,10 +553,10 @@ export default function SettingsScreen() {
                     }}>
                         <Text style={styles.actionBtnLightText}>Save URL</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.actionBtn, { flex: 1, backgroundColor: theme.colors.ink }]} onPress={handleSchoologySync} disabled={isSchoologySyncing}>
-                        {isSchoologySyncing ? <ActivityIndicator size="small" color="#fff" /> : (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <RefreshCw size={14} color="#fff" />
+                    <TouchableOpacity style={[styles.actionBtn, { flex: 1 }]} onPress={handleSchoologySync} disabled={isSchoologySyncing}>
+                        {isSchoologySyncing ? <ActivityIndicator size="small" color="#000" /> : (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <RefreshCw size={16} color="#000" />
                                 <Text style={styles.actionBtnText}>Sync Now</Text>
                             </View>
                         )}
@@ -497,14 +604,15 @@ export default function SettingsScreen() {
                 <TouchableOpacity
                     style={[
                         styles.actionBtn,
-                        { backgroundColor: isSyncing ? theme.colors.ink3 : theme.colors.ink, marginTop: 15 },
+                        { marginTop: 15 },
+                        isSyncing && { opacity: 0.7 }
                     ]}
                     onPress={handleStudentVueLogin}
                     disabled={isSyncing}
                 >
                     {isSyncing ? (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <ActivityIndicator size="small" color="#fff" />
+                            <ActivityIndicator size="small" color="#000" />
                             <Text style={styles.actionBtnText}>Importing grades…</Text>
                         </View>
                     ) : (
@@ -539,7 +647,7 @@ export default function SettingsScreen() {
                     </View>
                 </View>
                 <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: '#7c3aed', marginTop: 6 }]}
+                    style={[styles.actionBtn, { backgroundColor: theme.colors.purple, marginTop: 6 }]}
                     onPress={async () => {
                         setIsMockLoading(true);
                         setSyncResult(null);
@@ -559,7 +667,7 @@ export default function SettingsScreen() {
                 >
                     {isMockLoading ? (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <ActivityIndicator size="small" color="#fff" />
+                            <ActivityIndicator size="small" color="#000" />
                             <Text style={styles.actionBtnText}>Generating…</Text>
                         </View>
                     ) : (
@@ -593,20 +701,68 @@ const getStyles = (theme) => StyleSheet.create({
     toggleContainer: { width: 44, height: 24, borderRadius: 12, backgroundColor: theme.colors.surface2, padding: 2, justifyContent: 'center' },
     toggleCircle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
 
-    card: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 24, marginBottom: 20 },
+    card: {
+        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
+        borderRadius: theme.radii.lg, padding: 24, marginBottom: 20
+    },
     cardTitle: { fontFamily: theme.fonts.d, fontSize: 20, fontWeight: '600', color: theme.colors.ink, marginBottom: 10 },
     instructions: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, lineHeight: 20, marginBottom: 15 },
 
-    label: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 5, marginTop: 10 },
-    input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, padding: 12, borderRadius: theme.radii.r, fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink, marginBottom: 15 },
+    uriText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.accent },
+    helpStep: { fontFamily: theme.fonts.d, fontSize: 16, fontWeight: '700', color: theme.colors.ink, marginTop: 15 },
+    helpDesc: { fontFamily: theme.fonts.s, fontSize: 14, color: theme.colors.ink2, marginTop: 4, lineHeight: 20 },
 
-    googleBtn: { backgroundColor: theme.colors.blue, padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
-    googleBtnText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15, fontWeight: '600' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    periodPickerContainer: { backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, padding: 24, width: '90%', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 10, elevation: 5 },
+    periodPickerTitle: { fontFamily: theme.fonts.d, fontSize: 24, fontWeight: '700', color: theme.colors.ink, marginBottom: 20 },
 
-    actionBtn: { padding: 14, borderRadius: theme.radii.r, alignItems: 'center', backgroundColor: theme.colors.ink },
-    actionBtnText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15, fontWeight: '600' },
-    actionBtnLight: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
-    actionBtnLightText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 15, fontWeight: '600' },
+    label: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
+    input: {
+        backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
+        borderRadius: theme.radii.r, padding: 14, fontFamily: theme.fonts.m, fontSize: 13,
+        color: theme.colors.ink, marginBottom: 12
+    },
+
+    saveBtn: {
+        backgroundColor: '#FFFFFF', padding: 16, borderRadius: theme.radii.r,
+        alignItems: 'center', marginTop: 20, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4,
+        borderWidth: 1, borderColor: '#000000',
+    },
+    saveBtnText: { color: '#000000', fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
+
+    syncBtn: {
+        backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
+        padding: 14, borderRadius: theme.radii.r, alignItems: 'center', marginTop: 12,
+    },
+    syncBtnText: { color: theme.colors.ink, fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600' },
+
+    googleBtn: {
+        backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
+        padding: 14, borderRadius: theme.radii.r, alignItems: 'center', marginTop: 12,
+        flexDirection: 'row', justifyContent: 'center', gap: 10,
+    },
+    googleBtnText: { color: theme.colors.ink, fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600' },
+
+    logoutBtn: {
+        backgroundColor: theme.colors.red + '15', padding: 16, borderRadius: theme.radii.r,
+        alignItems: 'center', marginTop: 40, borderWidth: 1, borderColor: theme.colors.red + '30',
+    },
+    logoutBtnText: { color: theme.colors.red, fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
+
+    actionBtn: {
+        backgroundColor: '#FFFFFF', paddingVertical: 14, paddingHorizontal: 24,
+        borderRadius: theme.radii.r, alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: '#000000',
+        shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5,
+    },
+    actionBtnText: { color: '#000000', fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
+
+    actionBtnLight: {
+        backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
+        paddingVertical: 14, paddingHorizontal: 24, borderRadius: theme.radii.r,
+        alignItems: 'center', justifyContent: 'center',
+    },
+    actionBtnLightText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 16, fontWeight: '700' },
 
     progressBarTrack: { height: 4, backgroundColor: theme.colors.border, borderRadius: 2, marginTop: 12, overflow: 'hidden' },
     progressBarFill: { height: 4, width: '60%', backgroundColor: theme.colors.ink, borderRadius: 2 },

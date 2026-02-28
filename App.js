@@ -52,9 +52,21 @@ export default function App() {
     );
   }
 
+  const linking = {
+    config: {
+      screens: {
+        Home: '',
+        Calendar: 'calendar',
+        Gradebook: 'gradebook',
+        Focus: 'focus',
+        Settings: 'settings',
+      },
+    },
+  };
+
   return (
     <ThemeProvider>
-      <NavigationContainer>
+      <NavigationContainer linking={linking}>
         <TabNavigator />
       </NavigationContainer>
     </ThemeProvider>

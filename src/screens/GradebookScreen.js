@@ -287,12 +287,15 @@ export default function GradebookScreen() {
         const intervalDays = interval === '1m' ? 30 : interval === '3m' ? 90 : interval === '6m' ? 180 : 9999;
 
         const filtered = scored.filter(a => {
-            const d = new Date(a.date);
+            const dateStr = a.isoDate || a.date;
+            if (!dateStr) return true; // Include if no date
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return true;
             const diff = (now - d) / (1000 * 60 * 60 * 24);
             return diff <= intervalDays;
         });
 
-        if (filtered.length === 0) return null;
+        if (filtered.length < 1) return null;
 
         // If only 1 point, duplicate it so LineChart has a segment to draw
         const displayAsgns = filtered.length === 1 ? [filtered[0], filtered[0]] : filtered.slice(-10);
@@ -986,13 +989,24 @@ const getStyles = (theme) => StyleSheet.create({
     // Calc
     inputLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 5, marginTop: 14 },
     input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink },
+    calcButton: { backgroundColor: theme.colors.accent, padding: 14, borderRadius: theme.radii.r, alignItems: 'center', marginTop: 10 },
+    calcButtonText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15, fontWeight: '700' },
     googleBtn: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
     googleBtnText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 15, fontWeight: '600' },
 
-    actionBtn: { padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
-    actionBtnText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15, fontWeight: '600' },
-    actionBtnLight: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
-    actionBtnLightText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 15, fontWeight: '600' },
+    actionBtn: {
+        backgroundColor: '#FFFFFF', paddingVertical: 14, paddingHorizontal: 24,
+        borderRadius: theme.radii.r, alignItems: 'center', justifyContent: 'center',
+        borderWidth: 1, borderColor: '#000000',
+    },
+    actionBtnText: { color: '#000000', fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
+
+    actionBtnLight: {
+        backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
+        paddingVertical: 14, paddingHorizontal: 24, borderRadius: theme.radii.r,
+        alignItems: 'center', justifyContent: 'center',
+    },
+    actionBtnLightText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 16, fontWeight: '700' },
     resultBox: { marginTop: 16, padding: 20, backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
     resultLabel: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, marginBottom: 6, textAlign: 'center' },
     resultValue: { fontFamily: theme.fonts.d, fontSize: 48, fontWeight: '300', letterSpacing: -1.5 },
