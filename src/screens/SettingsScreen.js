@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
-import { parseStudentVueGradebook } from '../utils/studentVueParser';
+import { syncStudentVueGrades } from '../utils/studentVueAPI';
+import { theme } from '../utils/theme';
+import DistrictPickerModal, { KNOWN_DISTRICTS } from '../components/DistrictPickerModal';
+import { syncAssignmentsToCalendar } from '../utils/googleCalendarAPI';
+import { ChevronDown, RefreshCw } from 'lucide-react-native';
+import { loadMockGradebookData } from '../utils/mockStudentData';
+import ICAL from 'ical.js';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -14,9 +20,15 @@ export default function SettingsScreen() {
     const [googleUrl, setGoogleUrl] = useState('');
 
     // StudentVUE State
-    const [svUrl, setSvUrl] = useState('');
     const [svUser, setSvUser] = useState('');
     const [svPass, setSvPass] = useState('');
+    const [selectedDistrict, setSelectedDistrict] = useState(null);
+    const [customUrl, setCustomUrl] = useState('');
+    const [isPickerVisible, setIsPickerVisible] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncResult, setSyncResult] = useState(null); // { type: 'success'|'error', message: string }
+    const [isMockLoading, setIsMockLoading] = useState(false);
+    const [isSchoologySyncing, setIsSchoologySyncing] = useState(false);
 
     // Auth State
     const [accessToken, setAccessToken] = useState(null);
@@ -28,8 +40,6 @@ export default function SettingsScreen() {
     const redirectUri = isWeb
         ? window.location.origin
         : AuthSession.makeRedirectUri({ useProxy: true });
-
-    console.log("Current built Redirect URI: ", redirectUri);
 
     // Initialize Google Auth with placeholder Client IDs
     const [request, response, promptAsync] = Google.useAuthRequest({
@@ -53,30 +63,25 @@ export default function SettingsScreen() {
         loadToken();
     }, []);
 
-    // MANUAL WEB FALLBACK: If AuthSession drops state on the redirect back from Google, 
-    // manually parse the URL hash to extract the access token.
+    // MANUAL WEB FALLBACK
     useEffect(() => {
         if (typeof window !== 'undefined' && window.location.hash) {
             const hashParams = new URLSearchParams(window.location.hash.substring(1));
             const token = hashParams.get('access_token');
             if (token) {
-                console.log("MANUALLY INTERCEPTED GOOGLE TOKEN FROM URL!");
                 setAccessToken(token);
                 window.localStorage.setItem('googleAccessToken', token);
                 AsyncStorage.setItem('googleAccessToken', token);
                 window.alert("Success! Successfully linked your Google Account.");
-                // Clear the hash from the URL so it doesn't linger
                 window.history.replaceState(null, '', window.location.pathname);
             }
         }
     }, []);
 
     useEffect(() => {
-        console.log("Google Auth Response:", response);
         if (response?.type === 'success') {
             const token = response.authentication.accessToken;
             setAccessToken(token);
-            // Save token securely for use in other screens (both Native and Web Fallback)
             if (typeof window !== 'undefined') {
                 window.localStorage.setItem('googleAccessToken', token);
             }
@@ -92,110 +97,154 @@ export default function SettingsScreen() {
         }
     }, [response]);
 
-    // Fetch Settings from Supabase on load
     useEffect(() => {
         const fetchSettings = async () => {
-            const { data, error } = await supabase
-                .from('settings')
-                .select('*')
-                .eq('user_id', 'default_user')
-                .single();
-
-            if (data && data.schoology_url) {
-                setSchoologyUrl(data.schoology_url);
-            }
+            const { data, error } = await supabase.from('settings').select('*').eq('user_id', 'default_user').single();
+            if (data && data.schoology_url) setSchoologyUrl(data.schoology_url);
         };
         fetchSettings();
     }, []);
 
-    const handleSave = async () => {
+    const handleSaveSchoology = async () => {
         try {
-            const { error } = await supabase
-                .from('settings')
-                .upsert({ user_id: 'default_user', schoology_url: schoologyUrl }, { onConflict: 'user_id' });
-
+            const { error } = await supabase.from('settings').upsert({ user_id: 'default_user', schoology_url: schoologyUrl }, { onConflict: 'user_id' });
             if (error) throw error;
-            Alert.alert('Saved!', 'Your manual calendar URLs have been saved to Supabase.');
+            if (Platform.OS === 'web') window.alert('Saved: Your Schoology URL has been updated.');
+            else Alert.alert('Saved!', 'Your Schoology URL has been updated.');
         } catch (error) {
-            console.error(error);
-            Alert.alert('Error', 'Failed to save settings to Supabase.');
+            if (Platform.OS === 'web') window.alert('Error: Failed to save settings.');
+            else Alert.alert('Error', 'Failed to save settings.');
+        }
+    };
+
+    const handleSchoologySync = async () => {
+        if (!schoologyUrl) {
+            Alert.alert('Missing URL', 'Please enter your Schoology calendar link first.');
+            return;
+        }
+        setIsSchoologySyncing(true);
+        let fetchUrl = schoologyUrl.trim().replace(/^webcal:\/\//, 'https://');
+        try {
+            const response = await fetch(fetchUrl);
+            if (!response.ok) throw new Error('Network response was not ok');
+            const icsData = await response.text();
+            const comp = new ICAL.Component(ICAL.parse(icsData));
+            const events = comp.getAllSubcomponents('vevent');
+
+            const now = new Date();
+            const imported = events.map((ve, idx) => {
+                const ev = new ICAL.Event(ve);
+                const tl = ev.summary.toLowerCase();
+                const desc = (ev.description || '').toLowerCase();
+                const dueDate = ev.startDate ? ev.startDate.toJSDate() : new Date();
+
+                if (desc.includes('completed') || desc.includes('submitted') || dueDate < now) return null;
+
+                const diffDays = (dueDate - now) / (1000 * 60 * 60 * 24);
+                const u = diffDays <= 7 ? 9 : 5;
+
+                let points = 0;
+                const ptsMatch = desc.match(/(\d+)\s*pts/) || tl.match(/(\d+)\s*pts/);
+                if (ptsMatch) points = parseInt(ptsMatch[1]);
+
+                let im = points > 50 ? 10 : points > 20 ? 8 : 5;
+                if (tl.includes('test') || tl.includes('exam') || tl.includes('quiz')) im = Math.max(im, 9);
+                if (tl.includes('project') || tl.includes('essay')) im = Math.max(im, 8);
+
+                return {
+                    title: ev.summary,
+                    urgency: u,
+                    importance: im,
+                    duration: 60,
+                    date: dueDate.toISOString().split('T')[0],
+                    source: 'schoology_import',
+                    user_id: 'default_user'
+                };
+            }).filter(t => t !== null);
+
+            if (imported.length > 0) {
+                const { error } = await supabase.from('tasks').insert(imported);
+                if (error) throw error;
+            }
+
+            if (Platform.OS === 'web') window.alert(`Sync Complete: Imported ${imported.length} upcoming assignments.`);
+            else Alert.alert('Sync Complete', `Imported ${imported.length} upcoming assignments.`);
+        } catch (err) {
+            console.error(err);
+            if (Platform.OS === 'web') window.alert('Error: Failed to fetch Schoology calendar.');
+            else Alert.alert('Error', 'Failed to fetch Schoology calendar.');
+        } finally {
+            setIsSchoologySyncing(false);
         }
     };
 
     const handleStudentVueLogin = async () => {
-        if (!svUrl || !svUser || !svPass) {
-            if (typeof window !== 'undefined') window.alert("Missing Fields: Please enter your portal URL, Username, and Password.");
-            else Alert.alert("Missing Fields", "Please enter your portal URL, Username, and Password.");
+        let finalUrl = '';
+        if (selectedDistrict) {
+            finalUrl = selectedDistrict.id === 'custom' ? customUrl : selectedDistrict.url;
+        }
+
+        if (!finalUrl || !svUser || !svPass) {
+            setSyncResult({ type: 'error', message: 'Please select your school district and enter your username and password.' });
             return;
         }
 
+        setSyncResult(null);
+        setIsSyncing(true);
+
         try {
-            if (typeof window === 'undefined') {
-                Alert.alert("Syncing...", "Attempting to securely log into StudentVUE...");
-            } else {
-                console.log("Syncing: Attempting to securely log into StudentVUE...");
-            }
+            // Persist credentials so GradebookScreen can re-sync by quarter independently
+            await AsyncStorage.setItem('svUsername', svUser);
+            await AsyncStorage.setItem('svPassword', svPass);
+            await AsyncStorage.setItem('svDistrictUrl', finalUrl);
 
-            // Format URL to strip trailing slashes and ensure https
-            let baseUrl = svUrl.trim();
-            if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
-            if (!baseUrl.startsWith('http')) baseUrl = 'https://' + baseUrl;
+            const result = await syncStudentVueGrades(svUser, svPass, finalUrl);
 
-            const endpoint = `https://cors-anywhere.herokuapp.com/${baseUrl}/Service/PXPCommunication.asmx`;
+            // Handle both old (array) and new ({ grades, periods, period, periodIndex }) shapes
+            const formattedClasses = Array.isArray(result) ? result : (result.grades || []);
+            const periods = result.periods || [];
+            const periodName = result.period || '';
+            const periodIndex = result.periodIndex ?? 0;
 
-            const soapPayload = `<?xml version="1.0" encoding="utf-8"?>
-            <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-            <soap:Body>
-                <ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/">
-                <userID>${svUser}</userID>
-                <password>${svPass}</password>
-                <skipLoginLog>true</skipLoginLog>
-                <parent>false</parent>
-                <webServiceHandleName>PXPWebServices</webServiceHandleName>
-                <methodName>Gradebook</methodName>
-                <paramStr>&lt;Parms&gt;&lt;ChildIntID&gt;0&lt;/ChildIntID&gt;&lt;/Parms&gt;</paramStr>
-                </ProcessWebServiceRequest>
-            </soap:Body>
-            </soap:Envelope>`;
+            if (formattedClasses && formattedClasses.length > 0) {
+                await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
+                if (periods.length > 0) await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(periods));
+                if (periodName) await AsyncStorage.setItem('studentVuePeriodName', periodName);
+                await AsyncStorage.setItem('studentVuePeriodIndex', String(periodIndex));
 
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'text/xml; charset=utf-8',
-                    'SOAPAction': 'http://edupoint.com/webservices/ProcessWebServiceRequest'
-                },
-                body: soapPayload
-            });
+                // Count total assignments imported
+                const totalAssignments = formattedClasses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
 
-            const xmlText = await response.text();
-
-            if (xmlText.includes('Gradebook') || xmlText.includes('RT_ERROR') === false) {
-                console.log("SUCCESSFULLY FETCHED GRADES!");
-
-                // Parse the mess of XML into the clean JSON array GradebookScreen needs
-                console.log("--- RAW XML DEBUG ---");
-                console.log(xmlText.substring(0, 2000));
-
-                const formattedClasses = parseStudentVueGradebook(xmlText);
-                console.log("PARSER RESULT:", formattedClasses);
-
-                if (formattedClasses && formattedClasses.length > 0) {
-                    await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
-                    console.log("Successfully saved " + formattedClasses.length + " classes to AsyncStorage.");
-                    if (typeof window !== 'undefined') window.alert(`Success! Logged in and fetched ${formattedClasses.length} classes! They will appear in the Gradebook Tab.`);
-                    else Alert.alert("Success!", `Logged in and fetched ${formattedClasses.length} classes! They will appear in the Gradebook Tab.`);
-                } else {
-                    if (typeof window !== 'undefined') window.alert("Partial Data: Logged in, but couldn't completely parse your class list.");
-                    else Alert.alert("Partial Data", "Logged in, but couldn't completely parse your class list.");
+                let calendarMsg = '';
+                if (accessToken) {
+                    let allAssignments = [];
+                    for (const course of formattedClasses) {
+                        if (course.assignments) {
+                            allAssignments = allAssignments.concat(
+                                course.assignments.map(a => ({ ...a, courseName: course.name }))
+                            );
+                        }
+                    }
+                    if (allAssignments.length > 0) {
+                        const syncCount = await syncAssignmentsToCalendar(accessToken, allAssignments);
+                        if (syncCount > 0) calendarMsg = ` ${syncCount} synced to Google Calendar.`;
+                    }
                 }
+
+                const periodMsg = periodName ? ` for ${periodName}` : '';
+                setSyncResult({
+                    type: 'success',
+                    message: `✅ Imported ${formattedClasses.length} classes with ${totalAssignments} assignments${periodMsg}.${calendarMsg}`,
+                    detail: periods.length > 1 ? `${periods.length} grading periods available — use the Gradebook tab to switch quarters.` : null,
+                });
             } else {
-                if (typeof window !== 'undefined') window.alert("Login Failed: Could not authenticate. Check your URL, ID, and Password.");
-                else Alert.alert("Login Failed", "Could not authenticate. Check your URL, ID, and Password.");
+                setSyncResult({ type: 'error', message: 'Connected but no grade data was found. Your account may have no grades for this period.' });
             }
         } catch (error) {
             console.error(error);
-            if (typeof window !== 'undefined') window.alert("Network Error: Could not reach the StudentVUE portal. Check the URL.");
-            else Alert.alert("Network Error", "Could not reach the StudentVUE portal. Check the URL.");
+            setSyncResult({ type: 'error', message: error.message });
+        } finally {
+            setIsSyncing(false);
         }
     };
 
@@ -205,7 +254,6 @@ export default function SettingsScreen() {
             return;
         }
 
-        // Create a dummy 1-hour event starting right now
         const startTime = new Date();
         const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
 
@@ -229,23 +277,22 @@ export default function SettingsScreen() {
             if (res.ok) {
                 Alert.alert('Success!', 'Successfully scheduled a 1-hour block on your real Google Calendar!');
             } else {
-                const errorData = await res.json();
-                console.error(errorData);
                 Alert.alert('Calendar Error', 'Failed to insert the event. Are scopes correct?');
             }
         } catch (error) {
-            console.error(error);
             Alert.alert('Error', 'Network issue reaching Google.');
         }
     };
 
     return (
         <ScrollView style={styles.container}>
-            <Text style={styles.header}>Integrations & Sync</Text>
-            <Text style={styles.subtitle}>Connect outside apps to build your schedule.</Text>
+            <View style={styles.headerContainer}>
+                <Text style={styles.header}>Integrations</Text>
+                <Text style={styles.subtitle}>Connect outside apps to build your schedule.</Text>
+            </View>
 
             {/* --- GOOGLE LOGIN --- */}
-            <View style={[styles.card, { borderColor: '#4285F4', borderWidth: 2 }]}>
+            <View style={[styles.card, { borderColor: theme.colors.blue, borderWidth: 2 }]}>
                 <Text style={styles.cardTitle}>Google Accounts</Text>
                 <Text style={styles.instructions}>
                     Sign in with Google to allow Option to automatically read your free time and insert task blocks into your calendar.
@@ -253,7 +300,7 @@ export default function SettingsScreen() {
 
                 {accessToken ? (
                     <View>
-                        <Text style={{ color: '#34C759', fontWeight: 'bold', marginBottom: 15 }}>✅ Account Linked and Authorized</Text>
+                        <Text style={{ fontFamily: theme.fonts.s, color: theme.colors.green, fontWeight: '600', marginBottom: 15 }}>✅ Account Linked</Text>
                         <TouchableOpacity style={styles.actionBtn} onPress={blockOutTimeOnGoogleCalendar}>
                             <Text style={styles.actionBtnText}>Test: Block 1 Hour Now</Text>
                         </TouchableOpacity>
@@ -263,14 +310,8 @@ export default function SettingsScreen() {
                         style={[styles.googleBtn, !request && { opacity: 0.5 }]}
                         disabled={!request}
                         onPress={() => {
-                            console.log("GOOGLE BUTTON CLICKED!");
-                            console.log("EXACT REDIRECT URI:", redirectUri);
-                            console.log("AUTH REQUEST STATE:", request);
-                            if (request) {
-                                promptAsync();
-                            } else {
-                                if (typeof window !== 'undefined') window.alert("Still loading authentication flow. Please wait a second and try again.");
-                            }
+                            if (request) promptAsync();
+                            else if (typeof window !== 'undefined') window.alert("Still loading authentication flow. Please wait a second and try again.");
                         }}
                     >
                         <Text style={styles.googleBtnText}>
@@ -287,73 +328,193 @@ export default function SettingsScreen() {
                 <TextInput
                     style={styles.input}
                     placeholder="webcal://schoology.com/calendar..."
+                    placeholderTextColor={theme.colors.ink3}
                     value={schoologyUrl}
                     onChangeText={setSchoologyUrl}
                     autoCapitalize="none"
                 />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity style={[styles.actionBtn, { flex: 1, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border2 }]} onPress={handleSaveSchoology}>
+                        <Text style={[styles.actionBtnText, { color: theme.colors.ink2 }]}>Save URL</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.actionBtn, { flex: 1, backgroundColor: theme.colors.ink }]} onPress={handleSchoologySync} disabled={isSchoologySyncing}>
+                        {isSchoologySyncing ? <ActivityIndicator size="small" color="#fff" /> : (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <RefreshCw size={14} color="#fff" />
+                                <Text style={styles.actionBtnText}>Sync Now</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* --- STUDENTVUE / SYNERGY --- */}
-            <View style={[styles.card, { borderColor: '#8E24AA', borderWidth: 2 }]}>
-                <Text style={styles.cardTitle}>StudentVUE Grades</Text>
+            <View style={[styles.card, { borderColor: theme.colors.border2 }]}>
+                <Text style={styles.cardTitle}>StudentVUE</Text>
                 <Text style={styles.instructions}>
-                    Connect your school's StudentVUE portal to automatically fetch and calculate your latest grades.
+                    Connect your school's portal to automatically fetch and calculate grades.
                 </Text>
 
-                <Text style={styles.label}>School Portal URL</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="e.g. https://rtmsd.usplk12.org"
-                    value={svUrl}
-                    onChangeText={setSvUrl}
-                    autoCapitalize="none"
-                />
+                <Text style={styles.label}>School District</Text>
+                <TouchableOpacity
+                    style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                    onPress={() => setIsPickerVisible(true)}
+                >
+                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: selectedDistrict ? theme.colors.ink : theme.colors.ink3 }}>
+                        {selectedDistrict ? selectedDistrict.name : "Select your school district..."}
+                    </Text>
+                    <ChevronDown size={18} color={theme.colors.ink3} />
+                </TouchableOpacity>
+
+                {selectedDistrict && selectedDistrict.id === 'custom' && (
+                    <>
+                        <Text style={styles.label}>Custom Portal URL</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="e.g. https://rtmsd.usplk12.org"
+                            placeholderTextColor={theme.colors.ink3}
+                            value={customUrl}
+                            onChangeText={setCustomUrl}
+                            autoCapitalize="none"
+                        />
+                    </>
+                )}
 
                 <Text style={styles.label}>Username / Student ID</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Student ID"
-                    value={svUser}
-                    onChangeText={setSvUser}
-                    autoCapitalize="none"
-                />
+                <TextInput style={styles.input} placeholder="Student ID" placeholderTextColor={theme.colors.ink3} value={svUser} onChangeText={setSvUser} autoCapitalize="none" />
 
                 <Text style={styles.label}>Password</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Password"
-                    value={svPass}
-                    onChangeText={setSvPass}
-                    secureTextEntry
-                />
+                <TextInput style={styles.input} placeholder="Password" placeholderTextColor={theme.colors.ink3} value={svPass} onChangeText={setSvPass} secureTextEntry />
 
-                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#8E24AA', marginTop: 15 }]} onPress={handleStudentVueLogin}>
-                    <Text style={styles.actionBtnText}>Sync Grades Now</Text>
+                {/* Sync button with loading state */}
+                <TouchableOpacity
+                    style={[
+                        styles.actionBtn,
+                        { backgroundColor: isSyncing ? theme.colors.ink3 : theme.colors.ink, marginTop: 15 },
+                    ]}
+                    onPress={handleStudentVueLogin}
+                    disabled={isSyncing}
+                >
+                    {isSyncing ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <ActivityIndicator size="small" color="#fff" />
+                            <Text style={styles.actionBtnText}>Importing grades…</Text>
+                        </View>
+                    ) : (
+                        <Text style={styles.actionBtnText}>Sync Grades Now</Text>
+                    )}
+                </TouchableOpacity>
+
+                {/* Progress bar shown while syncing */}
+                {isSyncing && (
+                    <View style={styles.progressBarTrack}>
+                        <View style={styles.progressBarFill} />
+                    </View>
+                )}
+
+                {/* In-screen result banner */}
+                {syncResult && (
+                    <View style={[
+                        styles.syncBanner,
+                        {
+                            borderColor: syncResult.type === 'success' ? theme.colors.green : theme.colors.red,
+                            backgroundColor: syncResult.type === 'success' ? '#f0fdf4' : '#fff5f5'
+                        },
+                    ]}>
+                        <Text style={[styles.syncBannerText, { color: syncResult.type === 'success' ? '#166534' : '#991b1b' }]}>
+                            {syncResult.message}
+                        </Text>
+                        {syncResult.detail ? (
+                            <Text style={[styles.syncBannerDetail, { color: syncResult.type === 'success' ? '#166534' : '#991b1b' }]}>
+                                {syncResult.detail}
+                            </Text>
+                        ) : null}
+                    </View>
+                )}
+
+                {/* Beta: Demo data loader */}
+                <View style={styles.demoRow}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.demoLabel}>Beta Testing</Text>
+                        <Text style={styles.demoSub}>Load fake student data to test the Gradebook &amp; Calendar without real credentials.</Text>
+                    </View>
+                </View>
+                <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: '#7c3aed', marginTop: 6 }]}
+                    onPress={async () => {
+                        setIsMockLoading(true);
+                        setSyncResult(null);
+                        try {
+                            const { classCount, assignmentCount } = await loadMockGradebookData();
+                            setSyncResult({
+                                type: 'success',
+                                message: `🎓 Demo data loaded! ${classCount} classes · ${assignmentCount} assignments`,
+                                detail: 'Open the Gradebook tab to explore. Quarter picker will show Q1–Q4.',
+                            });
+                        } catch (e) {
+                            setSyncResult({ type: 'error', message: `Demo load failed: ${e.message}` });
+                        } finally {
+                            setIsMockLoading(false);
+                        }
+                    }}
+                    disabled={isMockLoading}
+                >
+                    {isMockLoading ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <ActivityIndicator size="small" color="#fff" />
+                            <Text style={styles.actionBtnText}>Generating…</Text>
+                        </View>
+                    ) : (
+                        <Text style={styles.actionBtnText}>🎓 Load Demo Data</Text>
+                    )}
                 </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                <Text style={styles.saveButtonText}>Save Manual Settings</Text>
-            </TouchableOpacity>
+
+            <DistrictPickerModal
+                visible={isPickerVisible}
+                onClose={() => setIsPickerVisible(false)}
+                onSelect={(district) => setSelectedDistrict(district)}
+                currentSelectionUrl={selectedDistrict?.url}
+            />
 
         </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#f9f9f9', paddingTop: 50 },
-    header: { fontSize: 28, fontWeight: 'bold', color: '#333' },
-    subtitle: { fontSize: 14, color: '#666', marginTop: 5, marginBottom: 25 },
-    card: { backgroundColor: '#fff', padding: 20, borderRadius: 12, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 3 },
-    cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 10 },
-    instructions: { fontSize: 13, color: '#555', lineHeight: 20, marginBottom: 15 },
-    input: { backgroundColor: '#f0f0f0', padding: 12, borderRadius: 8, fontSize: 14, borderWidth: 1, borderColor: '#ddd' },
-    saveButton: { backgroundColor: '#333', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 10, marginBottom: 40 },
-    saveButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+    container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40, paddingHorizontal: 20 },
+    headerContainer: { marginBottom: 30 },
+    header: { fontFamily: theme.fonts.d, fontSize: 36, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
+    subtitle: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginTop: 5 },
 
-    googleBtn: { backgroundColor: '#4285F4', padding: 15, borderRadius: 10, alignItems: 'center' },
-    googleBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+    card: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 24, marginBottom: 20 },
+    cardTitle: { fontFamily: theme.fonts.d, fontSize: 20, fontWeight: '600', color: theme.colors.ink, marginBottom: 10 },
+    instructions: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, lineHeight: 20, marginBottom: 15 },
 
-    actionBtn: { backgroundColor: '#007AFF', padding: 12, borderRadius: 8, alignItems: 'center' },
-    actionBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' }
+    label: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 5 },
+    input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, padding: 12, borderRadius: theme.radii.r, fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink, marginBottom: 15 },
+
+    saveButton: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border2, padding: 15, borderRadius: theme.radii.lg, alignItems: 'center', marginTop: 10, marginBottom: 60 },
+    saveButtonText: { fontFamily: theme.fonts.s, color: theme.colors.ink2, fontSize: 15, fontWeight: '600' },
+
+    googleBtn: { backgroundColor: theme.colors.blue, padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
+    googleBtnText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15, fontWeight: '600' },
+
+    actionBtn: { padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
+    actionBtnText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15, fontWeight: '600' },
+
+    // Loading bar
+    progressBarTrack: { height: 4, backgroundColor: theme.colors.border, borderRadius: 2, marginTop: 12, overflow: 'hidden' },
+    progressBarFill: { height: 4, width: '60%', backgroundColor: theme.colors.ink, borderRadius: 2 },
+
+    // Result banner
+    syncBanner: { marginTop: 14, padding: 14, borderRadius: theme.radii.r, borderWidth: 1 },
+    syncBannerText: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', lineHeight: 20 },
+    syncBannerDetail: { fontFamily: theme.fonts.m, fontSize: 11, marginTop: 4, opacity: 0.8 },
+
+    // Demo / beta testing row
+    demoRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 20, paddingTop: 18, borderTopWidth: 1, borderTopColor: theme.colors.border },
+    demoLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: '#7c3aed', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 3 },
+    demoSub: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, lineHeight: 16 },
 });

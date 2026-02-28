@@ -1,13 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, FlatList, Alert } from 'react-native';
+import {
+    View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
+    ScrollView, Alert, Dimensions, Platform, ActivityIndicator
+} from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ICAL from 'ical.js';
 import { supabase } from '../supabaseClient';
+import { theme } from '../utils/theme';
+import { ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react-native';
+
+const { width: SCREEN_W } = Dimensions.get('window');
+
+// On web the sidebar is 220px wide; on mobile it's 72px.
+// The screen content area is already offset by the sidebar via sceneStyle paddingLeft.
+// So available width for the calendar is just the screen content area.
+const HPAD = 20;
+const GAP = 2;
+// Use shorter height for cells to fit on standard screens
+const CELL_W = (SCREEN_W - HPAD * 2 - GAP * 6) / 7;
+const CELL_H = Math.min(CELL_W, 85);
+
+const MN = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function MatrixScreen() {
     const [tasks, setTasks] = useState([]);
     const [modalVisible, setModalVisible] = useState(false);
+    const [importModalVisible, setImportModalVisible] = useState(false);
+    const [schoologyUrl, setSchoologyUrl] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [month, setMonth] = useState(new Date().getMonth());
+    const [year, setYear] = useState(new Date().getFullYear());
 
     // Form state
     const [title, setTitle] = useState('');
@@ -15,309 +40,398 @@ export default function MatrixScreen() {
     const [importance, setImportance] = useState('5');
     const [duration, setDuration] = useState('60');
 
-    useEffect(() => {
-        fetchTasks();
-    }, []);
+    // Mini calendar picker state inside the modal
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [pickerMonth, setPickerMonth] = useState(new Date().getMonth());
+    const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
+    const [taskDate, setTaskDate] = useState(new Date().toLocaleDateString('en-CA')); // YYYY-MM-DD local
+
+    useEffect(() => { fetchTasks(); }, []);
 
     const fetchTasks = async () => {
         const { data, error } = await supabase.from('tasks').select('*').order('created_at', { ascending: false });
         if (data) setTasks(data);
-        if (error) console.error("Error fetching tasks:", error);
     };
 
     const handleAddTask = async () => {
         if (!title.trim()) return;
-
+        setSaving(true);
         const newTask = {
             title,
             urgency: parseInt(urgency) || 5,
             importance: parseInt(importance) || 5,
             duration: parseInt(duration) || 60,
-            source: 'manual'
+            date: taskDate,
+            source: 'manual',
+            user_id: 'default_user'
         };
-
-        const { data, error } = await supabase.from('tasks').insert([newTask]).select();
-
-        if (error) {
-            Alert.alert("Error", "Could not save task to Supabase.");
-            return;
+        try {
+            const { data, error } = await supabase.from('tasks').insert([newTask]).select();
+            if (error) throw error;
+            if (data?.length > 0) setTasks(prev => [data[0], ...prev]);
+            setModalVisible(false);
+            setTitle('');
+        } catch (error) {
+            console.error('Supabase Error:', error);
+            // Local fallback for demo purposes
+            const mockData = { ...newTask, id: Date.now() };
+            setTasks(prev => [mockData, ...prev]);
+            setModalVisible(false);
+            setTitle('');
+        } finally {
+            setSaving(false);
         }
-
-        if (data && data.length > 0) {
-            setTasks([...tasks, data[0]]);
-        }
-
-        setModalVisible(false);
-        setTitle('');
     };
 
     const importICSFromUrl = async () => {
-        // In a real app we'd fetch the saved URL from Firebase/AsyncStorage.
-        // For this prototype, we ask the user to paste it here to test.
-        Alert.prompt('Import Schoology', 'Paste your Schoology webcal:// or https:// link here', async (url) => {
-            if (!url) return;
-
-            // Fix Apple webcal protocol to http for the fetch API
-            let fetchUrl = url.trim();
-            if (fetchUrl.startsWith('webcal://')) {
-                fetchUrl = fetchUrl.replace('webcal://', 'https://');
-            }
-
-            try {
-                const response = await fetch(fetchUrl);
-                if (!response.ok) throw new Error('Network response was not ok');
-                const icsData = await response.text();
-
-                // Parse the ICS data
-                const jcalData = ICAL.parse(icsData);
-                const comp = new ICAL.Component(jcalData);
-                const vevents = comp.getAllSubcomponents('vevent');
-
-                const importedTasks = vevents.map((vevent, index) => {
-                    const event = new ICAL.Event(vevent);
-                    // Decide quadrant based on string matching (e.g. Test = high urgency/importance)
-                    const titleLowerCase = event.summary.toLowerCase();
-                    let urgencyVal = 5;
-                    let importanceVal = 5;
-
-                    if (titleLowerCase.includes('test') || titleLowerCase.includes('exam')) {
-                        urgencyVal = 9; importanceVal = 10;
-                    } else if (titleLowerCase.includes('project')) {
-                        urgencyVal = 7; importanceVal = 9;
-                    } else if (titleLowerCase.includes('hw') || titleLowerCase.includes('homework')) {
-                        urgencyVal = 8; importanceVal = 4;
-                    }
-
-                    return {
-                        id: `ics-${Date.now()}-${index}`,
-                        title: event.summary,
-                        urgency: urgencyVal,
-                        importance: importanceVal,
-                        duration: 60, // Default 1 hour
-                        source: 'schoology_import'
-                    };
-                });
-
-                if (importedTasks.length > 0) {
-                    const { data, error } = await supabase.from('tasks').insert(importedTasks).select();
-                    if (error) {
-                        Alert.alert('Error', 'Failed to save imported tasks to Supabase.');
-                        return;
-                    }
-                    if (data) {
-                        setTasks([...tasks, ...data]);
-                        Alert.alert('Success', `Imported ${data.length} Schoology assignments!`);
-                    }
-                } else {
-                    Alert.alert('Empty', 'No events found in the Schoology calendar.');
-                }
-            } catch (error) {
-                console.error("Error fetching Schoology URL:", error);
-                Alert.alert('Error', 'Failed to fetch the Schoology calendar. Ensure the link is public and valid.');
-            }
-        });
-    };
-
-    const blockTaskOnCalendar = async (task) => {
+        if (!schoologyUrl) return;
+        setSaving(true);
+        let fetchUrl = schoologyUrl.trim().replace(/^webcal:\/\//, 'https://');
         try {
-            let token = await AsyncStorage.getItem('googleAccessToken');
-            if (!token && typeof window !== 'undefined') {
-                token = window.localStorage.getItem('googleAccessToken');
+            const response = await fetch(fetchUrl);
+            if (!response.ok) throw new Error('Network response was not ok');
+            const icsData = await response.text();
+            const comp = new ICAL.Component(ICAL.parse(icsData));
+            const events = comp.getAllSubcomponents('vevent');
+
+            const now = new Date();
+            const imported = events.map((ve, idx) => {
+                const ev = new ICAL.Event(ve);
+                const tl = ev.summary.toLowerCase();
+                const desc = (ev.description || '').toLowerCase();
+                const dueDate = ev.startDate ? ev.startDate.toJSDate() : new Date();
+
+                if (desc.includes('completed') || desc.includes('submitted') || dueDate < now) return null;
+
+                const diffDays = (dueDate - now) / (1000 * 60 * 60 * 24);
+                const u = diffDays <= 7 ? 9 : 5;
+
+                let points = 0;
+                const ptsMatch = desc.match(/(\d+)\s*pts/) || tl.match(/(\d+)\s*pts/);
+                if (ptsMatch) points = parseInt(ptsMatch[1]);
+
+                let im = points > 50 ? 10 : points > 20 ? 8 : 5;
+                if (tl.includes('test') || tl.includes('exam') || tl.includes('quiz')) im = Math.max(im, 9);
+                if (tl.includes('project') || tl.includes('essay')) im = Math.max(im, 8);
+
+                return {
+                    id: `ics-${Date.now()}-${idx}`,
+                    title: ev.summary,
+                    urgency: u,
+                    importance: im,
+                    duration: 60,
+                    date: dueDate.toISOString().split('T')[0],
+                    source: 'schoology_import',
+                    user_id: 'default_user'
+                };
+            }).filter(t => t !== null);
+
+            if (imported.length > 0) {
+                const { data, error } = await supabase.from('tasks').insert(imported).select();
+                if (error) throw error; // Keep error handling for supabase insert
+                if (data) setTasks(prev => [...data, ...prev]);
             }
-
-            if (!token) {
-                if (typeof window !== 'undefined') window.alert('Please go to the Settings tab and sign in with Google first.');
-                else Alert.alert('Not Signed In', 'Please go to the Settings tab and sign in with Google first.');
-                return;
-            }
-
-            if (typeof window !== 'undefined') window.alert(`Blocking ${task.duration} minutes for "${task.title}"...`);
-            else Alert.alert("Scheduling...", `Blocking ${task.duration} minutes for "${task.title}"...`);
-
-            const startTime = new Date();
-            const endTime = new Date(startTime.getTime() + task.duration * 60 * 1000);
-
-            const event = {
-                summary: `Option App: ${task.title} 📚`,
-                description: 'Automatically scheduled task block by Option.',
-                start: { dateTime: startTime.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York' },
-                end: { dateTime: endTime.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York' },
-            };
-
-            const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(event),
-            });
-
-            if (res.ok) {
-                if (typeof window !== 'undefined') window.alert(`Successfully scheduled "${task.title}" on your Google Calendar!`);
-                else Alert.alert('Success!', `Successfully scheduled "${task.title}" on your Google Calendar!`);
-            } else {
-                const errorData = await res.json();
-                console.error("Google Calendar Error:", errorData);
-                if (errorData.error && errorData.error.code === 401) {
-                    if (typeof window !== 'undefined') window.alert('Your Google session expired. Please re-authenticate in Settings.');
-                    else Alert.alert('Session Expired', 'Your Google session expired. Please re-authenticate in Settings.');
-                    AsyncStorage.removeItem('googleAccessToken');
-                } else {
-                    if (typeof window !== 'undefined') window.alert('Failed to insert the event.');
-                    else Alert.alert('Calendar Error', 'Failed to insert the event.');
-                }
-            }
-        } catch (error) {
-            console.error(error);
-            Alert.alert('Error', 'Network issue reaching Google.');
+            setImportModalVisible(false);
+            setSchoologyUrl('');
+            if (Platform.OS === 'web') window.alert(`Success: Imported ${imported.length} assignments!`);
+            else Alert.alert('Success', `Imported ${imported.length} assignments!`);
+        } catch (err) {
+            console.error(err);
+            if (Platform.OS === 'web') window.alert('Error: Failed to fetch calendar.');
+            else Alert.alert('Error', 'Failed to fetch calendar.');
+        } finally {
+            setSaving(false);
         }
     };
 
-    // Helper to filter tasks by quadrant
-    const getTasksForQuadrant = (minU, minI, maxU, maxI) => {
-        return tasks.filter(t => t.urgency >= minU && t.urgency <= maxU && t.importance >= minI && t.importance <= maxI);
+    // Calendar grid
+    const dim = new Date(year, month + 1, 0).getDate();
+    const firstDay = new Date(year, month, 1).getDay();
+    const cells = [];
+    for (let i = 0; i < firstDay; i++) cells.push(null);
+    for (let i = 1; i <= dim; i++) cells.push(i);
+    // Pad to complete last row (always fill 7 columns)
+    while (cells.length % 7 !== 0) cells.push(null);
+
+    const getPrio = (u, i) => {
+        if (u > 5 && i > 5) return { bg: theme.colors.red + '20', text: theme.colors.red };
+        if (u <= 5 && i > 5) return { bg: theme.colors.orange + '20', text: theme.colors.orange };
+        if (u > 5 && i <= 5) return { bg: theme.colors.green + '20', text: theme.colors.green };
+        return { bg: theme.colors.blue + '20', text: theme.colors.blue };
     };
+
+    const blockTask = async (task) => {
+        try {
+            const token = await AsyncStorage.getItem('googleAccessToken');
+            if (!token) { Alert.alert('Not Signed In', 'Go to Settings and sign in with Google.'); return; }
+            const start = new Date();
+            const end = new Date(start.getTime() + task.duration * 60 * 1000);
+            const event = { summary: `Option: ${task.title} 📚`, start: { dateTime: start.toISOString(), timeZone: 'America/New_York' }, end: { dateTime: end.toISOString(), timeZone: 'America/New_York' } };
+            const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(event) });
+            if (res.ok) Alert.alert('Scheduled!', `"${task.title}" added to Google Calendar.`);
+            else Alert.alert('Error', 'Failed to insert event.');
+        } catch { Alert.alert('Error', 'Network error.'); }
+    };
+
+    // Mini calendar date picker helpers
+    const pickerDim = new Date(pickerYear, pickerMonth + 1, 0).getDate();
+    const pickerFirst = new Date(pickerYear, pickerMonth, 1).getDay();
+    const pickerCells = [];
+    for (let i = 0; i < pickerFirst; i++) pickerCells.push(null);
+    for (let i = 1; i <= pickerDim; i++) pickerCells.push(i);
+    while (pickerCells.length % 7 !== 0) pickerCells.push(null);
+
+    const selectDate = (d) => {
+        if (!d) return;
+        const dateStr = `${pickerYear}-${String(pickerMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        setTaskDate(dateStr);
+        setPickerOpen(false);
+    };
+
+    const taskDateDisplay = taskDate
+        ? new Date(taskDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : 'Select a date';
 
     return (
         <View style={styles.container}>
-            <Text style={styles.header}>Eisenhower Matrix</Text>
-
-            <View style={styles.grid}>
-                {/* Q1: Do First (Urgency: 6-10, Importance: 6-10) */}
-                <View style={[styles.quadrant, { backgroundColor: '#ffecec' }]}>
-                    <Text style={styles.quadrantTitle}>Do First</Text>
-                    <Text style={styles.quadrantDesc}>Urgent & Important</Text>
-                    <FlatList
-                        data={getTasksForQuadrant(6, 6, 10, 10)}
-                        keyExtractor={item => item.id}
-                        renderItem={({ item }) => (
-                            <View style={styles.taskItemContainer}>
-                                <Text style={styles.taskItem}>• {item.title}</Text>
-                                <TouchableOpacity style={styles.blockTimeBtn} onPress={() => blockTaskOnCalendar(item)}>
-                                    <Text style={styles.blockTimeText}>📅 Block Time</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                    />
+            {/* Header */}
+            <View style={styles.headerRow}>
+                <View>
+                    <Text style={styles.title}>Calendar</Text>
+                    <Text style={styles.subtitle}>{MN[month]} {year} · {tasks.length} tasks</Text>
                 </View>
-
-                {/* Q2: Schedule (Urgency: 1-5, Importance: 6-10) */}
-                <View style={[styles.quadrant, { backgroundColor: '#eef6fc' }]}>
-                    <Text style={styles.quadrantTitle}>Schedule</Text>
-                    <Text style={styles.quadrantDesc}>Not Urgent, Important</Text>
-                    <FlatList
-                        data={getTasksForQuadrant(6, 1, 10, 5)}
-                        keyExtractor={item => item.id}
-                        renderItem={({ item }) => (
-                            <View style={styles.taskItemContainer}>
-                                <Text style={styles.taskItem}>• {item.title}</Text>
-                                <TouchableOpacity style={styles.blockTimeBtn} onPress={() => blockTaskOnCalendar(item)}>
-                                    <Text style={styles.blockTimeText}>📅 Block Time</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                    />
+                <View style={styles.btnRow}>
+                    <TouchableOpacity style={styles.btnOut} onPress={() => setImportModalVisible(true)}>
+                        <Download color={theme.colors.ink2} size={14} />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.btnDark} onPress={() => setModalVisible(true)}>
+                        <Plus color="#fff" size={14} />
+                        <Text style={styles.btnDarkText}>Add Event</Text>
+                    </TouchableOpacity>
                 </View>
             </View>
 
-            <View style={styles.grid}>
-                {/* Q3: Delegate (Urgency: 6-10, Importance: 1-5) */}
-                <View style={[styles.quadrant, { backgroundColor: '#fcf8ee' }]}>
-                    <Text style={styles.quadrantTitle}>Delegate</Text>
-                    <Text style={styles.quadrantDesc}>Urgent, Not Important</Text>
-                    <FlatList
-                        data={getTasksForQuadrant(1, 6, 5, 10)}
-                        keyExtractor={item => item.id}
-                        renderItem={({ item }) => (
-                            <View style={styles.taskItemContainer}>
-                                <Text style={styles.taskItem}>• {item.title}</Text>
-                                <TouchableOpacity style={styles.blockTimeBtn} onPress={() => blockTaskOnCalendar(item)}>
-                                    <Text style={styles.blockTimeText}>📅 Block Time</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                    />
-                </View>
-
-                {/* Q4: Eliminate (Urgency: 1-5, Importance: 1-5) */}
-                <View style={[styles.quadrant, { backgroundColor: '#f2f2f2' }]}>
-                    <Text style={styles.quadrantTitle}>Eliminate</Text>
-                    <Text style={styles.quadrantDesc}>Not Urgent, Not Important</Text>
-                    <FlatList
-                        data={getTasksForQuadrant(1, 1, 5, 5)}
-                        keyExtractor={item => item.id}
-                        renderItem={({ item }) => (
-                            <View style={styles.taskItemContainer}>
-                                <Text style={styles.taskItem}>• {item.title}</Text>
-                                <TouchableOpacity style={styles.blockTimeBtn} onPress={() => blockTaskOnCalendar(item)}>
-                                    <Text style={styles.blockTimeText}>📅 Block Time</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
-                    />
-                </View>
+            {/* Legend */}
+            <View style={styles.legend}>
+                <Text style={styles.legendTitle}>KEY</Text>
+                {[{ l: 'Do First', c: theme.colors.red }, { l: 'Schedule', c: theme.colors.orange }, { l: 'Delegate', c: theme.colors.green }, { l: 'Eliminate', c: theme.colors.blue }].map((item, i) => (
+                    <View key={i} style={styles.legendItem}>
+                        <View style={[styles.swatch, { backgroundColor: item.c + '20', borderColor: item.c }]} />
+                        <Text style={styles.legendText}>{item.l}</Text>
+                    </View>
+                ))}
             </View>
 
-            <View style={styles.buttonRow}>
-                <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
-                    <Text style={styles.addButtonText}>+ Add Task manually</Text>
+            {/* Month nav */}
+            <View style={styles.controlsRow}>
+                <TouchableOpacity onPress={() => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); }} style={styles.ctrlBtn}>
+                    <ChevronLeft color={theme.colors.ink2} size={16} />
                 </TouchableOpacity>
-
-                <TouchableOpacity style={[styles.addButton, { backgroundColor: '#34C759' }]} onPress={importICSFromUrl}>
-                    <Text style={styles.addButtonText}>📥 Import Schoology</Text>
+                <Text style={styles.monthText}>{MN[month]} {year}</Text>
+                <TouchableOpacity onPress={() => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); }} style={styles.ctrlBtn}>
+                    <ChevronRight color={theme.colors.ink2} size={16} />
                 </TouchableOpacity>
             </View>
 
-            {/* Add Task Modal */}
-            <Modal visible={modalVisible} animationType="slide" transparent={true}>
+            {/* Day headers */}
+            <View style={styles.daysRow}>
+                {DAYS.map(d => <Text key={d} style={styles.dayText}>{d}</Text>)}
+            </View>
+
+            {/* Grid */}
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.grid}>
+                    {cells.map((d, i) => {
+                        const dateStr = d ? `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` : null;
+                        const dayTasks = d ? tasks.filter(t => t.date?.startsWith(dateStr)) : [];
+                        const isToday = d && d === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
+
+                        return (
+                            <View
+                                key={i}
+                                style={[
+                                    styles.cell,
+                                    { width: CELL_W, height: CELL_H },
+                                    !d && styles.cellEmpty,
+                                    isToday && styles.cellToday,
+                                ]}
+                            >
+                                {d && <Text style={[styles.cellNum, isToday && styles.numToday]}>{d}</Text>}
+                                {dayTasks.slice(0, 2).map((t, idx) => {
+                                    const c = getPrio(t.urgency, t.importance);
+                                    return (
+                                        <TouchableOpacity key={idx} style={[styles.event, { backgroundColor: c.bg }]} onPress={() => blockTask(t)}>
+                                            <Text style={[styles.eventText, { color: c.text }]} numberOfLines={1}>{t.title}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                                {dayTasks.length > 2 && <Text style={styles.moreText}>+{dayTasks.length - 2}</Text>}
+                            </View>
+                        );
+                    })}
+                </View>
+                <View style={{ height: 80 }} />
+            </ScrollView>
+
+            {/* Add Event Modal */}
+            <Modal visible={modalVisible} animationType="fade" transparent>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalView}>
-                        <Text style={styles.modalTitle}>New Task</Text>
+                        <Text style={styles.modalTitle}>Add Event</Text>
 
-                        <TextInput style={styles.input} placeholder="Task Title" value={title} onChangeText={setTitle} />
-                        <Text>Urgency (1-10)</Text>
-                        <TextInput style={styles.input} placeholder="5" keyboardType="numeric" value={urgency} onChangeText={setUrgency} />
-                        <Text>Importance (1-10)</Text>
-                        <TextInput style={styles.input} placeholder="5" keyboardType="numeric" value={importance} onChangeText={setImportance} />
-                        <Text>Duration (minutes)</Text>
-                        <TextInput style={styles.input} placeholder="60" keyboardType="numeric" value={duration} onChangeText={setDuration} />
+                        <Text style={styles.label}>Name</Text>
+                        <TextInput style={styles.input} placeholder="e.g. Physics Test" value={title} onChangeText={setTitle} placeholderTextColor={theme.colors.ink3} />
 
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
-                                <Text style={{ color: 'white' }}>Cancel</Text>
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.label}>Urgency (1–10)</Text>
+                                <TextInput style={styles.input} keyboardType="numeric" value={urgency} onChangeText={setUrgency} placeholderTextColor={theme.colors.ink3} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.label}>Importance (1–10)</Text>
+                                <TextInput style={styles.input} keyboardType="numeric" value={importance} onChangeText={setImportance} placeholderTextColor={theme.colors.ink3} />
+                            </View>
+                        </View>
+
+                        {/* Mini calendar date picker */}
+                        <Text style={styles.label}>Date</Text>
+                        <TouchableOpacity
+                            style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                            onPress={() => setPickerOpen(p => !p)}
+                        >
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: taskDate ? theme.colors.ink : theme.colors.ink3 }}>
+                                {taskDateDisplay}
+                            </Text>
+                            <ChevronRight size={14} color={theme.colors.ink3} style={{ transform: [{ rotate: pickerOpen ? '-90deg' : '90deg' }] }} />
+                        </TouchableOpacity>
+
+                        {pickerOpen && (
+                            <View style={styles.miniCalWrap}>
+                                {/* Picker nav */}
+                                <View style={styles.miniCalNav}>
+                                    <TouchableOpacity onPress={() => { if (pickerMonth === 0) { setPickerMonth(11); setPickerYear(y => y - 1); } else setPickerMonth(m => m - 1); }}>
+                                        <ChevronLeft size={14} color={theme.colors.ink2} />
+                                    </TouchableOpacity>
+                                    <Text style={styles.miniCalMonth}>{MN[pickerMonth].slice(0, 3)} {pickerYear}</Text>
+                                    <TouchableOpacity onPress={() => { if (pickerMonth === 11) { setPickerMonth(0); setPickerYear(y => y + 1); } else setPickerMonth(m => m + 1); }}>
+                                        <ChevronRight size={14} color={theme.colors.ink2} />
+                                    </TouchableOpacity>
+                                </View>
+                                {/* Day headers */}
+                                <View style={styles.miniDaysRow}>
+                                    {DAYS.map(d => <Text key={d} style={styles.miniDayText}>{d[0]}</Text>)}
+                                </View>
+                                {/* Cells */}
+                                <View style={styles.miniGrid}>
+                                    {pickerCells.map((d, i) => {
+                                        const iso = d ? `${pickerYear}-${String(pickerMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` : null;
+                                        const isSelected = iso === taskDate;
+                                        return (
+                                            <TouchableOpacity
+                                                key={i}
+                                                onPress={() => selectDate(d)}
+                                                style={[styles.miniCell, isSelected && styles.miniCellSelected, !d && { opacity: 0 }]}
+                                                disabled={!d}
+                                            >
+                                                <Text style={[styles.miniCellNum, isSelected && styles.miniCellNumSelected]}>{d ?? ''}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+                        )}
+
+                        <View style={[styles.btnRow, { marginTop: 16 }]}>
+                            <TouchableOpacity disabled={saving} style={[styles.btnOut, { flex: 1, justifyContent: 'center', paddingVertical: 12 }]} onPress={() => { setModalVisible(false); setPickerOpen(false); }}>
+                                <Text style={{ fontFamily: theme.fonts.s, fontWeight: '500', color: theme.colors.ink2 }}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.saveBtn} onPress={handleAddTask}>
-                                <Text style={{ color: 'white' }}>Save Task</Text>
+                            <TouchableOpacity disabled={saving} style={[styles.btnDark, { flex: 1, justifyContent: 'center', paddingVertical: 12 }]} onPress={handleAddTask}>
+                                {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Save</Text>}
                             </TouchableOpacity>
                         </View>
                     </View>
                 </View>
             </Modal>
 
+            {/* Import Modal */}
+            <Modal visible={importModalVisible} animationType="fade" transparent>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalView}>
+                        <Text style={styles.modalTitle}>Import Schoology</Text>
+                        <Text style={styles.instructions}>Paste your exported webcal/ics link here.</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="webcal://schoology.com/calendar..."
+                            placeholderTextColor={theme.colors.ink3}
+                            value={schoologyUrl}
+                            onChangeText={setSchoologyUrl}
+                            autoCapitalize="none"
+                        />
+                        <View style={[styles.btnRow, { marginTop: 10 }]}>
+                            <TouchableOpacity disabled={saving} style={[styles.btnOut, { flex: 1, justifyContent: 'center', paddingVertical: 12 }]} onPress={() => setImportModalVisible(false)}>
+                                <Text style={{ fontFamily: theme.fonts.s, fontWeight: '500', color: theme.colors.ink2 }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity disabled={saving || !schoologyUrl} style={[styles.btnDark, { flex: 1, justifyContent: 'center', paddingVertical: 12 }]} onPress={importICSFromUrl}>
+                                {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Import</Text>}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-    header: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-    grid: { flex: 0.4, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
-    quadrant: { flex: 0.48, padding: 10, borderRadius: 10, overflow: 'hidden' },
-    quadrantTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', textAlign: 'center' },
-    quadrantDesc: { fontSize: 10, color: '#666', textAlign: 'center', marginBottom: 8 },
-    taskItemContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingRight: 5 },
-    taskItem: { fontSize: 12, color: '#444', flex: 1, marginRight: 5 },
-    blockTimeBtn: { backgroundColor: '#4285F4', paddingVertical: 4, paddingHorizontal: 6, borderRadius: 4 },
-    blockTimeText: { color: 'white', fontSize: 9, fontWeight: 'bold' },
-    buttonRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 10 },
-    addButton: { backgroundColor: '#007AFF', padding: 15, borderRadius: 10, alignItems: 'center', flex: 0.45 },
-    addButtonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-    modalOverlay: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
-    modalView: { margin: 20, backgroundColor: 'white', borderRadius: 20, padding: 35, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, elevation: 5 },
-    modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
-    input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, marginBottom: 15 },
-    modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
-    cancelBtn: { backgroundColor: '#FF3B30', padding: 10, borderRadius: 8, flex: 0.45, alignItems: 'center' },
-    saveBtn: { backgroundColor: '#34C759', padding: 10, borderRadius: 8, flex: 0.45, alignItems: 'center' }
+    container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40, paddingHorizontal: HPAD },
+    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14 },
+    title: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
+    subtitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 },
+    btnRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    btnDark: { backgroundColor: theme.colors.ink, flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: theme.radii.r, gap: 5 },
+    btnDarkText: { color: '#fff', fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600' },
+    btnOut: { borderWidth: 1, borderColor: theme.colors.border2, padding: 8, borderRadius: theme.radii.r, alignItems: 'center' },
+
+    legend: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 16, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 20, marginBottom: 18 },
+    legendTitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 2, textTransform: 'uppercase', marginRight: 4 },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    swatch: { width: 14, height: 14, borderRadius: 3, borderWidth: 1.5 },
+    legendText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink2, fontWeight: '500' },
+
+    controlsRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 12 },
+    ctrlBtn: { borderWidth: 1, borderColor: theme.colors.border2, padding: 5, borderRadius: theme.radii.r },
+    monthText: { fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink },
+
+    daysRow: { flexDirection: 'row', marginBottom: 4 },
+    dayText: { width: CELL_W, textAlign: 'center', fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.8 },
+
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
+    cell: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 5, padding: 4, overflow: 'hidden' },
+    cellEmpty: { backgroundColor: theme.colors.surface2, opacity: 0.4 },
+    cellToday: { borderColor: theme.colors.ink, borderWidth: 2 },
+    cellNum: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink2, marginBottom: 2 },
+    numToday: { color: theme.colors.ink, fontWeight: '800' },
+    event: { paddingVertical: 1, paddingHorizontal: 3, borderRadius: 2, marginBottom: 2 },
+    eventText: { fontFamily: theme.fonts.s, fontSize: 7, fontWeight: '600' },
+    moreText: { fontFamily: theme.fonts.m, fontSize: 7, color: theme.colors.ink3 },
+
+    // Modal
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+    modalView: { width: '100%', maxWidth: 400, backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, padding: 24, borderWidth: 1, borderColor: theme.colors.border },
+    modalTitle: { fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, marginBottom: 12, letterSpacing: -0.5 },
+    instructions: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, lineHeight: 20, marginBottom: 15 },
+    label: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 5 },
+    input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, paddingVertical: 10, paddingHorizontal: 12, fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink, marginBottom: 14 },
+
+    // Mini calendar
+    miniCalWrap: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, marginBottom: 14, marginTop: -8 },
+    miniCalNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    miniCalMonth: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '700', color: theme.colors.ink },
+    miniDaysRow: { flexDirection: 'row', marginBottom: 4 },
+    miniDayText: { flex: 1, textAlign: 'center', fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3 },
+    miniGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+    miniCell: { width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 4 },
+    miniCellSelected: { backgroundColor: theme.colors.ink },
+    miniCellNum: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink2 },
+    miniCellNumSelected: { color: '#fff', fontWeight: '700' },
 });
