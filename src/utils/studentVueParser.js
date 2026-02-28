@@ -51,9 +51,28 @@ export const parseStudentVueGradebook = (xmlString) => {
             let currentGrade = 0;
 
             if (marks) {
-                // If there are multiple marking periods (Q1, Q2, S1), usually we want the most recent or active one.
-                // We'll just grab the first one that has a calculated score for simplicity in this MVP.
-                let targetMark = Array.isArray(marks) ? marks[marks.length - 1] : marks;
+                const marksList = Array.isArray(marks) ? marks : [marks];
+
+                // Try to find the most "relevant" active term.
+                // Fallback 1: Highest index with a valid score and non-zero assignments
+                // Fallback 2: The last one in the list (this was the original bug, often picking "Final Exam" or S1)
+                let targetMark = marksList[marksList.length - 1];
+
+                // Heuristic: Pick the mark that actually has assignments, prioritizing later quarters (e.g Q3 over Q2)
+                for (let i = marksList.length - 1; i >= 0; i--) {
+                    const m = marksList[i];
+                    const hasScore = m?.['@_CalculatedScoreRaw'];
+                    const hasAssignments = m?.Assignments?.Assignment;
+                    const markName = (m['@_MarkName'] || '').toUpperCase();
+
+                    // Avoid selecting "Final Exam" or "Semester" averages as the current active grade
+                    // if there's a Quarter grade available with assignments.
+                    if (hasScore && hasAssignments && !markName.includes('EXAM') && !markName.includes('SEMESTER')) {
+                        targetMark = m;
+                        break;
+                    }
+                }
+
                 if (targetMark?.['@_CalculatedScoreRaw']) {
                     currentGrade = parseFloat(targetMark['@_CalculatedScoreRaw']);
                 }
@@ -64,10 +83,10 @@ export const parseStudentVueGradebook = (xmlString) => {
 
             // Navigate to assignments (Marks -> Mark -> Assignments -> Assignment)
             // Due to how schools configure it, assignments might be inside specific Marks.
-            // Let's aggregate all assignments from all marks for this class
-            let allMarks = Array.isArray(marks) ? marks : [marks];
+            // Let's only aggregate assignments from the specific TargetMark to ensure we only show active ones
+            let activeMarks = targetMark ? [targetMark] : [];
 
-            allMarks.forEach(m => {
+            activeMarks.forEach(m => {
                 if (!m) return;
                 let assignments = m?.Assignments?.Assignment;
                 if (!assignments) return;
