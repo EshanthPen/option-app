@@ -68,7 +68,7 @@ export default function MatrixScreen() {
             urgency: parseInt(urgency) || 5,
             importance: parseInt(importance) || 5,
             duration: parseInt(duration) || 60,
-            date: taskDate,
+            due_date: taskDate,
             source: 'manual',
             user_id: 'default_user'
         };
@@ -128,7 +128,7 @@ export default function MatrixScreen() {
                     urgency: u,
                     importance: im,
                     duration: 60,
-                    date: dueDate.toISOString().split('T')[0],
+                    due_date: dueDate.toISOString().split('T')[0],
                     source: 'schoology_import',
                     user_id: 'default_user'
                 };
