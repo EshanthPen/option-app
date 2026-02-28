@@ -49,6 +49,7 @@ export const parseStudentVueGradebook = (xmlString) => {
             // Navigate to Marks to get the current Grade
             let marks = course?.Marks?.Mark;
             let currentGrade = 0;
+            let targetMark = null;
 
             if (marks) {
                 const marksList = Array.isArray(marks) ? marks : [marks];
@@ -56,13 +57,15 @@ export const parseStudentVueGradebook = (xmlString) => {
                 // Try to find the most "relevant" active term.
                 // Fallback 1: Highest index with a valid score and non-zero assignments
                 // Fallback 2: The last one in the list (this was the original bug, often picking "Final Exam" or S1)
-                let targetMark = marksList[marksList.length - 1];
+                targetMark = marksList[marksList.length - 1];
 
                 // Heuristic: Pick the mark that actually has assignments, prioritizing later quarters (e.g Q3 over Q2)
                 for (let i = marksList.length - 1; i >= 0; i--) {
                     const m = marksList[i];
-                    const hasScore = m?.['@_CalculatedScoreRaw'];
-                    const hasAssignments = m?.Assignments?.Assignment;
+                    if (!m) continue;
+
+                    const hasScore = m['@_CalculatedScoreRaw'];
+                    const hasAssignments = m.Assignments?.Assignment;
                     const markName = (m['@_MarkName'] || '').toUpperCase();
 
                     // Avoid selecting "Final Exam" or "Semester" averages as the current active grade
