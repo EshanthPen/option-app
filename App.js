@@ -6,6 +6,8 @@ import * as Font from 'expo-font';
 import { PlayfairDisplay_400Regular, PlayfairDisplay_600SemiBold, PlayfairDisplay_700Bold, PlayfairDisplay_900Black, PlayfairDisplay_400Regular_Italic } from '@expo-google-fonts/playfair-display';
 import { DMMono_300Light, DMMono_400Regular, DMMono_500Medium } from '@expo-google-fonts/dm-mono';
 import { InstrumentSans_400Regular, InstrumentSans_500Medium, InstrumentSans_600SemiBold } from '@expo-google-fonts/instrument-sans';
+import { ThemeProvider } from './src/context/ThemeContext';
+import { getTheme } from './src/utils/theme';
 
 export default function App() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
@@ -39,8 +41,10 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <TabNavigator />
-    </NavigationContainer>
+    <ThemeProvider>
+      <NavigationContainer>
+        <TabNavigator />
+      </NavigationContainer>
+    </ThemeProvider>
   );
 }

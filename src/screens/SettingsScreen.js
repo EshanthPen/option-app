@@ -6,16 +6,21 @@ import * as AuthSession from 'expo-auth-session';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
 import { syncStudentVueGrades } from '../utils/studentVueAPI';
-import { theme } from '../utils/theme';
+import { theme as staticTheme } from '../utils/theme';
 import DistrictPickerModal, { KNOWN_DISTRICTS } from '../components/DistrictPickerModal';
 import { syncAssignmentsToCalendar } from '../utils/googleCalendarAPI';
-import { ChevronDown, RefreshCw } from 'lucide-react-native';
+import { ChevronDown, RefreshCw, Moon, Sun } from 'lucide-react-native';
 import { loadMockGradebookData } from '../utils/mockStudentData';
 import ICAL from 'ical.js';
+import { useTheme } from '../context/ThemeContext';
+import { useNavigation } from '@react-navigation/native';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function SettingsScreen() {
+    const { theme, toggleTheme, isDarkMode } = useTheme();
+    const styles = getStyles(theme);
+    const navigation = useNavigation();
     const [schoologyUrl, setSchoologyUrl] = useState('');
     const [googleUrl, setGoogleUrl] = useState('');
 
@@ -119,23 +124,42 @@ export default function SettingsScreen() {
 
     const handleSchoologySync = async () => {
         if (!schoologyUrl) {
-            Alert.alert('Missing URL', 'Please enter your Schoology calendar link first.');
+            if (Platform.OS === 'web') window.alert('Please enter your Schoology calendar link first.');
+            else Alert.alert('Missing URL', 'Please enter your Schoology calendar link first.');
             return;
         }
         setIsSchoologySyncing(true);
         let fetchUrl = schoologyUrl.trim().replace(/^webcal:\/\//, 'https://');
+
+        // Use a relative path for the proxy, but fallback to direct fetch if on web and proxy fails
+        // Note: For local development, /api/schoology may not be active.
         const proxyUrl = `/api/schoology?url=${encodeURIComponent(fetchUrl)}`;
+
         try {
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error('Proxy or Schoology failed');
-            const icsData = await response.text();
-            const comp = new ICAL.Component(ICAL.parse(icsData));
+            let icsData = '';
+            try {
+                const response = await fetch(proxyUrl);
+                if (!response.ok) throw new Error('Proxy failed');
+                icsData = await response.text();
+            } catch (proxyErr) {
+                console.warn('Proxy failed, attempting direct fetch (CORS may block this if not proxied):', proxyErr);
+                const directResponse = await fetch(fetchUrl);
+                if (!directResponse.ok) throw new Error('Direct fetch failed');
+                icsData = await directResponse.text();
+            }
+
+            if (!icsData || !icsData.includes('BEGIN:VCALENDAR')) {
+                throw new Error('Invalid calendar data received.');
+            }
+
+            const jcalData = ICAL.parse(icsData);
+            const comp = new ICAL.Component(jcalData);
             const events = comp.getAllSubcomponents('vevent');
 
             const now = new Date();
             const imported = events.map((ve, idx) => {
                 const ev = new ICAL.Event(ve);
-                const tl = ev.summary.toLowerCase();
+                const tl = (ev.summary || '').toLowerCase();
                 const desc = (ev.description || '').toLowerCase();
                 const dueDate = ev.startDate ? ev.startDate.toJSDate() : new Date();
 
@@ -153,7 +177,7 @@ export default function SettingsScreen() {
                 if (tl.includes('project') || tl.includes('essay')) im = Math.max(im, 8);
 
                 return {
-                    title: ev.summary,
+                    title: ev.summary || 'Untitled Assignment',
                     urgency: u,
                     importance: im,
                     duration: 60,
@@ -168,12 +192,14 @@ export default function SettingsScreen() {
                 if (error) throw error;
             }
 
-            if (Platform.OS === 'web') window.alert(`Sync Complete: Imported ${imported.length} upcoming assignments.`);
-            else Alert.alert('Sync Complete', `Imported ${imported.length} upcoming assignments.`);
+            const msg = `Sync Complete: Imported ${imported.length} upcoming assignments.`;
+            if (Platform.OS === 'web') window.alert(msg);
+            else Alert.alert('Sync Complete', msg);
         } catch (err) {
-            console.error(err);
-            if (Platform.OS === 'web') window.alert('Error: Failed to fetch Schoology calendar.');
-            else Alert.alert('Error', 'Failed to fetch Schoology calendar.');
+            console.error('Schoology Sync Error:', err);
+            const errMsg = `Failed to sync: ${err.message}`;
+            if (Platform.OS === 'web') window.alert(errMsg);
+            else Alert.alert('Error', errMsg);
         } finally {
             setIsSchoologySyncing(false);
         }
@@ -228,7 +254,7 @@ export default function SettingsScreen() {
                     }
                     if (allAssignments.length > 0) {
                         const syncCount = await syncAssignmentsToCalendar(accessToken, allAssignments);
-                        if (syncCount > 0) calendarMsg = ` ${syncCount} synced to Google Calendar.`;
+                        if (syncCount > 0) calendarMsg = ` ${syncCount} synced to Google Calendar.`
                     }
                 }
 
@@ -244,6 +270,44 @@ export default function SettingsScreen() {
         } catch (error) {
             console.error(error);
             setSyncResult({ type: 'error', message: error.message });
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const syncGoogleCalendarManual = async () => {
+        if (!accessToken) {
+            Alert.alert('Not Linked', 'Please sign in with Google first.');
+            return;
+        }
+
+        setIsSyncing(true);
+        try {
+            const savedGrades = await AsyncStorage.getItem('studentVueGrades');
+            if (!savedGrades) {
+                Alert.alert('No Grade Data', 'Please sync with StudentVUE first so we have assignments to share with Google.');
+                return;
+            }
+
+            const formattedClasses = JSON.parse(savedGrades);
+            let allAssignments = [];
+            for (const course of formattedClasses) {
+                if (course.assignments) {
+                    allAssignments = allAssignments.concat(
+                        course.assignments.map(a => ({ ...a, courseName: course.name }))
+                    );
+                }
+            }
+
+            if (allAssignments.length > 0) {
+                const syncCount = await syncAssignmentsToCalendar(accessToken, allAssignments);
+                Alert.alert('Success!', `Synchronized ${syncCount} assignments to your Google Calendar.`);
+            } else {
+                Alert.alert('No Assignments', 'No assignments found to sync.');
+            }
+        } catch (error) {
+            console.error(error);
+            Alert.alert('Error', 'Failed to manual sync: ' + error.message);
         } finally {
             setIsSyncing(false);
         }
@@ -292,6 +356,30 @@ export default function SettingsScreen() {
                 <Text style={styles.subtitle}>Connect outside apps to build your schedule.</Text>
             </View>
 
+            {/* --- APPEARANCE --- */}
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Appearance</Text>
+                <TouchableOpacity
+                    style={styles.settingRow}
+                    onPress={toggleTheme}
+                    activeOpacity={0.7}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={[styles.iconBox, { backgroundColor: theme.colors.surface2 }]}>
+                            {isDarkMode ? <Moon size={20} color={theme.colors.purple} /> : <Sun size={20} color={theme.colors.orange} />}
+                        </View>
+                        <View>
+                            <Text style={styles.settingLabel}>Dark Mode</Text>
+                            <Text style={styles.settingSub}>{isDarkMode ? 'Enabled' : 'Disabled'}</Text>
+                        </View>
+                    </View>
+                    <View style={[styles.toggleContainer, isDarkMode && { backgroundColor: theme.colors.accent }]}>
+                        <View style={[styles.toggleCircle, isDarkMode && { transform: [{ translateX: 20 }] }]} />
+                    </View>
+                </TouchableOpacity>
+            </View>
+
+            {/* --- INTEGRATIONS --- */}
             {/* --- GOOGLE LOGIN --- */}
             <View style={[styles.card, { borderColor: theme.colors.blue, borderWidth: 2 }]}>
                 <Text style={styles.cardTitle}>Google Accounts</Text>
@@ -302,23 +390,39 @@ export default function SettingsScreen() {
                 {accessToken ? (
                     <View>
                         <Text style={{ fontFamily: theme.fonts.s, color: theme.colors.green, fontWeight: '600', marginBottom: 15 }}>✅ Account Linked</Text>
-                        <TouchableOpacity style={styles.actionBtn} onPress={blockOutTimeOnGoogleCalendar}>
-                            <Text style={styles.actionBtnText}>Test: Block 1 Hour Now</Text>
-                        </TouchableOpacity>
+                        <View style={{ gap: 10 }}>
+                            <TouchableOpacity style={styles.actionBtn} onPress={syncGoogleCalendarManual} disabled={isSyncing}>
+                                {isSyncing ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.actionBtnText}>Sync Gradebook to Google</Text>}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.actionBtnLight}
+                                onPress={blockOutTimeOnGoogleCalendar}
+                            >
+                                <Text style={styles.actionBtnLightText}>Test: Block 1 Hour</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 ) : (
-                    <TouchableOpacity
-                        style={[styles.googleBtn, !request && { opacity: 0.5 }]}
-                        disabled={!request}
-                        onPress={() => {
-                            if (request) promptAsync();
-                            else if (typeof window !== 'undefined') window.alert("Still loading authentication flow. Please wait a second and try again.");
-                        }}
-                    >
-                        <Text style={styles.googleBtnText}>
-                            {request ? "Sign In with Google" : "Loading Auth..."}
-                        </Text>
-                    </TouchableOpacity>
+                    <View>
+                        <TouchableOpacity
+                            style={[styles.googleBtn, !request && { opacity: 0.5 }]}
+                            disabled={!request}
+                            onPress={() => {
+                                if (request) promptAsync();
+                                else if (typeof window !== 'undefined') window.alert("Still loading authentication flow. Please wait a second and try again.");
+                            }}
+                        >
+                            <Text style={styles.googleBtnText}>
+                                {request ? "Sign In with Google" : "Loading Auth..."}
+                            </Text>
+                        </TouchableOpacity>
+                        <View style={{ marginTop: 15, padding: 12, backgroundColor: theme.colors.red + '10', borderRadius: 8, borderWidth: 1, borderColor: theme.colors.red + '30' }}>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.red, fontWeight: '700', textTransform: 'uppercase', marginBottom: 4 }}>⚠️ Error 400: redirect_uri_mismatch?</Text>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink2, lineHeight: 16 }}>
+                                To fix this, you must add <Text style={{ fontWeight: 'bold', color: theme.colors.ink }}>http://localhost:8081</Text> to the "Authorized redirect URIs" list in your Google Cloud Console project.
+                            </Text>
+                        </View>
+                    </View>
                 )}
             </View>
 
@@ -335,8 +439,12 @@ export default function SettingsScreen() {
                     autoCapitalize="none"
                 />
                 <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TouchableOpacity style={[styles.actionBtn, { flex: 1, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border2 }]} onPress={handleSaveSchoology}>
-                        <Text style={[styles.actionBtnText, { color: theme.colors.ink2 }]}>Save URL</Text>
+                    <TouchableOpacity style={styles.actionBtnLight} onPress={() => {
+                        AsyncStorage.setItem('schoologyUrl', schoologyUrl);
+                        if (Platform.OS === 'web') window.alert('Schoology URL saved.');
+                        else Alert.alert('Saved', 'Schoology URL saved.');
+                    }}>
+                        <Text style={styles.actionBtnLightText}>Save URL</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.actionBtn, { flex: 1, backgroundColor: theme.colors.ink }]} onPress={handleSchoologySync} disabled={isSchoologySyncing}>
                         {isSchoologySyncing ? <ActivityIndicator size="small" color="#fff" /> : (
@@ -479,11 +587,11 @@ export default function SettingsScreen() {
                 currentSelectionUrl={selectedDistrict?.url}
             />
 
-        </ScrollView>
+        </ScrollView >
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40, paddingHorizontal: 20 },
     headerContainer: { marginBottom: 30 },
     header: { fontFamily: theme.fonts.d, fontSize: 36, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
@@ -496,14 +604,16 @@ const styles = StyleSheet.create({
     label: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 5 },
     input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, padding: 12, borderRadius: theme.radii.r, fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink, marginBottom: 15 },
 
-    saveButton: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border2, padding: 15, borderRadius: theme.radii.lg, alignItems: 'center', marginTop: 10, marginBottom: 60 },
-    saveButtonText: { fontFamily: theme.fonts.s, color: theme.colors.ink2, fontSize: 15, fontWeight: '600' },
+    saveButton: { backgroundColor: theme.colors.ink, padding: 16, borderRadius: theme.radii.lg, alignItems: 'center', marginTop: 20 },
+    saveButtonText: { color: '#fff', fontFamily: theme.fonts.s, fontWeight: '600' },
 
     googleBtn: { backgroundColor: theme.colors.blue, padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
     googleBtnText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15, fontWeight: '600' },
 
-    actionBtn: { padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
+    actionBtn: { padding: 14, borderRadius: theme.radii.r, alignItems: 'center', backgroundColor: theme.colors.ink },
     actionBtnText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15, fontWeight: '600' },
+    actionBtnLight: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
+    actionBtnLightText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 15, fontWeight: '600' },
 
     // Loading bar
     progressBarTrack: { height: 4, backgroundColor: theme.colors.border, borderRadius: 2, marginTop: 12, overflow: 'hidden' },

@@ -6,14 +6,16 @@ import {
 import { LineChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { ChevronDown, ChevronLeft, RefreshCw } from 'lucide-react-native';
-import { theme } from '../utils/theme';
+import { ChevronDown, ChevronLeft, RefreshCw, ChevronRight, LayoutGrid, Calendar, Filter, Clock } from 'lucide-react-native';
+import { useTheme } from '../context/ThemeContext';
+import { theme as staticTheme } from '../utils/theme';
 import { syncStudentVueGrades } from '../utils/studentVueAPI';
+import { useNavigation } from '@react-navigation/native';
 
 const screenWidth = Dimensions.get('window').width;
 
 // ── Color helpers ────────────────────────────────────────────
-const gradeColor = (pct) => {
+const gradeColor = (pct, theme) => {
     if (pct >= 90) return theme.colors.green;
     if (pct >= 80) return theme.colors.blue;
     if (pct >= 70) return theme.colors.orange;
@@ -33,11 +35,15 @@ const gradeLetter = (pct) => {
 };
 
 export default function GradebookScreen() {
+    const { theme, isDarkMode } = useTheme();
+    const styles = getStyles(theme);
+    const navigation = useNavigation();
     const [classes, setClasses] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
     const [selectedClass, setSelectedClass] = useState(null);
     const [viewMode, setViewMode] = useState('assignments'); // 'assignments' | 'whatIf' | 'target'
+    const [interval, setInterval] = useState('3m'); // '1m', '3m', '6m', 'all'
 
     // ── Period / Quarter state ──────────────────────────────────
     const [availablePeriods, setAvailablePeriods] = useState([]);
@@ -277,11 +283,21 @@ export default function GradebookScreen() {
             .filter(a => a.score !== undefined && a.total > 0)
             .reverse();
 
-        if (scored.length < 2) return null;
+        const now = new Date();
+        const intervalDays = interval === '1m' ? 30 : interval === '3m' ? 90 : interval === '6m' ? 180 : 9999;
 
-        const last7 = scored.slice(-8); // Show up to 8 points for better context
+        const filtered = scored.filter(a => {
+            const d = new Date(a.date);
+            const diff = (now - d) / (1000 * 60 * 60 * 24);
+            return diff <= intervalDays;
+        });
 
-        // Calculate running average for the entire history but only graph the last few
+        if (filtered.length === 0) return null;
+
+        // If only 1 point, duplicate it so LineChart has a segment to draw
+        const displayAsgns = filtered.length === 1 ? [filtered[0], filtered[0]] : filtered.slice(-10);
+
+        // Calculate running average for the entire history but only graph the relevant window
         let runningSum = 0;
         let runningTotal = 0;
         const allAvgs = scored.map(a => {
@@ -290,16 +306,21 @@ export default function GradebookScreen() {
             return Math.round((runningSum / runningTotal) * 100);
         });
 
-        const displayData = allAvgs.slice(-8);
-        const displayAsgns = scored.slice(-8);
+        // Map the display assignments back to their running averages
+        const displayData = displayAsgns.map(f => {
+            const idx = scored.findIndex(s => s.id === f.id);
+            return allAvgs[idx];
+        });
+
+        const finalDisplayAsgns = displayAsgns;
 
         return {
-            labels: displayAsgns.map(() => ''),
+            labels: finalDisplayAsgns.map(() => ''),
             datasets: [{
                 data: displayData,
-                fullNames: displayAsgns.map(a => a.name || a.title || 'Assignment'),
-                rawScores: displayAsgns.map(a => `${a.score}/${a.total}`),
-                dates: displayAsgns.map(a => a.date)
+                fullNames: finalDisplayAsgns.map(a => a.name || a.title || 'Assignment'),
+                rawScores: finalDisplayAsgns.map(a => `${a.score}/${a.total}`),
+                dates: finalDisplayAsgns.map(a => a.date)
             }],
         };
     };
@@ -354,7 +375,7 @@ export default function GradebookScreen() {
 
     // ── Render: Main class card ─────────────────────────────────
     const renderClassItem = ({ item }) => {
-        const color = gradeColor(item.grade);
+        const color = gradeColor(item.grade, theme);
         const letter = item.letter && item.letter !== 'N/A' ? item.letter : gradeLetter(item.grade);
         const isSelected = selectedClass?.id === item.id;
 
@@ -438,7 +459,7 @@ export default function GradebookScreen() {
         return Object.keys(groups).sort().map(cat => {
             const items = groups[cat];
             const avg = catAvg(items);
-            const avgColor = avg !== null ? gradeColor(avg) : theme.colors.ink3;
+            const avgColor = avg !== null ? gradeColor(avg, theme) : theme.colors.ink3;
 
             return (
                 <View key={cat} style={{ marginBottom: 16 }}>
@@ -458,7 +479,7 @@ export default function GradebookScreen() {
                         const apt = hasPts ? (a.score / a.total) * 100 : null;
                         const isMissing = a.rawScore && /miss|incomplete|ng/i.test(a.rawScore);
                         const isExcused = a.rawScore && /exc|excused/i.test(a.rawScore);
-                        const accentColor = apt !== null ? gradeColor(apt) : theme.colors.border;
+                        const accentColor = apt !== null ? gradeColor(apt, theme) : theme.colors.border;
 
                         return (
                             <View
@@ -506,8 +527,9 @@ export default function GradebookScreen() {
         }
 
         const cls = selectedClass;
-        const letterColor = gradeColor(cls.grade);
+        const letterColor = gradeColor(cls.grade, theme);
         const letter = cls.letter || gradeLetter(cls.grade);
+        const chartData = getChartData();
 
         return (
             <View style={{ flex: 1 }}>
@@ -561,40 +583,54 @@ export default function GradebookScreen() {
                 {/* Assignments */}
                 {viewMode === 'assignments' && (
                     <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 4 }}>
-                        {getChartData() && (
+                        {chartData && (
                             <View style={styles.chartContainer}>
-                                <Text style={styles.chartLabel}>Recent Score Trend</Text>
-                                <LineChart
-                                    data={getChartData()}
-                                    width={screenWidth - 80}
-                                    height={160}
-                                    yAxisSuffix="%"
-                                    withDots
-                                    withInnerLines={false}
-                                    chartConfig={{
-                                        backgroundColor: theme.colors.surface,
-                                        backgroundGradientFrom: theme.colors.surface,
-                                        backgroundGradientTo: theme.colors.surface,
-                                        decimalPlaces: 0,
-                                        color: (opacity = 1) => `rgba(13,12,10,${opacity})`,
-                                        labelColor: (opacity = 1) => `rgba(144,141,134,${opacity})`,
-                                        style: { borderRadius: 8 },
-                                        propsForDots: { r: '4', strokeWidth: '2', stroke: theme.colors.blue },
-                                    }}
-                                    onDataPointClick={({ value, index }) => {
-                                        const data = getChartData();
-                                        setSelectedGraphAsgn({
-                                            name: data.datasets[0].fullNames[index],
-                                            score: data.datasets[0].rawScores[index],
-                                            pct: value,
-                                            date: data.datasets[0].dates[index]
-                                        });
-                                    }}
-                                    bezier
-                                    fromZero={false}
-                                    segments={5}
-                                    style={{ borderRadius: 8, paddingRight: 40 }}
-                                />
+                                <View style={styles.chartHeader}>
+                                    <Text style={styles.chartTitle}>Grade Trend</Text>
+                                    <View style={styles.intervalPicker}>
+                                        {['1m', '3m', '6m', 'all'].map(i => (
+                                            <TouchableOpacity
+                                                key={i}
+                                                onPress={() => setInterval(i)}
+                                                style={[styles.intervalBtn, interval === i && styles.intervalBtnActive]}
+                                            >
+                                                <Text style={[styles.intervalText, interval === i && styles.intervalTextActive]}>{i.toUpperCase()}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </View>
+
+                                <View style={styles.chartWrapper}>
+                                    <LineChart
+                                        data={chartData}
+                                        width={Dimensions.get('window').width > 1000 ? 920 : Dimensions.get('window').width - 80}
+                                        height={200}
+                                        chartConfig={{
+                                            backgroundColor: theme.colors.surface,
+                                            backgroundGradientFrom: theme.colors.surface,
+                                            backgroundGradientTo: theme.colors.surface,
+                                            decimalPlaces: 0,
+                                            color: (opacity = 1) => theme.colors.accent,
+                                            labelColor: (opacity = 1) => theme.colors.ink3,
+                                            style: { borderRadius: 16 },
+                                            propsForDots: { r: "4", strokeWidth: "2", stroke: theme.colors.surface },
+                                            yAxisLabel: "",
+                                            yAxisSuffix: "%",
+                                        }}
+                                        onDataPointClick={({ value, dataset, getColor, index }) => {
+                                            setSelectedGraphAsgn({
+                                                name: dataset.fullNames[index],
+                                                score: dataset.rawScores[index],
+                                                date: dataset.dates[index],
+                                                finalGrade: value
+                                            });
+                                        }}
+                                        bezier
+                                        fromZero={false}
+                                        segments={5}
+                                        style={{ borderRadius: 8, paddingRight: 40 }}
+                                    />
+                                </View>
 
                                 {selectedGraphAsgn && (
                                     <View style={styles.graphDetailBox}>
@@ -604,7 +640,7 @@ export default function GradebookScreen() {
                                         </View>
                                         <View style={{ alignItems: 'flex-end' }}>
                                             <Text style={styles.graphDetailScore}>{selectedGraphAsgn.score}</Text>
-                                            <Text style={[styles.graphDetailPct, { color: gradeColor(selectedGraphAsgn.pct) }]}>{selectedGraphAsgn.pct}%</Text>
+                                            <Text style={[styles.graphDetailPct, { color: gradeColor(selectedGraphAsgn.finalGrade, theme) }]}>{selectedGraphAsgn.finalGrade}%</Text>
                                         </View>
                                         <TouchableOpacity onPress={() => setSelectedGraphAsgn(null)} style={{ marginLeft: 10 }}>
                                             <ChevronDown size={14} color={theme.colors.ink3} style={{ transform: [{ rotate: '90deg' }] }} />
@@ -649,7 +685,7 @@ export default function GradebookScreen() {
                             <View style={styles.resultBox}>
                                 <Text style={styles.resultLabel}>Your new average would be:</Text>
                                 <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                                    <Text style={[styles.resultValue, { color: gradeColor(parseFloat(hypotheticalResult)) }]}>{hypotheticalResult}%</Text>
+                                    <Text style={[styles.resultValue, { color: gradeColor(parseFloat(hypotheticalResult), theme) }]}>{hypotheticalResult}%</Text>
                                     <Text style={styles.resultDiff}>
                                         ({(parseFloat(hypotheticalResult) - selectedClass.grade).toFixed(2).replace(/^([^+-])/, '+$1')}%)
                                     </Text>
@@ -729,7 +765,6 @@ export default function GradebookScreen() {
                             <Text style={styles.header}>Gradebook</Text>
                             <Text style={styles.headerSub}>
                                 {currentPeriodName || 'No period loaded'}
-                                {classes.length > 0 ? ` · ${classes.length} classes` : ''}
                             </Text>
                         </View>
                     )}
@@ -785,14 +820,30 @@ export default function GradebookScreen() {
                         <Text style={styles.placeholderSub}>Go to Settings, enter your StudentVUE credentials, and sync.</Text>
                     </View>
                 ) : (
-                    /* Class list */
-                    <FlatList
-                        data={classes}
-                        keyExtractor={item => item.id.toString()}
-                        renderItem={renderClassItem}
-                        showsVerticalScrollIndicator={false}
-                        contentContainerStyle={{ paddingBottom: 40 }}
-                    />
+                    /* Class list (Grid Layout) */
+                    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                        <View style={styles.gridContainer}>
+                            {classes.map((item, index) => {
+                                const gradeNum = parseFloat(item.grade);
+                                const gradeColor = gradeNum >= 90 ? theme.colors.green : gradeNum >= 80 ? theme.colors.blue : gradeNum >= 70 ? theme.colors.orange : theme.colors.red;
+                                return (
+                                    <TouchableOpacity
+                                        key={index}
+                                        style={styles.gridItem}
+                                        onPress={() => setSelectedClass(item)}
+                                    >
+                                        <View style={[styles.gridGradeBox, { borderLeftColor: gradeColor }]}>
+                                            <Text style={[styles.gridGradeText, { color: gradeColor }]}>{item.grade}%</Text>
+                                            <View style={styles.gridInfo}>
+                                                <Text style={styles.gridClassName} numberOfLines={1}>{item.name}</Text>
+                                                <Text style={styles.gridTeacher} numberOfLines={1}>{item.teacher}</Text>
+                                            </View>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    </ScrollView>
                 )}
 
             </View>
@@ -802,15 +853,14 @@ export default function GradebookScreen() {
     );
 }
 
-// ── Styles ───────────────────────────────────────────────────
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg, alignItems: 'center' },
-    contentWrapper: { flex: 1, width: '100%', maxWidth: 1000, paddingHorizontal: 20, paddingTop: 40 },
+    contentWrapper: { flex: 1, width: '100%', maxWidth: 1400, paddingHorizontal: 40, paddingTop: 60 },
 
     // Header
     headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
-    header: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
-    headerSub: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1, textTransform: 'uppercase', marginTop: 3 },
+    header: { fontFamily: theme.fonts.d, fontSize: 42, fontWeight: '700', color: theme.colors.ink, letterSpacing: -1 },
+    headerSub: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 },
     headerBackBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
 
@@ -832,10 +882,10 @@ const styles = StyleSheet.create({
         backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
         borderRadius: theme.radii.r, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 14,
     },
-    gpaBannerLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.5, textTransform: 'uppercase' },
-    gpaBannerValue: { fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '900', color: theme.colors.ink, letterSpacing: -0.5 },
+    gpaBannerLabel: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, letterSpacing: 2, textTransform: 'uppercase' },
+    gpaBannerValue: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '900', color: theme.colors.ink, letterSpacing: -1 },
 
-    // Class card
+    // Class card (old list item, kept for renderClassItem if still used elsewhere)
     classCard: {
         flexDirection: 'row', alignItems: 'center',
         backgroundColor: theme.colors.surface, paddingVertical: 16, paddingRight: 16, paddingLeft: 14,
@@ -860,6 +910,25 @@ const styles = StyleSheet.create({
     graphDetailDate: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase' },
     graphDetailScore: { fontFamily: theme.fonts.d, fontSize: 16, fontWeight: '700', color: theme.colors.ink },
     graphDetailPct: { fontFamily: theme.fonts.m, fontSize: 11, fontWeight: '800' },
+
+    // Grid Layout
+    gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, paddingBottom: 60, marginTop: 20 },
+    gridItem: { width: '31.5%', backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border, overflow: 'hidden' },
+    gridGradeBox: { padding: 24, paddingVertical: 36, borderLeftWidth: 6 },
+    gridGradeText: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '800', marginBottom: 6 },
+    gridInfo: { marginTop: 8 },
+    gridClassName: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700', color: theme.colors.ink },
+    gridTeacher: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 4 },
+
+    // Chart improvements
+    chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+    chartTitle: { fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink },
+    intervalPicker: { flexDirection: 'row', gap: 6 },
+    intervalBtn: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, backgroundColor: theme.colors.surface2 },
+    intervalBtnActive: { backgroundColor: theme.colors.accent },
+    intervalText: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink2 },
+    intervalTextActive: { color: '#fff', fontWeight: '700' },
+    chartWrapper: { alignItems: 'center' },
 
     // Type tags
     typeTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 3, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
@@ -917,8 +986,13 @@ const styles = StyleSheet.create({
     // Calc
     inputLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 5, marginTop: 14 },
     input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink },
-    calcButton: { backgroundColor: theme.colors.ink, padding: 15, borderRadius: theme.radii.lg, alignItems: 'center', marginTop: 18 },
-    calcButtonText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15, fontWeight: '600' },
+    googleBtn: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
+    googleBtnText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 15, fontWeight: '600' },
+
+    actionBtn: { padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
+    actionBtnText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15, fontWeight: '600' },
+    actionBtnLight: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
+    actionBtnLightText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 15, fontWeight: '600' },
     resultBox: { marginTop: 16, padding: 20, backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
     resultLabel: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, marginBottom: 6, textAlign: 'center' },
     resultValue: { fontFamily: theme.fonts.d, fontSize: 48, fontWeight: '300', letterSpacing: -1.5 },

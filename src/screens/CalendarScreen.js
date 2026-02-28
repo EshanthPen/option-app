@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-
+import { useTheme } from '../context/ThemeContext';
 export default function CalendarScreen() {
+    const { theme } = useTheme();
+    const styles = getStyles(theme);
     return (
         <View style={styles.container}>
             <Text style={styles.title}>Auto-Scheduler</Text>
@@ -10,8 +12,8 @@ export default function CalendarScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
-    title: { fontSize: 28, fontWeight: 'bold', marginBottom: 10, color: '#333' },
-    subtitle: { fontSize: 16, color: '#666' }
+const getStyles = (theme) => StyleSheet.create({
+    container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.bg },
+    title: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: 'bold', marginBottom: 10, color: theme.colors.ink },
+    subtitle: { fontFamily: theme.fonts.s, fontSize: 16, color: theme.colors.ink3 }
 });

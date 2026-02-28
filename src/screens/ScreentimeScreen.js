@@ -3,7 +3,8 @@ import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
-import { theme } from '../utils/theme';
+import { theme as staticTheme } from '../utils/theme';
+import { useTheme } from '../context/ThemeContext';
 import { Play, Pause, RotateCcw, Coffee, BookOpen } from 'lucide-react-native';
 
 const screenWidth = Dimensions.get('window').width;
@@ -13,22 +14,21 @@ const WEEKLY_HOURS = [1.5, 3.5, 1, 4, 5, 2, 0];
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const TODAY_IDX = (new Date().getDay() + 6) % 7; // 0=Mon
 
-const focusScore = () => {
-    const total = WEEKLY_HOURS.reduce((a, b) => a + b, 0);
-    const weeklyTarget = 25; // 5 hrs/day × 5 school days
-    const raw = Math.min(100, Math.round((total / weeklyTarget) * 100));
-    return raw;
-};
-
-const scoreColor = (s) => s >= 80 ? theme.colors.green : s >= 60 ? theme.colors.blue : s >= 40 ? theme.colors.orange : theme.colors.red;
+const scoreColor = (s, theme) => s >= 80 ? theme.colors.green : s >= 60 ? theme.colors.blue : s >= 40 ? theme.colors.orange : theme.colors.red;
 const scoreLabel = (s) => s >= 80 ? 'Excellent' : s >= 60 ? 'Good' : s >= 40 ? 'Needs Work' : 'Low Focus';
 
 export default function ScreentimeScreen() {
+    const { theme, isDarkMode } = useTheme();
+    const styles = getStyles(theme);
     const [timeLeft, setTimeLeft] = useState(25 * 60);
     const [isActive, setIsActive] = useState(false);
     const [mode, setMode] = useState('Work');
     const [sessionsCompleted, setSessionsCompleted] = useState(0);
-    const score = focusScore();
+    const score = (() => {
+        const total = WEEKLY_HOURS.reduce((a, b) => a + b, 0);
+        const weeklyTarget = 25;
+        return Math.min(100, Math.round((total / weeklyTarget) * 100));
+    })();
     const ringAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -91,7 +91,7 @@ export default function ScreentimeScreen() {
                     <Text style={styles.scoreNum} adjustsFontSizeToFit numberOfLines={1}>
                         {score}
                     </Text>
-                    <Text style={[styles.scoreLabel, { color: scoreColor(score) }]}>
+                    <Text style={[styles.scoreLabel, { color: scoreColor(score, theme) }]}>
                         {scoreLabel(score)}
                     </Text>
                     <Text style={styles.scoreDesc}>Focus Score this week</Text>
@@ -101,12 +101,12 @@ export default function ScreentimeScreen() {
                     <View style={styles.ringWrap}>
                         <View style={[styles.ringTrack, { borderColor: theme.colors.border }]}>
                             <View style={[styles.ringFill, {
-                                borderColor: scoreColor(score),
+                                borderColor: scoreColor(score, theme),
                                 // approximate arc using borderRadius trick
                                 opacity: score / 100,
                             }]} />
                         </View>
-                        <Text style={[styles.ringPct, { color: scoreColor(score) }]}>{score}%</Text>
+                        <Text style={[styles.ringPct, { color: scoreColor(score, theme) }]}>{score}%</Text>
                     </View>
                     <View style={styles.sessionRow}>
                         {[...Array(4)].map((_, i) => (
@@ -176,7 +176,7 @@ export default function ScreentimeScreen() {
                         backgroundGradientTo: theme.colors.surface,
                         decimalPlaces: 1,
                         color: (o = 1) => `rgba(13,12,10,${o})`,
-                        labelColor: (o = 1) => `rgba(144,141,134,${o})`,
+                        labelColor: (o = 1) => theme.colors.ink3,
                         propsForDots: { r: '4', strokeWidth: '2', stroke: theme.colors.blue },
                     }}
                     bezier
@@ -205,7 +205,7 @@ export default function ScreentimeScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40, paddingHorizontal: 20 },
     headerContainer: { marginBottom: 20 },
     header: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },

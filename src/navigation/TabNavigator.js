@@ -7,7 +7,8 @@ import MatrixScreen from '../screens/MatrixScreen';
 import GradebookScreen from '../screens/GradebookScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ScreentimeScreen from '../screens/ScreentimeScreen';
-import { theme } from '../utils/theme';
+import { theme as staticTheme } from '../utils/theme';
+import { useTheme } from '../context/ThemeContext';
 
 const Tab = createBottomTabNavigator();
 
@@ -23,6 +24,9 @@ const NAV_ITEMS = [
 ];
 
 function CustomSidebar({ state, descriptors, navigation }) {
+    const { theme, isDarkMode } = useTheme();
+    const styles = getStyles(theme);
+
     return (
         <View style={[styles.sidebarContainer, { width: SIDEBAR_WIDTH }]}>
             <View style={styles.logoContainer}>
@@ -60,6 +64,7 @@ function CustomSidebar({ state, descriptors, navigation }) {
 }
 
 export default function TabNavigator() {
+    const { theme } = useTheme();
     return (
         <Tab.Navigator
             initialRouteName="Home"
@@ -78,7 +83,7 @@ export default function TabNavigator() {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     sidebarContainer: {
         position: 'absolute', top: 0, left: 0, bottom: 0,
         backgroundColor: theme.colors.surface,

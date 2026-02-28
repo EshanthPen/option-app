@@ -7,7 +7,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ICAL from 'ical.js';
 import { supabase } from '../supabaseClient';
-import { theme } from '../utils/theme';
+import { theme as staticTheme } from '../utils/theme';
+import { useTheme } from '../context/ThemeContext';
 import { ChevronLeft, ChevronRight, Plus, Download, CalendarDays } from 'lucide-react-native';
 
 const { width: SCREEN_W, height: SCREEN_H_RAW } = Dimensions.get('window');
@@ -28,6 +29,8 @@ const MN = ['January', 'February', 'March', 'April', 'May', 'June',
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function MatrixScreen() {
+    const { theme, isDarkMode } = useTheme();
+    const styles = getStyles(theme);
     const [tasks, setTasks] = useState([]);
     const [modalVisible, setModalVisible] = useState(false);
     const [importModalVisible, setImportModalVisible] = useState(false);
@@ -235,10 +238,10 @@ export default function MatrixScreen() {
                         </View>
                         <View style={styles.btnRow}>
                             <TouchableOpacity style={styles.btnOut} onPress={() => setImportModalVisible(true)}>
-                                <Download color={theme.colors.ink2} size={14} />
+                                <Download color={theme.colors.ink2} size={18} />
                             </TouchableOpacity>
                             <TouchableOpacity style={styles.btnDark} onPress={() => setModalVisible(true)}>
-                                <Plus color="#fff" size={14} />
+                                <Plus color="#fff" size={18} />
                                 <Text style={styles.btnDarkText}>Add Event</Text>
                             </TouchableOpacity>
                         </View>
@@ -268,7 +271,17 @@ export default function MatrixScreen() {
 
                     {/* Day headers */}
                     <View style={styles.daysRow}>
-                        {DAYS.map(d => <Text key={d} style={styles.dayText}>{d}</Text>)}
+                        {DAYS.map(d => (
+                            <Text
+                                key={d}
+                                style={[
+                                    styles.dayText,
+                                    { width: '14.28%' }
+                                ]}
+                            >
+                                {d}
+                            </Text>
+                        ))}
                     </View>
 
                     {/* Grid */}
@@ -280,11 +293,11 @@ export default function MatrixScreen() {
                                 const isToday = d && d === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
 
                                 return (
-                                    <View
+                                    <TouchableOpacity
                                         key={i}
                                         style={[
                                             styles.cell,
-                                            { width: IS_WIDE ? (SCREEN_W - SIDEBAR_W - 80) / 7 : CELL_W, height: CELL_H },
+                                            { width: '13.8%', height: CELL_H + 30 },
                                             !d && styles.cellEmpty,
                                             isToday && styles.cellToday,
                                             selectedDate === dateStr && styles.cellSelected,
@@ -292,16 +305,31 @@ export default function MatrixScreen() {
                                         onPress={() => d && setSelectedDate(dateStr)}
                                     >
                                         {d && <Text style={[styles.cellNum, isToday && styles.numToday]}>{d}</Text>}
-                                        {dayTasks.slice(0, 2).map((t, idx) => {
+                                        {dayTasks.slice(0, 3).map((t, idx) => {
                                             const c = getPrio(t.urgency, t.importance);
+                                            const isHigh = (t.urgency + t.importance) >= 15;
+                                            const isMed = (t.urgency + t.importance) >= 10 && !isHigh;
                                             return (
-                                                <TouchableOpacity key={idx} style={[styles.event, { backgroundColor: c.bg }]} onPress={() => blockTask(t)}>
-                                                    <Text style={[styles.eventText, { color: c.text }]} numberOfLines={1}>{t.title}</Text>
-                                                </TouchableOpacity>
+                                                <View
+                                                    key={idx}
+                                                    style={[
+                                                        styles.event,
+                                                        { backgroundColor: c.bg },
+                                                        isHigh && { paddingVertical: 6, marginVertical: 2 },
+                                                        isMed && { paddingVertical: 4 }
+                                                    ]}
+                                                >
+                                                    <Text style={[
+                                                        styles.eventText,
+                                                        { color: c.text },
+                                                        isHigh && { fontSize: 11, fontWeight: '900' },
+                                                        isMed && { fontWeight: '700' }
+                                                    ]} numberOfLines={1}>{t.title}</Text>
+                                                </View>
                                             );
                                         })}
-                                        {dayTasks.length > 2 && <Text style={styles.moreText}>+{dayTasks.length - 2}</Text>}
-                                    </View>
+                                        {dayTasks.length > 3 && <Text style={styles.moreText}>+{dayTasks.length - 3} more</Text>}
+                                    </TouchableOpacity>
                                 );
                             })}
                         </View>
@@ -346,8 +374,8 @@ export default function MatrixScreen() {
                                             <Text style={styles.sidebarTaskPrio}>{t.urgency}U · {t.importance}I</Text>
                                         </View>
                                     </View>
-                                    <TouchableOpacity style={styles.blockBtn} onPress={() => blockTask(t)}>
-                                        <CalendarDays size={14} color={theme.colors.ink3} />
+                                    <TouchableOpacity style={styles.sidebarBlockBtn} onPress={() => blockTask(t)}>
+                                        <CalendarDays size={18} color={theme.colors.ink} />
                                     </TouchableOpacity>
                                 </TouchableOpacity>
                             );
@@ -465,7 +493,7 @@ export default function MatrixScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40 },
     mainLayout: { flex: 1, paddingHorizontal: HPAD },
     layoutWide: { flexDirection: 'row', gap: 30 },
@@ -474,9 +502,12 @@ const styles = StyleSheet.create({
     title: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
     subtitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 },
     btnRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-    btnDark: { backgroundColor: theme.colors.ink, flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: theme.radii.r, gap: 5 },
-    btnDarkText: { color: '#fff', fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600' },
-    btnOut: { borderWidth: 1, borderColor: theme.colors.border2, padding: 8, borderRadius: theme.radii.r, alignItems: 'center' },
+    btnDark: { backgroundColor: theme.colors.ink, flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: theme.radii.r, gap: 8 },
+    btnDarkText: { color: '#fff', fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600' },
+    saveButton: { backgroundColor: theme.colors.ink, padding: 16, borderRadius: theme.radii.lg, alignItems: 'center', marginTop: 20 },
+    saveButtonText: { color: '#fff', fontFamily: theme.fonts.s, fontWeight: '600' },
+    btnOut: { borderWidth: 1, borderColor: theme.colors.border2, padding: 10, borderRadius: theme.radii.r, alignItems: 'center', backgroundColor: theme.colors.surface },
+    btnOutText: { color: theme.colors.ink, fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600' },
 
     legend: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 16, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 20, marginBottom: 18 },
     legendTitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 2, textTransform: 'uppercase', marginRight: 4 },
@@ -495,12 +526,12 @@ const styles = StyleSheet.create({
     cell: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 5, padding: 4, overflow: 'hidden' },
     cellEmpty: { backgroundColor: theme.colors.surface2, opacity: 0.4 },
     cellToday: { borderColor: theme.colors.ink, borderWidth: 2 },
-    cellNum: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink2, marginBottom: 2 },
-    numToday: { color: theme.colors.ink, fontWeight: '800' },
-    cellSelected: { backgroundColor: theme.colors.surface2, borderColor: theme.colors.ink3, borderWidth: 1 },
-    event: { paddingVertical: 1, paddingHorizontal: 3, borderRadius: 2, marginBottom: 2 },
-    eventText: { fontFamily: theme.fonts.s, fontSize: 7, fontWeight: '600' },
-    moreText: { fontFamily: theme.fonts.m, fontSize: 7, color: theme.colors.ink3 },
+    cellNum: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '700', color: theme.colors.ink2, marginBottom: 4 },
+    numToday: { color: theme.colors.ink, fontWeight: '900' },
+    cellSelected: { backgroundColor: theme.colors.surface2, borderColor: theme.colors.ink, borderWidth: 1.5 },
+    event: { paddingVertical: 2, paddingHorizontal: 4, borderRadius: 4, marginBottom: 3 },
+    eventText: { fontFamily: theme.fonts.s, fontSize: 10, fontWeight: '700' },
+    moreText: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, fontWeight: '600', marginTop: 2 },
 
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
@@ -539,9 +570,9 @@ const styles = StyleSheet.create({
     checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.border2, alignItems: 'center', justifyContent: 'center' },
     checkboxActive: { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink },
     checkboxInner: { width: 8, height: 8, borderRadius: 1.5, backgroundColor: '#fff' },
-    sidebarTaskTitle: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '500', color: theme.colors.ink },
-    sidebarTaskMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-    miniSwatch: { width: 6, height: 6, borderRadius: 3 },
-    sidebarTaskPrio: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase' },
-    blockBtn: { padding: 8, borderRadius: 6, backgroundColor: theme.colors.surface2 },
+    sidebarTaskTitle: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink },
+    sidebarTaskMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+    miniSwatch: { width: 8, height: 8, borderRadius: 4 },
+    sidebarTaskPrio: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.5 },
+    sidebarBlockBtn: { padding: 10, borderRadius: 8, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
 });

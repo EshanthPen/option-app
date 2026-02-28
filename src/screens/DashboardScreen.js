@@ -5,11 +5,12 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BookOpen, CalendarDays, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react-native';
-import { theme } from '../utils/theme';
+import { theme as staticTheme } from '../utils/theme';
+import { useTheme } from '../context/ThemeContext';
 
 const screenWidth = Dimensions.get('window').width;
 
-const gradeColor = (pct) => {
+const gradeColor = (pct, theme) => {
     if (pct >= 90) return theme.colors.green;
     if (pct >= 80) return theme.colors.blue;
     if (pct >= 70) return theme.colors.orange;
@@ -58,10 +59,17 @@ const daysUntil = (iso) => {
 };
 
 export default function DashboardScreen() {
+    const { theme, isDarkMode } = useTheme();
+    const styles = getStyles(theme);
     const navigation = useNavigation();
     const [classes, setClasses] = useState([]);
     const [periodName, setPeriodName] = useState('');
-    const [loaded, setLoaded] = useState(false);
+    const [greeting, setGreeting] = useState(getGreeting());
+    const [userName, setUserName] = useState('Joshua'); // Pull from storage if exists later
+    const focusScoreNum = (() => {
+        // Mock score for now
+        return 88;
+    })();
 
     useFocusEffect(
         useCallback(() => {
@@ -92,217 +100,242 @@ export default function DashboardScreen() {
 
     // Upcoming assignments: collect all, sort by isoDate, take next 7
     const upcoming = classes.flatMap(c =>
-        (c.assignments || []).map(a => ({ ...a, courseName: c.name, courseColor: gradeColor(c.grade) }))
+        (c.assignments || []).map(a => ({ ...a, courseName: c.name, courseColor: gradeColor(c.grade, theme) }))
     )
         .filter(a => a.isoDate && a.isoDate >= TODAY.toISOString().slice(0, 10))
         .sort((a, b) => a.isoDate.localeCompare(b.isoDate))
         .slice(0, 7);
 
-    const gpaColor = wgpa ? (parseFloat(wgpa) >= 3.7 ? theme.colors.green : parseFloat(wgpa) >= 3.0 ? theme.colors.blue : parseFloat(wgpa) >= 2.0 ? theme.colors.orange : theme.colors.red) : theme.colors.ink3;
+    const gpaColor = wgpa ? (parseFloat(wgpa) >= 3.7 ? theme.colors.green : parseFloat(wgpa) >= 3.0 ? theme.colors.blue : parseFloat(wgpa) >= 2.0 ? theme.colors.orange : theme.colors.red) : theme.colors.ink2;
 
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.contentWrapper}>
-                {/* Header */}
-                <View style={styles.headerContainer}>
-                    <Text style={styles.greeting}>{getGreeting()}</Text>
-                    <Text style={styles.header}>Dashboard</Text>
-                    <Text style={styles.subtitle}>
-                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                        {periodName ? ` · ${periodName}` : ''}
-                    </Text>
+                {/* Modern Greeting Header */}
+                <View style={styles.heroSection}>
+                    <View>
+                        <Text style={styles.greetingText}>{greeting},</Text>
+                        <Text style={styles.userNameText}>{userName}</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={styles.focusWidget}
+                        onPress={() => navigation.navigate('Focus')}
+                    >
+                        <View style={styles.focusRing}>
+                            <View style={[styles.focusFill, { height: `${focusScoreNum}%` }]} />
+                            <Text style={styles.focusNumText}>{focusScoreNum}</Text>
+                        </View>
+                        <View>
+                            <Text style={styles.focusLabel}>Focus Score</Text>
+                            <Text style={styles.focusSub}>Excellent</Text>
+                        </View>
+                    </TouchableOpacity>
                 </View>
 
-                {/* GPA Card */}
-                {loaded && (
-                    <View style={[styles.gpaCard, { borderLeftColor: gpaColor, borderLeftWidth: 5 }]}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.gpaCardLabel}>Weighted GPA</Text>
-                            <Text style={[styles.gpaCardValue, { color: gpaColor }]}>{wgpa ?? '—'}</Text>
-                            <Text style={styles.gpaCardSub}>Unweighted: {ugpa ?? '—'} · {classes.length} classes</Text>
+                {/* GPA Stats Row */}
+                <View style={styles.statsRow}>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statLabel}>Weighted GPA</Text>
+                        <Text style={[styles.statValue, { color: gpaColor }]}>{wgpa || '—'}</Text>
+                        <View style={[styles.statIndicator, { backgroundColor: gpaColor }]} />
+                    </View>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statLabel}>Unweighted</Text>
+                        <Text style={styles.statValue}>{ugpa || '—'}</Text>
+                        <View style={[styles.statIndicator, { backgroundColor: theme.colors.ink3 }]} />
+                    </View>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statLabel}>Period</Text>
+                        <Text style={styles.statValue}>{periodName || 'Q3'}</Text>
+                    </View>
+                </View>
+
+                <View style={styles.layoutMain}>
+                    {/* Left Column: Assignments */}
+                    <View style={styles.columnLeft}>
+                        <View style={styles.sectionHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <CalendarDays size={18} color={theme.colors.ink} strokeWidth={2.5} />
+                                <Text style={styles.sectionTitle}>Up Next</Text>
+                            </View>
+                            <TouchableOpacity>
+                                <Text style={styles.seeAllText}>See Calendar</Text>
+                            </TouchableOpacity>
                         </View>
-                        <View style={styles.gpaBarWrap}>
-                            {classes.map((c, i) => (
-                                <View
-                                    key={i}
-                                    style={[styles.gpaBar, { backgroundColor: gradeColor(c.grade), flex: 1 }]}
-                                    title={c.name}
-                                />
+
+                        {upcoming.length > 0 ? (
+                            upcoming.map((asgn, i) => (
+                                <View key={i} style={styles.assignmentCard}>
+                                    <View style={[styles.asgnColorBar, { backgroundColor: asgn.courseColor }]} />
+                                    <View style={styles.asgnContent}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.asgnTitle} numberOfLines={1}>{asgn.name}</Text>
+                                            <Text style={styles.asgnCourse}>{asgn.courseName}</Text>
+                                        </View>
+                                        <View style={{ alignItems: 'flex-end' }}>
+                                            <Text style={styles.asgnDate}>{fmt(asgn.isoDate)}</Text>
+                                            <Text style={[styles.asgnDays, { color: daysUntil(asgn.isoDate) <= 2 ? theme.colors.red : theme.colors.ink3 }]}>
+                                                in {daysUntil(asgn.isoDate)} days
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            ))
+                        ) : (
+                            <View style={styles.emptyCard}>
+                                <Text style={styles.emptyText}>All caught up!</Text>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Right Column: Grades & Insights */}
+                    <View style={styles.columnRight}>
+                        <View style={styles.sectionHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <TrendingDown size={18} color={theme.colors.red} strokeWidth={2.5} />
+                                <Text style={styles.sectionTitle}>Attention</Text>
+                            </View>
+                        </View>
+
+                        {atRisk.length > 0 ? (
+                            atRisk.map((c, i) => {
+                                const color = gradeColor(c.grade, theme);
+                                return (
+                                    <View key={i} style={styles.atRiskCard}>
+                                        <View style={styles.atRiskHeader}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.atRiskName} numberOfLines={1}>{c.name}</Text>
+                                                <Text style={styles.atRiskSub}>Needs {(83 - c.grade).toFixed(1)}% to reach B</Text>
+                                            </View>
+                                            <View style={[styles.atRiskGradeBox, { backgroundColor: color + '15' }]}>
+                                                <Text style={[styles.atRiskGradeText, { color }]}>{c.grade}%</Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                );
+                            })
+                        ) : (
+                            <View style={styles.successCard}>
+                                <TrendingUp size={24} color={theme.colors.green} />
+                                <Text style={styles.successText}>All your classes are in great shape.</Text>
+                            </View>
+                        )}
+
+                        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
+                            <Text style={styles.sectionTitle}>Overview</Text>
+                        </View>
+                        <View style={styles.overviewContainer}>
+                            {classes.slice(0, 5).map((c, i) => (
+                                <View key={i} style={styles.overviewRow}>
+                                    <Text style={styles.overviewLabel} numberOfLines={1}>{c.name}</Text>
+                                    <View style={styles.progressBarBg}>
+                                        <View style={[styles.progressBarFill, { width: `${c.grade}%`, backgroundColor: gradeColor(c.grade, theme) }]} />
+                                    </View>
+                                    <Text style={styles.overviewValue}>{c.grade}%</Text>
+                                </View>
                             ))}
                         </View>
                     </View>
-                )}
-
-                {/* Quick actions */}
-                <View style={styles.quickRow}>
-                    <TouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Gradebook')}>
-                        <BookOpen size={18} color={theme.colors.ink} />
-                        <Text style={styles.quickLabel}>Gradebook</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Calendar')}>
-                        <CalendarDays size={18} color={theme.colors.ink} />
-                        <Text style={styles.quickLabel}>Calendar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Focus')}>
-                        <TrendingUp size={18} color={theme.colors.ink} />
-                        <Text style={styles.quickLabel}>Focus</Text>
-                    </TouchableOpacity>
                 </View>
-
-                {/* Upcoming assignments */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Upcoming Assignments</Text>
-                    {upcoming.length === 0 ? (
-                        <View style={styles.emptyBox}>
-                            <Text style={styles.emptyText}>{loaded ? 'No upcoming assignments. Sync grades in Settings.' : 'Loading…'}</Text>
-                        </View>
-                    ) : upcoming.map((a, i) => {
-                        const days = daysUntil(a.isoDate);
-                        const urgentColor = days !== null && days <= 2 ? theme.colors.red : days !== null && days <= 5 ? theme.colors.orange : theme.colors.ink3;
-                        return (
-                            <View key={i} style={[styles.assignmentRow, { borderLeftColor: a.courseColor, borderLeftWidth: 3 }]}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.assignmentName} numberOfLines={1}>{a.name}</Text>
-                                    <Text style={styles.assignmentCourse} numberOfLines={1}>{a.courseName}</Text>
-                                </View>
-                                <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={styles.assignmentDate}>{fmt(a.isoDate)}</Text>
-                                    {days !== null && (
-                                        <Text style={[styles.assignmentDays, { color: urgentColor }]}>
-                                            {days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days}d`}
-                                        </Text>
-                                    )}
-                                </View>
-                            </View>
-                        );
-                    })}
-                </View>
-
-                {/* At-Risk classes */}
-                {atRisk.length > 0 && (
-                    <View style={styles.section}>
-                        <View style={styles.sectionTitleRow}>
-                            <AlertTriangle size={14} color={theme.colors.orange} />
-                            <Text style={[styles.sectionTitle, { color: theme.colors.orange }]}>Classes to Watch</Text>
-                        </View>
-                        <Text style={styles.sectionSub}>These classes are below a B and may impact your GPA.</Text>
-                        {atRisk.map((c, i) => {
-                            const color = gradeColor(c.grade);
-                            const letter = c.letter && c.letter !== 'N/A' ? c.letter : gradeLetter(c.grade);
-                            const pointsNeeded = (83 - c.grade).toFixed(1);
-                            return (
-                                <View key={i} style={[styles.atRiskRow, { borderLeftColor: color, borderLeftWidth: 3 }]}>
-                                    <View style={{ flex: 1 }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <Text style={styles.atRiskName} numberOfLines={1}>{c.name}</Text>
-                                            <View style={[styles.typeChip, c.type === 'AP' && { backgroundColor: theme.colors.ink }, c.type === 'HN' && { backgroundColor: '#4e4c47' }]}>
-                                                <Text style={[styles.typeChipText, (c.type === 'AP' || c.type === 'HN') && { color: '#fff' }]}>{c.type}</Text>
-                                            </View>
-                                        </View>
-                                        <Text style={styles.atRiskSub}>Needs +{pointsNeeded}% to reach a B</Text>
-                                    </View>
-                                    <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={[styles.atRiskLetter, { color }]}>{letter}</Text>
-                                        <Text style={[styles.atRiskPct, { color }]}>{c.grade}%</Text>
-                                    </View>
-                                </View>
-                            );
-                        })}
-                    </View>
-                )}
-
-                {/* All-class overview bar */}
-                {classes.length > 0 && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Class Overview</Text>
-                        {[...classes].sort((a, b) => b.grade - a.grade).map((c, i) => (
-                            <View key={i} style={styles.overviewRow}>
-                                <Text style={styles.overviewName} numberOfLines={1}>{c.name}</Text>
-                                <View style={styles.overviewBarWrap}>
-                                    <View style={[styles.overviewBar, {
-                                        width: `${c.grade}%`,
-                                        backgroundColor: gradeColor(c.grade),
-                                    }]} />
-                                </View>
-                                <Text style={[styles.overviewPct, { color: gradeColor(c.grade) }]}>{c.grade}%</Text>
-                            </View>
-                        ))}
-                    </View>
-                )}
-
-                <View style={{ height: 60 }} />
             </View>
+            <View style={{ height: 100 }} />
         </ScrollView>
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg },
-    scrollContent: { paddingTop: 40, paddingHorizontal: 20, alignItems: 'center' },
-    contentWrapper: { width: '100%', maxWidth: 1000 },
-    headerContainer: { marginBottom: 20 },
-    greeting: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5 },
-    header: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5, marginTop: 2 },
-    subtitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 },
+    scrollContent: { paddingTop: 60, paddingHorizontal: 40, alignItems: 'center' },
+    contentWrapper: { width: '100%', maxWidth: 1400 },
 
-    // GPA Card
-    gpaCard: {
-        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: theme.radii.lg, padding: 20, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 16,
+    // Hero Section
+    heroSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 48 },
+    greetingText: { fontFamily: theme.fonts.m, fontSize: 16, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 3 },
+    userNameText: { fontFamily: theme.fonts.d, fontSize: 64, fontWeight: '700', color: theme.colors.ink, letterSpacing: -2, marginTop: -4 },
+
+    focusWidget: {
+        flexDirection: 'row', alignItems: 'center', gap: 14,
+        padding: 12, paddingRight: 20,
+        backgroundColor: theme.colors.surface, borderRadius: 20,
+        borderWidth: 1, borderColor: theme.colors.border,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3
     },
-    gpaCardLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 4 },
-    gpaCardValue: { fontFamily: theme.fonts.d, fontSize: 52, fontWeight: '900', letterSpacing: -2, lineHeight: 58 },
-    gpaCardSub: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 4 },
-    gpaBarWrap: { flexDirection: 'column', width: 8, height: 70, gap: 2, borderRadius: 4, overflow: 'hidden' },
-    gpaBar: { borderRadius: 2 },
-
-    // Quick actions
-    quickRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-    quickBtn: {
-        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: theme.radii.lg, paddingVertical: 14,
+    focusRing: {
+        width: 48, height: 48, borderRadius: 24,
+        backgroundColor: theme.colors.surface2, overflow: 'hidden',
+        justifyContent: 'center', alignItems: 'center',
+        borderWidth: 1, borderColor: theme.colors.border
     },
-    quickLabel: { fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink },
-
-    // Sections
-    section: { marginBottom: 20 },
-    sectionTitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10 },
-    sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-    sectionSub: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginBottom: 10 },
-
-    // Upcoming
-    assignmentRow: {
-        flexDirection: 'row', alignItems: 'center',
-        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: theme.radii.r, paddingVertical: 10, paddingHorizontal: 12,
-        marginBottom: 6,
+    focusFill: {
+        position: 'absolute', bottom: 0, width: '100%',
+        backgroundColor: theme.colors.green, opacity: 0.15
     },
-    assignmentName: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '500', color: theme.colors.ink },
-    assignmentCourse: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 2 },
-    assignmentDate: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3 },
-    assignmentDays: { fontFamily: theme.fonts.m, fontSize: 11, fontWeight: '600', marginTop: 2 },
+    focusNumText: { fontFamily: theme.fonts.m, fontSize: 16, fontWeight: '700', color: theme.colors.ink },
+    focusLabel: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1 },
+    focusSub: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.green },
 
-    // At-risk
-    atRiskRow: {
-        flexDirection: 'row', alignItems: 'center',
-        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: theme.radii.r, paddingVertical: 12, paddingHorizontal: 12, marginBottom: 6,
+    // Stats Row
+    statsRow: { flexDirection: 'row', gap: 16, marginBottom: 32 },
+    statCard: {
+        flex: 1, padding: 16,
+        backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
+        borderWidth: 1, borderColor: theme.colors.border,
     },
-    atRiskName: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink, flex: 1 },
-    atRiskSub: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 3 },
-    atRiskLetter: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '900', letterSpacing: -1, lineHeight: 36 },
-    atRiskPct: { fontFamily: theme.fonts.m, fontSize: 10, fontWeight: '600' },
-    typeChip: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
-    typeChipText: { fontFamily: theme.fonts.m, fontSize: 8, fontWeight: '700', color: theme.colors.ink2, textTransform: 'uppercase' },
+    statLabel: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 },
+    statValue: { fontFamily: theme.fonts.d, fontSize: 36, fontWeight: '700', color: theme.colors.ink },
+    statIndicator: { height: 4, width: 32, borderRadius: 2, marginTop: 12 },
 
-    // Overview bars
-    overviewRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 7 },
-    overviewName: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink2, width: 120 },
-    overviewBarWrap: { flex: 1, height: 8, backgroundColor: theme.colors.surface2, borderRadius: 4, overflow: 'hidden' },
-    overviewBar: { height: 8, borderRadius: 4 },
-    overviewPct: { fontFamily: theme.fonts.m, fontSize: 10, fontWeight: '700', width: 38, textAlign: 'right' },
+    // Main Layout
+    layoutMain: { flexDirection: 'row', gap: 32 },
+    columnLeft: { flex: 1.4 },
+    columnRight: { flex: 1 },
 
-    emptyBox: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 16 },
-    emptyText: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, textAlign: 'center' },
+    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    sectionTitle: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '700', color: theme.colors.ink },
+    seeAllText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },
+
+    // Assignments
+    assignmentCard: {
+        flexDirection: 'row', backgroundColor: theme.colors.surface,
+        borderRadius: theme.radii.lg, marginBottom: 12, overflow: 'hidden',
+        borderWidth: 1, borderColor: theme.colors.border,
+    },
+    asgnColorBar: { width: 4 },
+    asgnContent: { flex: 1, padding: 20, flexDirection: 'row', alignItems: 'center', gap: 16 },
+    asgnTitle: { fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '600', color: theme.colors.ink },
+    asgnCourse: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 4 },
+    asgnDate: { fontFamily: theme.fonts.m, fontSize: 14, fontWeight: '700', color: theme.colors.ink },
+    asgnDays: { fontFamily: theme.fonts.m, fontSize: 11, marginTop: 4 },
+
+    // At Risk
+    atRiskCard: {
+        backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
+        padding: 16, marginBottom: 12, borderWidth: 1, borderColor: theme.colors.border,
+    },
+    atRiskHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    atRiskName: { fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink },
+    atRiskSub: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 2 },
+    atRiskGradeBox: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignItems: 'center' },
+    atRiskGradeText: { fontFamily: theme.fonts.m, fontSize: 15, fontWeight: '700' },
+
+    successCard: {
+        padding: 24, alignItems: 'center', gap: 12,
+        backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
+        borderWidth: 1, borderColor: theme.colors.border, borderStyle: 'dashed'
+    },
+    successText: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink3, textAlign: 'center' },
+
+    // Overview
+    overviewContainer: {
+        backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
+        padding: 20, borderWidth: 1, borderColor: theme.colors.border
+    },
+    overviewRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+    overviewLabel: { flex: 1, fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink2 },
+    progressBarBg: { flex: 2, height: 6, backgroundColor: theme.colors.surface2, borderRadius: 3, overflow: 'hidden' },
+    progressBarFill: { height: '100%', borderRadius: 3 },
+    overviewValue: { width: 32, fontFamily: theme.fonts.m, fontSize: 10, fontWeight: '700', textAlign: 'right', color: theme.colors.ink },
+
+    emptyCard: { padding: 32, alignItems: 'center', backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, borderStyle: 'dashed', borderWidth: 1, borderColor: theme.colors.border },
+    emptyText: { fontFamily: theme.fonts.s, fontSize: 14, color: theme.colors.ink3 }
 });

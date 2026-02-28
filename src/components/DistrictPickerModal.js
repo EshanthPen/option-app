@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
 import { Search, X, Check, Globe } from 'lucide-react-native';
-import { theme } from '../utils/theme';
+import { theme as staticTheme } from '../utils/theme';
+import { useTheme } from '../context/ThemeContext';
 
 export const KNOWN_DISTRICTS = [
     { id: 'fcps', name: 'Fairfax County Public Schools (VA)', url: 'https://sisstudent.fcps.edu' },
@@ -15,6 +16,8 @@ export const KNOWN_DISTRICTS = [
 ];
 
 export default function DistrictPickerModal({ visible, onClose, onSelect, currentSelectionUrl }) {
+    const { theme, isDarkMode } = useTheme();
+    const styles = getStyles(theme);
     const [searchQuery, setSearchQuery] = useState('');
 
     const filteredDistricts = useMemo(() => {
@@ -112,7 +115,7 @@ export default function DistrictPickerModal({ visible, onClose, onSelect, curren
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.4)',
