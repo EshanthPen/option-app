@@ -9,7 +9,7 @@ import ICAL from 'ical.js';
 import { supabase } from '../supabaseClient';
 import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
-import { ChevronLeft, ChevronRight, Plus, Download, CalendarDays } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Download, CalendarDays, Sparkles, Check } from 'lucide-react-native';
 
 const { width: SCREEN_W, height: SCREEN_H_RAW } = Dimensions.get('window');
 const IS_WIDE = SCREEN_W > 800;
@@ -40,6 +40,8 @@ export default function MatrixScreen() {
     const [year, setYear] = useState(new Date().getFullYear());
     const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
     const [selectedTaskIds, setSelectedTaskIds] = useState([]);
+    const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
+    const [studyPlan, setStudyPlan] = useState([]);
 
     // Form state
     const [title, setTitle] = useState('');
@@ -188,6 +190,77 @@ export default function MatrixScreen() {
         );
     };
 
+    const toggleComplete = async (task) => {
+        const newCompleted = !task.completed;
+        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: newCompleted } : t));
+        try {
+            await supabase.from('tasks').update({ completed: newCompleted }).eq('id', task.id);
+        } catch {
+            // Revert optimistic update on failure
+            setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: !newCompleted } : t));
+        }
+    };
+
+    const generateStudyPlan = () => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const upcoming = tasks
+            .filter(t => !t.completed && t.date && new Date(t.date + 'T12:00:00') >= today)
+            .sort((a, b) => {
+                const dA = Math.max((new Date(a.date + 'T12:00:00') - today) / (1000 * 60 * 60 * 24), 0.5);
+                const dB = Math.max((new Date(b.date + 'T12:00:00') - today) / (1000 * 60 * 60 * 24), 0.5);
+                return ((b.urgency + b.importance) / dB) - ((a.urgency + a.importance) / dA);
+            })
+            .slice(0, 10);
+
+        const plan = upcoming.map(t => {
+            const due = new Date(t.date + 'T12:00:00');
+            const daysUntil = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+            const offset = daysUntil <= 2 ? 0 : daysUntil <= 5 ? 1 : 2;
+            const studyDate = new Date(due);
+            studyDate.setDate(studyDate.getDate() - offset);
+            if (studyDate < today) studyDate.setTime(today.getTime());
+            return {
+                task: t,
+                studyDate: studyDate.toLocaleDateString('en-CA'),
+                studyDateDisplay: studyDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+                duration: t.duration || 60,
+                daysUntilDue: daysUntil,
+            };
+        });
+        setStudyPlan(plan);
+        setScheduleModalVisible(true);
+    };
+
+    const addPlanToCalendar = async () => {
+        const token = await AsyncStorage.getItem('googleAccessToken');
+        if (!token) {
+            if (Platform.OS === 'web') window.alert('Not Signed In: Go to Settings and sign in with Google first.');
+            else Alert.alert('Not Signed In', 'Go to Settings and sign in with Google first.');
+            return;
+        }
+        let added = 0;
+        for (const item of studyPlan) {
+            const start = new Date(item.studyDate + 'T16:00:00');
+            const end = new Date(start.getTime() + item.duration * 60 * 1000);
+            const event = {
+                summary: `Study: ${item.task.title} 📚`,
+                description: `Due: ${item.task.date} · Urgency ${item.task.urgency} · Importance ${item.task.importance}`,
+                start: { dateTime: start.toISOString(), timeZone: 'America/New_York' },
+                end: { dateTime: end.toISOString(), timeZone: 'America/New_York' },
+            };
+            const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(event),
+            });
+            if (res.ok) added++;
+        }
+        if (Platform.OS === 'web') window.alert(`Done! Added ${added} study blocks to Google Calendar.`);
+        else Alert.alert('Done!', `Added ${added} study blocks to Google Calendar.`);
+        setScheduleModalVisible(false);
+    };
+
     // Calendar grid
     const dim = new Date(year, month + 1, 0).getDate();
     const firstDay = new Date(year, month, 1).getDay();
@@ -247,9 +320,12 @@ export default function MatrixScreen() {
                     <View style={styles.headerRow}>
                         <View>
                             <Text style={styles.title}>Calendar</Text>
-                            <Text style={styles.subtitle}>{MN[month]} {year} · {tasks.length} tasks</Text>
+                            <Text style={styles.subtitle}>{MN[month]} {year} · {tasks.filter(t => !t.completed).length}/{tasks.length} pending</Text>
                         </View>
                         <View style={styles.btnRow}>
+                            <TouchableOpacity style={styles.btnOut} onPress={generateStudyPlan}>
+                                <Sparkles color={theme.colors.ink2} size={18} />
+                            </TouchableOpacity>
                             <TouchableOpacity style={styles.btnOut} onPress={() => setImportModalVisible(true)}>
                                 <Download color={theme.colors.ink2} size={18} />
                             </TouchableOpacity>
@@ -371,26 +447,29 @@ export default function MatrixScreen() {
                         ) : selectedDayTasks.map((t, idx) => {
                             const prio = getPrio(t.urgency, t.importance);
                             const isSelected = selectedTaskIds.includes(t.id);
+                            const isDone = !!t.completed;
                             return (
-                                <TouchableOpacity
+                                <View
                                     key={idx}
-                                    style={[styles.sidebarTask, isSelected && styles.sidebarTaskActive]}
-                                    onPress={() => toggleTaskSelection(t.id)}
+                                    style={[styles.sidebarTask, isDone && styles.sidebarTaskDone]}
                                 >
-                                    <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
-                                        {isSelected && <View style={styles.checkboxInner} />}
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.sidebarTaskTitle} numberOfLines={1}>{t.title}</Text>
+                                    <TouchableOpacity
+                                        style={[styles.checkbox, isDone && styles.checkboxDone]}
+                                        onPress={() => toggleComplete(t)}
+                                    >
+                                        {isDone && <Check size={11} color="#fff" strokeWidth={3} />}
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={{ flex: 1 }} onPress={() => toggleTaskSelection(t.id)}>
+                                        <Text style={[styles.sidebarTaskTitle, isDone && styles.sidebarTaskTitleDone, isSelected && { color: theme.colors.ink3 }]} numberOfLines={1}>{t.title}</Text>
                                         <View style={styles.sidebarTaskMeta}>
                                             <View style={[styles.miniSwatch, { backgroundColor: prio.text }]} />
-                                            <Text style={styles.sidebarTaskPrio}>{t.urgency}U · {t.importance}I</Text>
+                                            <Text style={styles.sidebarTaskPrio}>{t.urgency}U · {t.importance}I · {t.duration}min</Text>
                                         </View>
-                                    </View>
+                                    </TouchableOpacity>
                                     <TouchableOpacity style={styles.sidebarBlockBtn} onPress={() => blockTask(t)}>
                                         <CalendarDays size={18} color={theme.colors.ink} />
                                     </TouchableOpacity>
-                                </TouchableOpacity>
+                                </View>
                             );
                         })}
                     </ScrollView>
@@ -502,6 +581,56 @@ export default function MatrixScreen() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Smart Study Schedule Modal */}
+            <Modal visible={scheduleModalVisible} animationType="fade" transparent>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalView, { maxHeight: '80%' }]}>
+                        <Text style={styles.modalTitle}>Smart Schedule</Text>
+                        <Text style={styles.instructions}>
+                            Study blocks generated from your upcoming tasks, prioritized by urgency and due date.
+                        </Text>
+                        {studyPlan.length === 0 ? (
+                            <Text style={[styles.instructions, { color: theme.colors.ink3, textAlign: 'center', marginTop: 12 }]}>
+                                No upcoming incomplete tasks found.
+                            </Text>
+                        ) : (
+                            <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+                                {studyPlan.map((item, i) => {
+                                    const prio = getPrio(item.task.urgency, item.task.importance);
+                                    return (
+                                        <View key={i} style={styles.planItem}>
+                                            <View style={[styles.planDot, { backgroundColor: prio.text }]} />
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.planTitle} numberOfLines={1}>{item.task.title}</Text>
+                                                <Text style={styles.planMeta}>{item.studyDateDisplay} · {item.duration} min</Text>
+                                                <Text style={styles.planDue}>Due in {item.daysUntilDue} day{item.daysUntilDue !== 1 ? 's' : ''}</Text>
+                                            </View>
+                                        </View>
+                                    );
+                                })}
+                                <View style={{ height: 8 }} />
+                            </ScrollView>
+                        )}
+                        <View style={[styles.btnRow, { marginTop: 16 }]}>
+                            <TouchableOpacity
+                                style={[styles.btnOut, { flex: 1, justifyContent: 'center', paddingVertical: 12 }]}
+                                onPress={() => setScheduleModalVisible(false)}
+                            >
+                                <Text style={{ fontFamily: theme.fonts.s, fontWeight: '500', color: theme.colors.ink2 }}>Close</Text>
+                            </TouchableOpacity>
+                            {studyPlan.length > 0 && (
+                                <TouchableOpacity
+                                    style={[styles.btnDark, { flex: 1, justifyContent: 'center', paddingVertical: 12 }]}
+                                    onPress={addPlanToCalendar}
+                                >
+                                    <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Add to Calendar</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -580,12 +709,22 @@ const getStyles = (theme) => StyleSheet.create({
 
     sidebarTask: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
     sidebarTaskActive: { backgroundColor: theme.colors.surface2 },
-    checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.border2, alignItems: 'center', justifyContent: 'center' },
+    sidebarTaskDone: { opacity: 0.5 },
+    checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: theme.colors.border2, alignItems: 'center', justifyContent: 'center' },
     checkboxActive: { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink },
+    checkboxDone: { backgroundColor: theme.colors.green, borderColor: theme.colors.green },
     checkboxInner: { width: 8, height: 8, borderRadius: 1.5, backgroundColor: '#fff' },
     sidebarTaskTitle: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink },
+    sidebarTaskTitleDone: { textDecorationLine: 'line-through', color: theme.colors.ink3 },
     sidebarTaskMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
     miniSwatch: { width: 8, height: 8, borderRadius: 4 },
     sidebarTaskPrio: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.5 },
     sidebarBlockBtn: { padding: 10, borderRadius: 8, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
+
+    // Study plan modal
+    planItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+    planDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
+    planTitle: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink },
+    planMeta: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink2, marginTop: 3 },
+    planDue: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 2 },
 });
