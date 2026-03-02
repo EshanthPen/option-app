@@ -94,22 +94,35 @@ export default function MatrixScreen() {
         if (!schoologyUrl) return;
         setSaving(true);
         let fetchUrl = schoologyUrl.trim().replace(/^webcal:\/\//, 'https://');
-        const proxyUrl = `/api/schoology?url=${encodeURIComponent(fetchUrl)}`;
+        const baseUrl = Platform.OS === 'web' ? window.location.origin : 'http://localhost:8081';
+        const proxyUrl = `${baseUrl}/api/schoology?url=${encodeURIComponent(fetchUrl)}`;
         try {
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error('Proxy or Schoology failed');
-            const icsData = await response.text();
+            let icsData = '';
+            try {
+                const response = await fetch(proxyUrl);
+                if (!response.ok) throw new Error('Proxy failed');
+                icsData = await response.text();
+            } catch (proxyErr) {
+                const directResponse = await fetch(fetchUrl);
+                if (!directResponse.ok) throw new Error('Direct fetch failed');
+                icsData = await directResponse.text();
+            }
+
+            if (!icsData || !icsData.includes('BEGIN:VCALENDAR')) {
+                throw new Error('No valid calendar data received. Ensure your link is a valid Schoology ICS URL.');
+            }
+
             const comp = new ICAL.Component(ICAL.parse(icsData));
             const events = comp.getAllSubcomponents('vevent');
 
             const now = new Date();
-            const imported = events.map((ve, idx) => {
+            const imported = events.map((ve) => {
                 const ev = new ICAL.Event(ve);
-                const tl = ev.summary.toLowerCase();
+                const tl = (ev.summary || '').toLowerCase();
                 const desc = (ev.description || '').toLowerCase();
                 const dueDate = ev.startDate ? ev.startDate.toJSDate() : new Date();
 
-                if (desc.includes('completed') || desc.includes('submitted') || dueDate < now) return null;
+                if (desc.includes('completed') || desc.includes('submitted') || dueDate < new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)) return null;
 
                 const diffDays = (dueDate - now) / (1000 * 60 * 60 * 24);
                 const u = diffDays <= 7 ? 9 : 5;
@@ -123,8 +136,7 @@ export default function MatrixScreen() {
                 if (tl.includes('project') || tl.includes('essay')) im = Math.max(im, 8);
 
                 return {
-                    id: `ics-${Date.now()}-${idx}`,
-                    title: ev.summary,
+                    title: ev.summary || 'Untitled Assignment',
                     urgency: u,
                     importance: im,
                     duration: 60,
@@ -136,7 +148,7 @@ export default function MatrixScreen() {
 
             if (imported.length > 0) {
                 const { data, error } = await supabase.from('tasks').insert(imported).select();
-                if (error) throw error; // Keep error handling for supabase insert
+                if (error) throw error;
                 if (data) setTasks(prev => [...data, ...prev]);
             }
             setImportModalVisible(false);
@@ -145,8 +157,9 @@ export default function MatrixScreen() {
             else Alert.alert('Success', `Imported ${imported.length} assignments!`);
         } catch (err) {
             console.error(err);
-            if (Platform.OS === 'web') window.alert('Error: Failed to fetch calendar.');
-            else Alert.alert('Error', 'Failed to fetch calendar.');
+            const errMsg = err.message || 'Failed to fetch calendar.';
+            if (Platform.OS === 'web') window.alert(`Error: ${errMsg}`);
+            else Alert.alert('Error', errMsg);
         } finally {
             setSaving(false);
         }

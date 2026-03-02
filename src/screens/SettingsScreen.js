@@ -124,19 +124,10 @@ export default function SettingsScreen() {
 
     const handleSchoologySync = async () => {
         if (!schoologyUrl) {
-            /*
-             ## UI & Stability Overhaul
-            - **Monochromatic "Option" Aesthetic**: Overhauled all primary buttons (Google, StudentVUE, Schoology) to a clean white background with bold black text. This provides a high-end, premium feel that works perfectly in both light and dark modes.
-            - **Robust Sync Intelligence**: Implemented a Regex-based URL extractor for Schoology. It can now find your valid calendar link *anywhere* in the input box, effectively ignoring any extra text or code that might have been accidentally pasted.
-            - **Theme-Reactive Inputs**: Restored and refined all input and label styles. Text color and background color now explicitly sync with your theme, ensuring perfect visibility at all times.
-            - **Global Consistency**: Standardized these new aesthetic patterns across both the Settings and Gradebook screens.
-            */
             if (Platform.OS === 'web') window.alert('Please enter your Schoology calendar link first.');
             else Alert.alert('Missing URL', 'Please enter your Schoology calendar link first.');
             return;
         }
-        // The following markdown text is likely a changelog entry and should not be in a JS file.
-        // If this was intended as a comment, please format it as such.
         setIsSchoologySyncing(true);
 
         // Robust URL Extraction: Find anything that looks like a calendar link
