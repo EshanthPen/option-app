@@ -68,7 +68,7 @@ export default function MatrixScreen() {
             urgency: parseInt(urgency) || 5,
             importance: parseInt(importance) || 5,
             duration: parseInt(duration) || 60,
-            due_date: taskDate,
+            date: taskDate,
             source: 'manual',
             user_id: 'default_user'
         };
@@ -94,22 +94,35 @@ export default function MatrixScreen() {
         if (!schoologyUrl) return;
         setSaving(true);
         let fetchUrl = schoologyUrl.trim().replace(/^webcal:\/\//, 'https://');
-        const proxyUrl = `/api/schoology?url=${encodeURIComponent(fetchUrl)}`;
+        const baseUrl = Platform.OS === 'web' ? window.location.origin : 'http://localhost:8081';
+        const proxyUrl = `${baseUrl}/api/schoology?url=${encodeURIComponent(fetchUrl)}`;
         try {
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error('Proxy or Schoology failed');
-            const icsData = await response.text();
+            let icsData = '';
+            try {
+                const response = await fetch(proxyUrl);
+                if (!response.ok) throw new Error('Proxy failed');
+                icsData = await response.text();
+            } catch (proxyErr) {
+                const directResponse = await fetch(fetchUrl);
+                if (!directResponse.ok) throw new Error('Direct fetch failed');
+                icsData = await directResponse.text();
+            }
+
+            if (!icsData || !icsData.includes('BEGIN:VCALENDAR')) {
+                throw new Error('No valid calendar data received. Ensure your link is a valid Schoology ICS URL.');
+            }
+
             const comp = new ICAL.Component(ICAL.parse(icsData));
             const events = comp.getAllSubcomponents('vevent');
 
             const now = new Date();
-            const imported = events.map((ve, idx) => {
+            const imported = events.map((ve) => {
                 const ev = new ICAL.Event(ve);
-                const tl = ev.summary.toLowerCase();
+                const tl = (ev.summary || '').toLowerCase();
                 const desc = (ev.description || '').toLowerCase();
                 const dueDate = ev.startDate ? ev.startDate.toJSDate() : new Date();
 
-                if (desc.includes('completed') || desc.includes('submitted') || dueDate < now) return null;
+                if (desc.includes('completed') || desc.includes('submitted') || dueDate < new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)) return null;
 
                 const diffDays = (dueDate - now) / (1000 * 60 * 60 * 24);
                 const u = diffDays <= 7 ? 9 : 5;
@@ -123,12 +136,11 @@ export default function MatrixScreen() {
                 if (tl.includes('project') || tl.includes('essay')) im = Math.max(im, 8);
 
                 return {
-                    id: `ics-${Date.now()}-${idx}`,
-                    title: ev.summary,
+                    title: ev.summary || 'Untitled Assignment',
                     urgency: u,
                     importance: im,
                     duration: 60,
-                    due_date: dueDate.toISOString().split('T')[0],
+                    date: dueDate.toISOString().split('T')[0],
                     source: 'schoology_import',
                     user_id: 'default_user'
                 };
@@ -136,7 +148,7 @@ export default function MatrixScreen() {
 
             if (imported.length > 0) {
                 const { data, error } = await supabase.from('tasks').insert(imported).select();
-                if (error) throw error; // Keep error handling for supabase insert
+                if (error) throw error;
                 if (data) setTasks(prev => [...data, ...prev]);
             }
             setImportModalVisible(false);
@@ -145,8 +157,9 @@ export default function MatrixScreen() {
             else Alert.alert('Success', `Imported ${imported.length} assignments!`);
         } catch (err) {
             console.error(err);
-            if (Platform.OS === 'web') window.alert('Error: Failed to fetch calendar.');
-            else Alert.alert('Error', 'Failed to fetch calendar.');
+            const errMsg = err.message || 'Failed to fetch calendar.';
+            if (Platform.OS === 'web') window.alert(`Error: ${errMsg}`);
+            else Alert.alert('Error', errMsg);
         } finally {
             setSaving(false);
         }
@@ -195,7 +208,7 @@ export default function MatrixScreen() {
         try {
             const token = await AsyncStorage.getItem('googleAccessToken');
             if (!token) { Alert.alert('Not Signed In', 'Go to Settings and sign in with Google.'); return; }
-            const start = task.due_date ? new Date(task.due_date + 'T12:00:00') : new Date();
+            const start = task.date ? new Date(task.date + 'T12:00:00') : new Date();
             const end = new Date(start.getTime() + task.duration * 60 * 1000);
             const event = { summary: `Option: ${task.title} 📚`, start: { dateTime: start.toISOString(), timeZone: 'America/New_York' }, end: { dateTime: end.toISOString(), timeZone: 'America/New_York' } };
             const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(event) });
@@ -223,7 +236,7 @@ export default function MatrixScreen() {
         ? new Date(taskDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         : 'Select a date';
 
-    const selectedDayTasks = tasks.filter(t => t.due_date?.startsWith(selectedDate));
+    const selectedDayTasks = tasks.filter(t => t.date?.startsWith(selectedDate));
 
     return (
         <View style={styles.container}>
@@ -289,7 +302,7 @@ export default function MatrixScreen() {
                         <View style={styles.grid}>
                             {cells.map((d, i) => {
                                 const dateStr = d ? `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` : null;
-                                const dayTasks = d ? tasks.filter(t => t.due_date?.startsWith(dateStr)) : [];
+                                const dayTasks = d ? tasks.filter(t => t.date?.startsWith(dateStr)) : [];
                                 const isToday = d && d === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
 
                                 return (
