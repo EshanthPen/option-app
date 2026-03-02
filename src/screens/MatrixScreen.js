@@ -12,6 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { ChevronLeft, ChevronRight, Plus, Download, CalendarDays, Zap } from 'lucide-react-native';
 import { fetchFreeBusy, createGoogleCalendarEvent } from '../utils/googleCalendarAPI';
 import { performSmartScheduling } from '../utils/schedulerAssistant';
+import { getDeviceId } from '../utils/auth';
 
 const { width: SCREEN_W, height: SCREEN_H_RAW } = Dimensions.get('window');
 const IS_WIDE = SCREEN_W > 800;
@@ -42,6 +43,7 @@ export default function MatrixScreen() {
     const [year, setYear] = useState(new Date().getFullYear());
     const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
     const [selectedTaskIds, setSelectedTaskIds] = useState([]);
+    const [deviceId, setDeviceId] = useState(null);
 
     // Form state
     const [title, setTitle] = useState('');
@@ -55,10 +57,18 @@ export default function MatrixScreen() {
     const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
     const [taskDate, setTaskDate] = useState(new Date().toLocaleDateString('en-CA')); // YYYY-MM-DD local
 
-    useEffect(() => { fetchTasks(); }, []);
+    useEffect(() => {
+        const init = async () => {
+            const id = await getDeviceId();
+            setDeviceId(id);
+            fetchTasks(id);
+        };
+        init();
+    }, []);
 
-    const fetchTasks = async () => {
-        const { data, error } = await supabase.from('tasks').select('*').order('created_at', { ascending: false });
+    const fetchTasks = async (idToUse = deviceId) => {
+        if (!idToUse) return;
+        const { data, error } = await supabase.from('tasks').select('*').eq('user_id', idToUse).order('created_at', { ascending: false });
         if (data) setTasks(data);
     };
 
@@ -70,9 +80,9 @@ export default function MatrixScreen() {
             urgency: parseInt(urgency) || 5,
             importance: parseInt(importance) || 5,
             duration: parseInt(duration) || 60,
-            date: taskDate,
+            due_date: taskDate,
             source: 'manual',
-            user_id: 'default_user'
+            user_id: deviceId
         };
         try {
             const { data, error } = await supabase.from('tasks').insert([newTask]).select();
@@ -142,9 +152,9 @@ export default function MatrixScreen() {
                     urgency: u,
                     importance: im,
                     duration: 60,
-                    date: dueDate.toISOString().split('T')[0],
+                    due_date: dueDate.toISOString().split('T')[0],
                     source: 'schoology_import',
-                    user_id: 'default_user'
+                    user_id: deviceId
                 };
             }).filter(t => t !== null);
 

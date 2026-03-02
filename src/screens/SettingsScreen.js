@@ -15,6 +15,7 @@ import ICAL from 'ical.js';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { parseStudentVueGradebook } from '../utils/studentVueParser';
+import { getDeviceId } from '../utils/auth';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -43,6 +44,7 @@ export default function SettingsScreen() {
 
     // Auth State
     const [accessToken, setAccessToken] = useState(null);
+    const [deviceId, setDeviceId] = useState(null);
 
     const isWeb = typeof window !== 'undefined' && window.location;
 
@@ -114,15 +116,18 @@ export default function SettingsScreen() {
 
     useEffect(() => {
         const fetchSettings = async () => {
-            const { data, error } = await supabase.from('settings').select('*').eq('user_id', 'default_user').single();
+            const id = await getDeviceId();
+            setDeviceId(id);
+            const { data, error } = await supabase.from('settings').select('*').eq('user_id', id).single();
             if (data && data.schoology_url) setSchoologyUrl(data.schoology_url);
         };
         fetchSettings();
     }, []);
 
     const handleSaveSchoology = async () => {
+        if (!deviceId) return;
         try {
-            const { error } = await supabase.from('settings').upsert({ user_id: 'default_user', schoology_url: schoologyUrl }, { onConflict: 'user_id' });
+            const { error } = await supabase.from('settings').upsert({ user_id: deviceId, schoology_url: schoologyUrl }, { onConflict: 'user_id' });
             if (error) throw error;
             if (Platform.OS === 'web') window.alert('Saved: Your Schoology URL has been updated.');
             else Alert.alert('Saved!', 'Your Schoology URL has been updated.');
@@ -222,9 +227,9 @@ export default function SettingsScreen() {
                     urgency: u,
                     importance: im,
                     duration: 60,
-                    date: dueDate.toISOString().split('T')[0],
+                    due_date: dueDate.toISOString().split('T')[0],
                     source: 'schoology_import',
-                    user_id: 'default_user'
+                    user_id: deviceId
                 };
             }).filter(t => t !== null);
 
