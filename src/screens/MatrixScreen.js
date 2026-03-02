@@ -9,7 +9,9 @@ import ICAL from 'ical.js';
 import { supabase } from '../supabaseClient';
 import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
-import { ChevronLeft, ChevronRight, Plus, Download, CalendarDays } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Download, CalendarDays, Zap } from 'lucide-react-native';
+import { fetchFreeBusy, createGoogleCalendarEvent } from '../utils/googleCalendarAPI';
+import { performSmartScheduling } from '../utils/schedulerAssistant';
 
 const { width: SCREEN_W, height: SCREEN_H_RAW } = Dimensions.get('window');
 const IS_WIDE = SCREEN_W > 800;
@@ -182,6 +184,79 @@ export default function MatrixScreen() {
         }
     };
 
+    const handleSmartSchedule = async () => {
+        setSaving(true);
+        try {
+            // 1. Auth check
+            const token = await AsyncStorage.getItem('googleAccessToken');
+            if (!token) {
+                if (Platform.OS === 'web') window.alert('Not Signed In: Go to Settings and sign in with Google to use Smart Scheduling.');
+                else Alert.alert('Not Signed In', 'Go to Settings and sign in with Google to use Smart Scheduling.');
+                setSaving(false);
+                return;
+            }
+
+            // 2. Load Working Hours (Default to 3 PM - 10 PM if unset)
+            const startStr = await AsyncStorage.getItem('workingStartHour');
+            const endStr = await AsyncStorage.getItem('workingEndHour');
+            const workingHours = {
+                startHour: startStr ? parseInt(startStr) : 15,
+                endHour: endStr ? parseInt(endStr) : 22
+            };
+
+            // 3. Fetch Google Calendar constraints for the next 7 days
+            const now = new Date();
+            const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+            const busyPeriods = await fetchFreeBusy(token, now, nextWeek);
+
+            // 4. Run AI Scheduler Algorithm against 'unscheduled' tasks
+            const optimizedTasks = performSmartScheduling(tasks, busyPeriods, workingHours);
+
+            if (optimizedTasks.length === 0) {
+                if (Platform.OS === 'web') window.alert('No tasks need scheduling! Everything is already planned or completed.');
+                else Alert.alert('All Caught Up', 'No tasks need scheduling! Everything is already planned or completed.');
+                setSaving(false);
+                return;
+            }
+
+            // 5. Update state and dispatch to Supabase and Google sequentially
+            let successCount = 0;
+            for (const task of optimizedTasks) {
+                // Save to Google Calendar
+                const event = {
+                    summary: `Option: ${task.title} 🤖`,
+                    description: `Priority: ${task.urgency}U/${task.importance}I\n\nAutomatically scheduled by Option Smart AI.`,
+                    start: { dateTime: task.scheduled_start, timeZone: 'America/New_York' },
+                    end: { dateTime: task.scheduled_end, timeZone: 'America/New_York' }
+                };
+
+                const calSuccess = await createGoogleCalendarEvent(token, event);
+
+                if (calSuccess) {
+                    // Save to Supabase
+                    const { error } = await supabase.from('tasks')
+                        .update({ scheduled_start: task.scheduled_start, scheduled_end: task.scheduled_end })
+                        .eq('id', task.id);
+
+                    if (!error) successCount++;
+                }
+            }
+
+            // Reload visual state completely so users see the times
+            await fetchTasks();
+
+            if (Platform.OS === 'web') window.alert(`Smart Scheduling Complete: AI placed ${successCount} tasks on your calendar!`);
+            else Alert.alert('Smart Scheduling Complete', `AI placed ${successCount} tasks on your calendar!`);
+
+        } catch (error) {
+            console.error("Smart Schedule Error:", error);
+            if (Platform.OS === 'web') window.alert("Failed to auto-schedule tasks. Check console.");
+            else Alert.alert("Error", "Failed to auto-schedule tasks.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const toggleTaskSelection = (id) => {
         setSelectedTaskIds(prev =>
             prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -250,6 +325,10 @@ export default function MatrixScreen() {
                             <Text style={styles.subtitle}>{MN[month]} {year} · {tasks.length} tasks</Text>
                         </View>
                         <View style={styles.btnRow}>
+                            <TouchableOpacity style={[styles.btnDark, { backgroundColor: theme.colors.purple }]} onPress={handleSmartSchedule} disabled={saving}>
+                                {saving ? <ActivityIndicator size="small" color="#fff" /> : <Zap color="#fff" size={16} />}
+                                <Text style={styles.btnDarkText}>Auto-Schedule</Text>
+                            </TouchableOpacity>
                             <TouchableOpacity style={styles.btnOut} onPress={() => setImportModalVisible(true)}>
                                 <Download color={theme.colors.ink2} size={18} />
                             </TouchableOpacity>
@@ -382,6 +461,13 @@ export default function MatrixScreen() {
                                     </View>
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.sidebarTaskTitle} numberOfLines={1}>{t.title}</Text>
+
+                                        {t.scheduled_start && (
+                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2, marginBottom: 4 }}>
+                                                🕒 {new Date(t.scheduled_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(t.scheduled_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </Text>
+                                        )}
+
                                         <View style={styles.sidebarTaskMeta}>
                                             <View style={[styles.miniSwatch, { backgroundColor: prio.text }]} />
                                             <Text style={styles.sidebarTaskPrio}>{t.urgency}U · {t.importance}I</Text>

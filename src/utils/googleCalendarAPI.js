@@ -1,6 +1,45 @@
 import { Alert } from 'react-native';
 
 /**
+ * Fetches the user's busy periods from their primary Google Calendar.
+ * 
+ * @param {string} accessToken Complete OAuth access token
+ * @param {Date} timeMin Start of the search window
+ * @param {Date} timeMax End of the search window
+ * @returns {Promise<Array>} Array of { start: string, end: string } ISO dates representing busy blocks
+ */
+export const fetchFreeBusy = async (accessToken, timeMin, timeMax) => {
+    if (!accessToken) return [];
+
+    try {
+        const response = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                timeMin: timeMin.toISOString(),
+                timeMax: timeMax.toISOString(),
+                items: [{ id: 'primary' }]
+            }),
+        });
+
+        if (!response.ok) {
+            console.error("FreeBusy API Error:", await response.text());
+            return [];
+        }
+
+        const data = await response.json();
+        // data.calendars.primary.busy is an array of { start, end } objects
+        return data.calendars?.primary?.busy || [];
+    } catch (error) {
+        console.error("Network Error fetching FreeBusy:", error);
+        return [];
+    }
+};
+
+/**
  * Creates an event on the user's primary Google Calendar.
  * 
  * @param {string} accessToken Complete OAuth access token for Google API

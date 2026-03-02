@@ -37,6 +37,10 @@ export default function SettingsScreen() {
     const [isSchoologySyncing, setIsSchoologySyncing] = useState(false);
     const [isHelpVisible, setIsHelpVisible] = useState(false);
 
+    // Working Hours State
+    const [startHour, setStartHour] = useState('15'); // Default 3 PM
+    const [endHour, setEndHour] = useState('22'); // Default 10 PM
+
     // Auth State
     const [accessToken, setAccessToken] = useState(null);
 
@@ -65,6 +69,12 @@ export default function SettingsScreen() {
 
             const savedSchoology = await AsyncStorage.getItem('schoologyUrl');
             if (savedSchoology) setSchoologyUrl(savedSchoology);
+
+            const savedStart = await AsyncStorage.getItem('workingStartHour');
+            if (savedStart) setStartHour(savedStart);
+
+            const savedEnd = await AsyncStorage.getItem('workingEndHour');
+            if (savedEnd) setEndHour(savedEnd);
         };
         loadToken();
     }, []);
@@ -119,6 +129,24 @@ export default function SettingsScreen() {
         } catch (error) {
             if (Platform.OS === 'web') window.alert('Error: Failed to save settings.');
             else Alert.alert('Error', 'Failed to save settings.');
+        }
+    };
+
+    const handleSaveWorkingHours = async () => {
+        try {
+            const parsedStart = parseInt(startHour);
+            const parsedEnd = parseInt(endHour);
+            if (isNaN(parsedStart) || isNaN(parsedEnd) || parsedStart < 0 || parsedEnd > 24) {
+                if (Platform.OS === 'web') window.alert('Please enter valid 24-hour integers (0-24).');
+                else Alert.alert('Invalid Input', 'Please enter valid 24-hour integers (0-24).');
+                return;
+            }
+            await AsyncStorage.setItem('workingStartHour', startHour);
+            await AsyncStorage.setItem('workingEndHour', endHour);
+            if (Platform.OS === 'web') window.alert('Saved: Smart Scheduling hours updated.');
+            else Alert.alert('Saved!', 'Smart Scheduling hours updated.');
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -668,6 +696,40 @@ export default function SettingsScreen() {
                     ) : (
                         <Text style={styles.actionBtnText}>🎓 Load Demo Data</Text>
                     )}
+                </TouchableOpacity>
+            </View>
+
+            <View style={styles.card}>
+                <Text style={styles.cardTitle}>Smart Scheduling</Text>
+                <Text style={styles.instructions}>Define your available working hours. The AI Scheduler will not place tasks outside this window (e.g. 15 for 3 PM, 22 for 10 PM).</Text>
+
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 5 }}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginBottom: 8 }}>Start Hour (0-24)</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={startHour}
+                            onChangeText={setStartHour}
+                            keyboardType="numeric"
+                            placeholder="15"
+                            placeholderTextColor={theme.colors.ink3}
+                        />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginBottom: 8 }}>End Hour (0-24)</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={endHour}
+                            onChangeText={setEndHour}
+                            keyboardType="numeric"
+                            placeholder="22"
+                            placeholderTextColor={theme.colors.ink3}
+                        />
+                    </View>
+                </View>
+
+                <TouchableOpacity style={[styles.actionBtn, { marginTop: 15 }]} onPress={handleSaveWorkingHours}>
+                    <Text style={styles.actionBtnText}>Save Hours</Text>
                 </TouchableOpacity>
             </View>
 
