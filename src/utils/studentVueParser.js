@@ -1,5 +1,65 @@
 import { XMLParser } from 'fast-xml-parser';
 
+export const parseStudentVuePeriods = (xmlString) => {
+    try {
+        const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
+        const match = xmlString.match(/<ProcessWebServiceRequestResult>(.*?)<\/ProcessWebServiceRequestResult>/s);
+        let gradebookXmlString = match ? match[1] : null;
+        if (!gradebookXmlString && xmlString.includes('<Gradebook')) gradebookXmlString = xmlString;
+        if (!gradebookXmlString) return { periods: [], currentPeriodIndex: 0, currentPeriodName: '' };
+
+        gradebookXmlString = gradebookXmlString.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        const innerJson = parser.parse(gradebookXmlString);
+
+        let reportPeriods = innerJson?.Gradebook?.ReportingPeriods?.ReportPeriod;
+        let periods = [];
+        if (reportPeriods) {
+            if (!Array.isArray(reportPeriods)) reportPeriods = [reportPeriods];
+
+            const today = new Date();
+            let bestIndex = 0;
+            let bestName = '';
+            let foundCurrent = false;
+
+            periods = reportPeriods.map(p => {
+                const idx = parseInt(p['@_Index'] || p['@_GradingPeriodIndex'] || '0');
+                const name = p['@_GradePeriod'] || p['@_MarkingPeriod'] || `Period ${idx}`;
+
+                const start = new Date(p['@_StartDate'] || p['@_Start'] || 0);
+                const end = new Date(p['@_EndDate'] || p['@_End'] || 0);
+
+                if (start && end && today >= start && today <= end) {
+                    bestIndex = idx;
+                    bestName = name;
+                    foundCurrent = true;
+                }
+
+                return { index: idx, name: name };
+            });
+
+            if (!foundCurrent && periods.length > 0) {
+                // Default to first period if start dates are empty or in the future
+                // Wait, typically we want the highest index if dates are missing, or the most recent past date
+                let maxIdx = periods[0].index;
+                let maxName = periods[0].name;
+                periods.forEach(p => {
+                    if (p.index > maxIdx) {
+                        maxIdx = p.index;
+                        maxName = p.name;
+                    }
+                });
+                bestIndex = maxIdx;
+                bestName = maxName;
+            }
+
+            return { periods, currentPeriodIndex: bestIndex, currentPeriodName: bestName };
+        }
+        return { periods: [], currentPeriodIndex: 0, currentPeriodName: '' };
+    } catch (e) {
+        return { periods: [], currentPeriodIndex: 0, currentPeriodName: '' };
+    }
+};
+
 export const parseStudentVueGradebook = (xmlString) => {
     try {
         const parser = new XMLParser({

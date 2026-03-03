@@ -144,7 +144,7 @@ export default function GradebookScreen() {
       <parent>0</parent>
       <webServiceHandleName>PXPWebServices</webServiceHandleName>
       <methodName>Gradebook</methodName>
-      <paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;0&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr>
+      <paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;${periodIndex}&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr>
     </ProcessWebServiceRequest>
   </soap:Body>
 </soap:Envelope>`;
@@ -174,10 +174,14 @@ export default function GradebookScreen() {
                 setClasses(grades);
                 await AsyncStorage.setItem('studentVueGrades', JSON.stringify(grades));
 
-                // Note: The original generic parser doesn't extract 'periods', so we clear them for now
-                setAvailablePeriods([]);
-                setCurrentPeriodName('Current Quarter');
-                setCurrentPeriodIndex(0);
+                // Maintain the selected period info
+                const periods = JSON.parse(await AsyncStorage.getItem('studentVuePeriods') || '[]');
+                const periodName = periods.find(p => p.index === periodIndex)?.name || `Quarter ${periodIndex}`;
+
+                setCurrentPeriodName(periodName);
+                setCurrentPeriodIndex(periodIndex);
+                await AsyncStorage.setItem('studentVuePeriodName', periodName);
+                await AsyncStorage.setItem('studentVuePeriodIndex', String(periodIndex));
 
                 setSelectedClass(null);
             } else {

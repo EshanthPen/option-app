@@ -14,7 +14,7 @@ import { loadMockGradebookData } from '../utils/mockStudentData';
 import ICAL from 'ical.js';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
-import { parseStudentVueGradebook } from '../utils/studentVueParser';
+import { parseStudentVueGradebook, parseStudentVuePeriods } from '../utils/studentVueParser';
 import { getDeviceId } from '../utils/auth';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -310,9 +310,38 @@ export default function SettingsScreen() {
             const xmlText = await response.text();
 
             if (xmlText.includes('Gradebook') || xmlText.includes('RT_ERROR') === false) {
-                const formattedClasses = parseStudentVueGradebook(xmlText);
+                const { periods, currentPeriodIndex, currentPeriodName } = parseStudentVuePeriods(xmlText);
+
+                let finalXmlText = xmlText;
+
+                if (currentPeriodIndex > 0) {
+                    const secondPayload = soapPayload.replace('<ReportPeriod>0</ReportPeriod>', `<ReportPeriod>${currentPeriodIndex}</ReportPeriod>`);
+                    const secondResponse = await fetch(proxyEndpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload: secondPayload })
+                    });
+                    if (secondResponse.ok) {
+                        const secondText = await secondResponse.text();
+                        if (secondText.includes('Gradebook')) {
+                            finalXmlText = secondText;
+                        }
+                    }
+                }
+
+                const formattedClasses = parseStudentVueGradebook(finalXmlText);
                 if (formattedClasses && formattedClasses.length > 0) {
                     await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
+
+                    if (periods && periods.length > 0) {
+                        await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(periods));
+                        await AsyncStorage.setItem('studentVuePeriodName', currentPeriodName || 'Current Quarter');
+                        await AsyncStorage.setItem('studentVuePeriodIndex', String(currentPeriodIndex || 0));
+                    } else {
+                        await AsyncStorage.removeItem('studentVuePeriods');
+                        await AsyncStorage.setItem('studentVuePeriodName', 'Current Quarter');
+                        await AsyncStorage.setItem('studentVuePeriodIndex', '0');
+                    }
 
                     const totalAssignments = formattedClasses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
 
