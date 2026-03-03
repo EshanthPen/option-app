@@ -140,14 +140,10 @@ export const syncStudentVueGrades = async (username, password, districtUrl, requ
 
     const base = districtUrl.trim().replace(/\/+$/, "");
 
-    // Use a CORS proxy ONLY when running on the web, since Native apps don't have CORS restrictions.
-    // We use a POST-compatible proxy if on web, since StudentVUE requires POST requests.
-    const CORS_PROXY = Platform.OS === 'web' ? 'https://corsproxy.io/?' : '';
-
     const candidateEndpoints = [
-        `${CORS_PROXY}${base}/Service/PXPCommunication.asmx`,
-        `${CORS_PROXY}${base}/SVUE/Service/PXPCommunication.asmx`,
-        `${CORS_PROXY}${base}/PXP2/Service/PXPCommunication.asmx`,
+        `${base}/Service/PXPCommunication.asmx`,
+        `${base}/SVUE/Service/PXPCommunication.asmx`,
+        `${base}/PXP2/Service/PXPCommunication.asmx`,
     ];
 
     const buildSoap = (u, p, method, paramStr) => `<?xml version="1.0" encoding="utf-8"?>
@@ -168,6 +164,15 @@ export const syncStudentVueGrades = async (username, password, districtUrl, requ
 </soap:Envelope>`;
 
     const soapFetch = async (endpoint, soapBody) => {
+        if (Platform.OS === 'web') {
+            // Route through the Vercel proxy to avoid CORS issues on web
+            const response = await fetch('/api/studentvue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUrl: endpoint, soapPayload: soapBody }),
+            });
+            return response.text();
+        }
         const response = await fetch(endpoint, {
             method: "POST",
             headers: {

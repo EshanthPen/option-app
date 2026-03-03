@@ -14,7 +14,6 @@ import { loadMockGradebookData } from '../utils/mockStudentData';
 import ICAL from 'ical.js';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
-import { parseStudentVueGradebook } from '../utils/studentVueParser';
 import { getDeviceId } from '../utils/auth';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -274,55 +273,20 @@ export default function SettingsScreen() {
             await AsyncStorage.setItem('svPassword', svPass);
             await AsyncStorage.setItem('svDistrictUrl', baseUrl);
 
-            // Prioritize the logic from remote branch for 'auth' (Proxy + Parser)
-            const finalTargetUrl = baseUrl.endsWith('Service/PXPCommunication.asmx')
-                ? baseUrl
-                : `${baseUrl}/Service/PXPCommunication.asmx`;
+            const result = await syncStudentVueGrades(svUser, svPass, baseUrl);
 
-            const soapPayload = `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/">
-      <userID>${svUser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</userID>
-      <password>${svPass.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</password>
-      <skipLoginLog>1</skipLoginLog>
-      <parent>0</parent>
-      <webServiceHandleName>PXPWebServices</webServiceHandleName>
-      <methodName>Gradebook</methodName>
-      <paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;0&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr>
-    </ProcessWebServiceRequest>
-  </soap:Body>
-</soap:Envelope>`;
+            if (result.grades && result.grades.length > 0) {
+                await AsyncStorage.setItem('studentVueGrades', JSON.stringify(result.grades));
+                await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(result.periods));
+                await AsyncStorage.setItem('studentVuePeriodName', result.period);
+                await AsyncStorage.setItem('studentVuePeriodIndex', String(result.periodIndex));
 
-            const proxyEndpoint = '/api/studentvue';
+                const totalAssignments = result.grades.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
 
-            const response = await fetch(proxyEndpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload: soapPayload })
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData?.cause || errData?.details || response.statusText);
-            }
-
-            const xmlText = await response.text();
-
-            if (xmlText.includes('Gradebook') || xmlText.includes('RT_ERROR') === false) {
-                const formattedClasses = parseStudentVueGradebook(xmlText);
-                if (formattedClasses && formattedClasses.length > 0) {
-                    await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
-
-                    const totalAssignments = formattedClasses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
-
-                    setSyncResult({
-                        type: 'success',
-                        message: `✅ Imported ${formattedClasses.length} classes with ${totalAssignments} assignments.`
-                    });
-                } else {
-                    throw new Error("Connected, but couldn't parse your class list.");
-                }
+                setSyncResult({
+                    type: 'success',
+                    message: `✅ Imported ${result.grades.length} classes with ${totalAssignments} assignments for ${result.period}.`
+                });
             } else {
                 setSyncResult({ type: 'error', message: 'Connected but no grade data was found. Your account may have no grades for this period.' });
             }
