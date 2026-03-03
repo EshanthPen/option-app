@@ -57,6 +57,10 @@ export default function GradebookScreen() {
     const [newAsgnCat, setNewAsgnCat] = useState('Summative'); // Summative | Formative | Final
     const [hypotheticalResult, setHypotheticalResult] = useState(null);
 
+    // ── Hypothetical Edit Mode state ────────────────────────────
+    const [isHypothetical, setIsHypothetical] = useState(false);
+    const [hypoAssignments, setHypoAssignments] = useState([]);
+
     // ── Target state ────────────────────────────────────────────
     const [targetGrade, setTargetGrade] = useState('');
     const [targetCat, setTargetCat] = useState('Summative');
@@ -427,6 +431,8 @@ export default function GradebookScreen() {
                     setViewMode('assignments');
                     setHypotheticalResult(null);
                     setRequiredScore(null);
+                    setIsHypothetical(false);
+                    setHypoAssignments(JSON.parse(JSON.stringify(item.assignments || [])));
                 }}
                 activeOpacity={0.7}
             >
@@ -469,7 +475,9 @@ export default function GradebookScreen() {
 
     // ── Render: Assignment row (grouped by category) ────────────
     const renderAssignmentsGrouped = (cls) => {
-        if (!cls.assignments || cls.assignments.length === 0) {
+        const assignmentsToList = isHypothetical ? hypoAssignments : (cls.assignments || []);
+
+        if (!assignmentsToList || assignmentsToList.length === 0) {
             return (
                 <View style={styles.emptyAssignments}>
                     <Text style={styles.placeholderText}>No assignments recorded for this period.</Text>
@@ -479,7 +487,7 @@ export default function GradebookScreen() {
 
         // Group by category
         const groups = {};
-        for (const a of cls.assignments) {
+        for (const a of assignmentsToList) {
             const key = a.category || a.type || 'Other';
             if (!groups[key]) groups[key] = [];
             groups[key].push(a);
@@ -487,12 +495,16 @@ export default function GradebookScreen() {
 
         // Category average
         const catAvg = (items) => {
-            const scored = items.filter(a => a.score !== undefined && a.total > 0);
+            const scored = items.filter(a => a.score !== undefined && a.total > 0 && !isNaN(parseFloat(a.score)) && !isNaN(parseFloat(a.total)));
             if (!scored.length) return null;
-            return (scored.reduce((s, a) => s + a.score, 0) / scored.reduce((s, a) => s + a.total, 0)) * 100;
+            return (scored.reduce((s, a) => s + parseFloat(a.score), 0) / scored.reduce((s, a) => s + parseFloat(a.total), 0)) * 100;
         };
 
-        return Object.keys(groups).sort().map(cat => {
+        const updateHypoAssignment = (id, field, value) => {
+            setHypoAssignments(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a));
+        };
+
+        const renderGroup = (cat) => {
             const items = groups[cat];
             const avg = catAvg(items);
             const avgColor = avg !== null ? gradeColor(avg, theme) : theme.colors.ink3;
@@ -512,25 +524,53 @@ export default function GradebookScreen() {
                     {/* Assignments */}
                     {items.map((a, i) => {
                         const hasPts = a.score !== undefined && a.total !== undefined && a.total > 0;
-                        const apt = hasPts ? (a.score / a.total) * 100 : null;
+                        const validPts = hasPts && !isNaN(parseFloat(a.score)) && !isNaN(parseFloat(a.total));
+                        const apt = validPts ? (parseFloat(a.score) / parseFloat(a.total)) * 100 : null;
                         const isMissing = a.rawScore && /miss|incomplete|ng/i.test(a.rawScore);
                         const isExcused = a.rawScore && /exc|excused/i.test(a.rawScore);
                         const accentColor = apt !== null ? gradeColor(apt, theme) : theme.colors.border;
 
                         return (
                             <View
-                                key={`${cat}-${i}`}
+                                key={`${cat}-${a.id || i}`}
                                 style={[styles.assignmentRow, { borderLeftColor: accentColor, borderLeftWidth: 3 }]}
                             >
                                 <View style={{ flex: 1, paddingRight: 8 }}>
-                                    <Text style={styles.assignmentName} numberOfLines={2}>{a.name || a.title}</Text>
-                                    {a.notes ? <Text style={styles.assignmentNotes}>{a.notes}</Text> : null}
+                                    {isHypothetical ? (
+                                        <TextInput
+                                            style={[styles.assignmentName, { padding: 0, margin: 0, backgroundColor: 'transparent' }]}
+                                            value={a.name || a.title}
+                                            onChangeText={(t) => updateHypoAssignment(a.id, 'name', t)}
+                                            selectTextOnFocus
+                                        />
+                                    ) : (
+                                        <Text style={styles.assignmentName} numberOfLines={2}>{a.name || a.title}</Text>
+                                    )}
+                                    {a.notes && !isHypothetical ? <Text style={styles.assignmentNotes}>{a.notes}</Text> : null}
                                     <Text style={styles.assignmentDate}>{a.date}</Text>
                                 </View>
-                                {hasPts ? (
+                                {isHypothetical ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                        <TextInput
+                                            style={[styles.assignmentScore, { color: accentColor, backgroundColor: theme.colors.surface2, paddingHorizontal: 4, borderRadius: 4, textAlign: 'right', minWidth: 25 }]}
+                                            value={String(a.score ?? '')}
+                                            onChangeText={(t) => updateHypoAssignment(a.id, 'score', t)}
+                                            keyboardType="numeric"
+                                            selectTextOnFocus
+                                        />
+                                        <Text style={[styles.assignmentScore, { color: theme.colors.ink3 }]}>/</Text>
+                                        <TextInput
+                                            style={[styles.assignmentScore, { color: accentColor, backgroundColor: theme.colors.surface2, paddingHorizontal: 4, borderRadius: 4, textAlign: 'right', minWidth: 25 }]}
+                                            value={String(a.total ?? '')}
+                                            onChangeText={(t) => updateHypoAssignment(a.id, 'total', t)}
+                                            keyboardType="numeric"
+                                            selectTextOnFocus
+                                        />
+                                    </View>
+                                ) : hasPts ? (
                                     <View style={{ alignItems: 'flex-end' }}>
                                         <Text style={[styles.assignmentScore, { color: accentColor }]}>
-                                            {Number.isInteger(a.score) ? a.score : a.score.toFixed(1)}/{Number.isInteger(a.total) ? a.total : a.total.toFixed(1)}
+                                            {Number.isInteger(a.score) ? a.score : parseFloat(a.score).toFixed(1)}/{Number.isInteger(a.total) ? a.total : parseFloat(a.total).toFixed(1)}
                                         </Text>
                                         <Text style={[styles.assignmentPct, { color: accentColor }]}>
                                             {Math.round(apt)}%
@@ -548,7 +588,80 @@ export default function GradebookScreen() {
                     })}
                 </View>
             );
+        };
+
+        const content = Object.keys(groups).sort().map(renderGroup);
+
+        if (isHypothetical) {
+            content.push(
+                <TouchableOpacity
+                    key="add-assignment"
+                    style={[styles.calcButton, { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, marginTop: -6 }]}
+                    onPress={() => {
+                        const newAsgn = {
+                            id: `hypo-${Date.now()}`,
+                            title: 'New Assignment',
+                            name: 'New Assignment',
+                            category: 'Summative',
+                            score: 100,
+                            total: 100,
+                            date: new Date().toLocaleDateString(),
+                            type: 'Summative'
+                        };
+                        setHypoAssignments([newAsgn, ...hypoAssignments]);
+                    }}
+                >
+                    <Text style={[styles.calcButtonText, { color: theme.colors.ink }]}>+ Add Target Assignment</Text>
+                </TouchableOpacity>
+            );
+        }
+
+        return content;
+    };
+
+    // ── Live Grade Calculator ───────────────────────────────────
+    const calculateLiveGrade = (assignmentsList) => {
+        const cats = {
+            Summative: { earned: 0, possible: 0 },
+            Formative: { earned: 0, possible: 0 },
+            Final: { earned: 0, possible: 0 }
+        };
+
+        (assignmentsList || []).forEach(a => {
+            const catStr = (a.category || a.type || '').toLowerCase();
+            const nameStr = (a.name || a.title || '').toLowerCase();
+
+            let type = 'Formative';
+            if (/summat|exam|test|quiz|assessment|frq|major/i.test(catStr) || /exam|test|major/i.test(nameStr)) {
+                type = 'Summative';
+            }
+            if (catStr === 'final' || catStr === 'final exam' || nameStr === 'final exam') {
+                type = 'Final';
+            }
+            if (/homework|classwork|daily|participation|bell|exit|formative/i.test(catStr)) {
+                type = 'Formative';
+            }
+
+            const s = parseFloat(a.score);
+            const t = parseFloat(a.total);
+            if (!isNaN(s) && !isNaN(t) && t > 0) {
+                cats[type].earned += s;
+                cats[type].possible += t;
+            }
         });
+
+        const sAvg = cats.Summative.possible > 0 ? (cats.Summative.earned / cats.Summative.possible) * 100 : null;
+        const fAvg = cats.Formative.possible > 0 ? (cats.Formative.earned / cats.Formative.possible) * 100 : null;
+        const feAvg = cats.Final.possible > 0 ? (cats.Final.earned / cats.Final.possible) * 100 : null;
+
+        let weight80 = 0;
+        if (sAvg !== null && fAvg !== null) weight80 = (sAvg * 0.7) + (fAvg * 0.3);
+        else if (sAvg !== null) weight80 = sAvg;
+        else if (fAvg !== null) weight80 = fAvg;
+        else return null;
+
+        if (feAvg !== null) return ((weight80 * 0.8) + (feAvg * 0.2)).toFixed(2);
+        return weight80.toFixed(2);
     };
 
     // ── Render: Detail view ─────────────────────────────────────
@@ -563,20 +676,42 @@ export default function GradebookScreen() {
         }
 
         const cls = selectedClass;
-        const letterColor = gradeColor(cls.grade, theme);
-        const letter = cls.letter || gradeLetter(cls.grade);
+
+        // Use dynamically calculated grade if hypothetical
+        const liveGradeNum = isHypothetical ? calculateLiveGrade(hypoAssignments) : cls.grade;
+        const displayGrade = liveGradeNum !== null ? liveGradeNum : 'N/A';
+        const letterColor = displayGrade !== 'N/A' ? gradeColor(parseFloat(displayGrade), theme) : theme.colors.border;
+        const letter = displayGrade !== 'N/A' ? gradeLetter(parseFloat(displayGrade)) : 'N/A';
+
         const chartData = getChartData();
 
         return (
             <View style={{ flex: 1 }}>
                 {/* Back button + class header */}
-                <TouchableOpacity
-                    style={styles.backRow}
-                    onPress={() => setSelectedClass(null)}
-                >
-                    <ChevronLeft size={13} color={theme.colors.ink3} />
-                    <Text style={styles.backText}>All Classes</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <TouchableOpacity
+                        style={styles.backRow}
+                        onPress={() => setSelectedClass(null)}
+                    >
+                        <ChevronLeft size={13} color={theme.colors.ink3} />
+                        <Text style={styles.backText}>All Classes</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.hypoToggle, isHypothetical && styles.hypoToggleActive]}
+                        onPress={() => {
+                            if (!isHypothetical) {
+                                setHypoAssignments(JSON.parse(JSON.stringify(cls.assignments || [])));
+                            }
+                            setIsHypothetical(!isHypothetical);
+                        }}
+                    >
+                        <Text style={[styles.hypoToggleText, isHypothetical && { color: theme.colors.blue }]}>What If Mode</Text>
+                        <View style={[styles.toggleContainer, isHypothetical && { backgroundColor: theme.colors.blue }]}>
+                            <View style={[styles.toggleCircle, isHypothetical && { transform: [{ translateX: 20 }] }]} />
+                        </View>
+                    </TouchableOpacity>
+                </View>
 
                 <View style={[styles.detailHeader, { borderLeftColor: letterColor, borderLeftWidth: 4 }]}>
                     <View style={{ flex: 1, paddingRight: 12 }}>
@@ -593,33 +728,40 @@ export default function GradebookScreen() {
                             <View style={styles.typeTag}>
                                 <Text style={styles.typeTagText}>GP {cls.wGP}W / {cls.uGP}U</Text>
                             </View>
+                            {isHypothetical && (
+                                <View style={[styles.typeTag, { backgroundColor: theme.colors.blue + '20', borderColor: theme.colors.blue }]}>
+                                    <Text style={[styles.typeTagText, { color: theme.colors.blue }]}>Hypothetical</Text>
+                                </View>
+                            )}
                         </View>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                         <Text style={[styles.detailLetter, { color: letterColor }]}>{letter}</Text>
-                        <Text style={[styles.detailPct, { color: letterColor }]}>{cls.grade}%</Text>
+                        <Text style={[styles.detailPct, { color: letterColor }]}>{displayGrade}{displayGrade !== 'N/A' && '%'}</Text>
                     </View>
                 </View>
 
                 {/* Tabs */}
-                <View style={styles.tabRow}>
-                    {['assignments', 'whatIf', 'target'].map((m, i) => (
-                        <TouchableOpacity
-                            key={m}
-                            style={[styles.tabBtn, viewMode === m && styles.tabBtnActive]}
-                            onPress={() => setViewMode(m)}
-                        >
-                            <Text style={[styles.tabText, viewMode === m && styles.tabTextActive]}>
-                                {['Assignments', 'What If?', 'Target'][i]}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+                {!isHypothetical && (
+                    <View style={styles.tabRow}>
+                        {['assignments', 'whatIf', 'target'].map((m, i) => (
+                            <TouchableOpacity
+                                key={m}
+                                style={[styles.tabBtn, viewMode === m && styles.tabBtnActive]}
+                                onPress={() => setViewMode(m)}
+                            >
+                                <Text style={[styles.tabText, viewMode === m && styles.tabTextActive]}>
+                                    {['Assignments', 'Quick Calc', 'Target'][i]}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
 
                 {/* Assignments */}
-                {viewMode === 'assignments' && (
+                {(viewMode === 'assignments' || isHypothetical) && (
                     <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 4 }}>
-                        {chartData && (
+                        {chartData && !isHypothetical && (
                             <View style={styles.chartContainer}>
                                 <View style={styles.chartHeader}>
                                     <Text style={styles.chartTitle}>Grade Trend</Text>
@@ -1067,6 +1209,11 @@ const getStyles = (theme) => StyleSheet.create({
     placeholderSub: { fontFamily: theme.fonts.m, color: theme.colors.ink4, fontSize: 12, textAlign: 'center', marginTop: 6, lineHeight: 18 },
     emptyDetail: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     emptyDetailIcon: { fontSize: 36, marginBottom: 12 },
+
+    // Hypothetical Toggle
+    hypoToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 6, paddingRight: 0, borderRadius: 20 },
+    hypoToggleActive: {},
+    hypoToggleText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
 
     // Category Selector (What If)
     catSelector: { flexDirection: 'row', gap: 6, marginBottom: 15 },
