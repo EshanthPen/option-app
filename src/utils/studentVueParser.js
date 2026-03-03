@@ -93,6 +93,9 @@ export const parseStudentVueGradebook = (xmlString) => {
         let xmlCourses = innerJson?.Gradebook?.Courses?.Course;
         if (!xmlCourses) return [];
 
+        // Check if the XML indicates which ReportingPeriod was actually fetched
+        const reportPeriodId = innerJson?.Gradebook?.ReportingPeriod?.['@_GradePeriod'];
+
         // If taking only 1 class, it might not be an array
         if (!Array.isArray(xmlCourses)) {
             xmlCourses = [xmlCourses];
@@ -114,25 +117,32 @@ export const parseStudentVueGradebook = (xmlString) => {
             if (marks) {
                 const marksList = Array.isArray(marks) ? marks : [marks];
 
-                // Try to find the most "relevant" active term.
-                // Fallback 1: Highest index with a valid score and non-zero assignments
-                // Fallback 2: The last one in the list (this was the original bug, often picking "Final Exam" or S1)
-                targetMark = marksList[marksList.length - 1];
+                // If the response specified a ReportPeriod, try to find the matching Mark by MarkName
+                if (reportPeriodId) {
+                    targetMark = marksList.find(m => m['@_MarkName'] === reportPeriodId);
+                }
 
-                // Heuristic: Pick the mark that actually has assignments, prioritizing later quarters (e.g Q3 over Q2)
-                for (let i = marksList.length - 1; i >= 0; i--) {
-                    const m = marksList[i];
-                    if (!m) continue;
+                if (!targetMark) {
+                    // Try to find the most "relevant" active term.
+                    // Fallback 1: Highest index with a valid score and non-zero assignments
+                    // Fallback 2: The last one in the list (this was the original bug, often picking "Final Exam" or S1)
+                    targetMark = marksList[marksList.length - 1];
 
-                    const hasScore = m['@_CalculatedScoreRaw'];
-                    const hasAssignments = m.Assignments?.Assignment;
-                    const markName = (m['@_MarkName'] || '').toUpperCase();
+                    // Heuristic: Pick the mark that actually has assignments, prioritizing later quarters (e.g Q3 over Q2)
+                    for (let i = marksList.length - 1; i >= 0; i--) {
+                        const m = marksList[i];
+                        if (!m) continue;
 
-                    // Avoid selecting "Final Exam" or "Semester" averages as the current active grade
-                    // if there's a Quarter grade available with assignments.
-                    if (hasScore && hasAssignments && !markName.includes('EXAM') && !markName.includes('SEMESTER')) {
-                        targetMark = m;
-                        break;
+                        const hasScore = m['@_CalculatedScoreRaw'];
+                        const hasAssignments = m.Assignments?.Assignment;
+                        const markName = (m['@_MarkName'] || '').toUpperCase();
+
+                        // Avoid selecting "Final Exam" or "Semester" averages as the current active grade
+                        // if there's a Quarter grade available with assignments.
+                        if (hasScore && hasAssignments && !markName.includes('EXAM') && !markName.includes('SEMESTER')) {
+                            targetMark = m;
+                            break;
+                        }
                     }
                 }
 
