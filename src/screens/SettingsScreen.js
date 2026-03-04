@@ -57,7 +57,10 @@ export default function SettingsScreen() {
         iosClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
         androidClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
         webClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
-        scopes: ['https://www.googleapis.com/auth/calendar.events'],
+        scopes: [
+            'https://www.googleapis.com/auth/calendar.events',
+            'https://www.googleapis.com/auth/userinfo.profile'
+        ],
         redirectUri,
     });
 
@@ -96,18 +99,33 @@ export default function SettingsScreen() {
     }, []);
 
     useEffect(() => {
-        if (response?.type === 'success') {
-            const token = response.authentication.accessToken;
+        const handleAuthCallback = async (token) => {
             setAccessToken(token);
             if (typeof window !== 'undefined') {
                 window.localStorage.setItem('googleAccessToken', token);
             }
-            AsyncStorage.setItem('googleAccessToken', token).then(() => {
+            try {
+                // Fetch User Profile Name
+                const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (profileRes.ok) {
+                    const profile = await profileRes.json();
+                    const name = profile.given_name || profile.name || 'User';
+                    await AsyncStorage.setItem('googleUserName', name);
+                }
+
+                await AsyncStorage.setItem('googleAccessToken', token);
                 if (typeof window !== 'undefined') window.alert("Success! Successfully linked your Google Account.");
                 else Alert.alert("Success", "Successfully linked your Google Account!");
-            }).catch(() => {
-                if (typeof window !== 'undefined') window.alert("Warning: Saved token to browser but native storage failed.");
-            });
+            } catch (err) {
+                console.warn('Failed to save Google Auth:', err);
+                if (typeof window !== 'undefined') window.alert("Warning: Authentication succeeded but profile save failed.");
+            }
+        };
+
+        if (response?.type === 'success') {
+            handleAuthCallback(response.authentication.accessToken);
         } else if (response?.type === 'error') {
             if (typeof window !== 'undefined') window.alert("Could not sign in right now. Note: Client IDs need to be configured.");
             else Alert.alert("Error", "Could not sign in right now. Note: Client IDs need to be configured.");

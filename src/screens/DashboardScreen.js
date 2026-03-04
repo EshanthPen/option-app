@@ -77,12 +77,14 @@ export default function DashboardScreen() {
                 try {
                     const raw = await AsyncStorage.getItem('studentVueGrades');
                     const pn = await AsyncStorage.getItem('studentVuePeriodName');
+                    const savedName = await AsyncStorage.getItem('googleUserName');
+
                     if (raw) setClasses(JSON.parse(raw));
                     if (pn) setPeriodName(pn);
+                    if (savedName) setUserName(savedName);
+
                 } catch (e) {
                     console.error(e);
-                } finally {
-                    setLoaded(true);
                 }
             };
             load();
