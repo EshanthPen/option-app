@@ -10,7 +10,7 @@
  * 
  * @param {Array} tasks - Array of task objects from Supabase (needs .urgency, .importance, .duration)
  * @param {Array} busyPeriods - Array of { start: Date, end: Date } from Google Calendar FreeBusy
- * @param {Object} workingHours - { startHour: 16, endHour: 22 } (E.g., 4 PM to 10 PM)
+ * @param {Object} workingHours - e.g. { 0: { start: 15, end: 22 }, ... 6: { start: 10, end: 23 } } (0=Mon...6=Sun)
  * @returns {Array} List of tasks with newly assigned `scheduled_start` and `scheduled_end` (ISO strings)
  */
 export const performSmartScheduling = (tasks, busyPeriods, workingHours) => {
@@ -36,12 +36,19 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours) => {
     const allBlocks = [...busyPeriods.map(bp => ({ start: new Date(bp.start), end: new Date(bp.end) }))];
 
     for (let d = new Date(scheduleWindowStart); d < scheduleWindowEnd; d.setDate(d.getDate() + 1)) {
+        // Convert JS getDay (0=Sun, 1=Mon) to our UI day index (0=Mon...6=Sun)
+        const jsDay = d.getDay();
+        const uiDayIndex = jsDay === 0 ? 6 : jsDay - 1;
+
+        // Fallback safely if workingHours structure is malformed
+        const dayConfig = workingHours[uiDayIndex] || { start: 15, end: 22 };
+
         // Block 1: Midnight to startHour (e.g., Sleep/School)
         const midnight = new Date(d);
         midnight.setHours(0, 0, 0, 0);
 
         const morningEnd = new Date(d);
-        morningEnd.setHours(workingHours.startHour, 0, 0, 0);
+        morningEnd.setHours(dayConfig.start, 0, 0, 0);
 
         if (morningEnd > midnight) {
             allBlocks.push({ start: midnight, end: morningEnd });
@@ -49,7 +56,7 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours) => {
 
         // Block 2: endHour to Midnight (e.g., Sleep)
         const eveningStart = new Date(d);
-        eveningStart.setHours(workingHours.endHour, 0, 0, 0);
+        eveningStart.setHours(dayConfig.end, 0, 0, 0);
 
         const nextMidnight = new Date(d);
         nextMidnight.setDate(nextMidnight.getDate() + 1);

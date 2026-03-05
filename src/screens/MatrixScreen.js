@@ -206,13 +206,27 @@ export default function MatrixScreen() {
                 return;
             }
 
-            // 2. Load Working Hours (Default to 3 PM - 10 PM if unset)
-            const startStr = await AsyncStorage.getItem('workingStartHour');
-            const endStr = await AsyncStorage.getItem('workingEndHour');
-            const workingHours = {
-                startHour: startStr ? parseInt(startStr) : 15,
-                endHour: endStr ? parseInt(endStr) : 22
-            };
+            // 2. Load Working Hours (7 days. 0=Mon, ..., 6=Sun visually)
+            const savedHours = await AsyncStorage.getItem('smartScheduleHours');
+            let workingHours;
+            if (savedHours) {
+                try {
+                    workingHours = JSON.parse(savedHours);
+                } catch (e) { console.error("Error parsing smart hours", e); }
+            }
+
+            if (!workingHours) {
+                // Fallback to old format
+                const startStr = await AsyncStorage.getItem('workingStartHour');
+                const endStr = await AsyncStorage.getItem('workingEndHour');
+                const s = startStr ? parseInt(startStr) : 15;
+                const e = endStr ? parseInt(endStr) : 22;
+                workingHours = {
+                    0: { start: s, end: e }, 1: { start: s, end: e }, 2: { start: s, end: e },
+                    3: { start: s, end: e }, 4: { start: s, end: e }, 5: { start: s, end: e },
+                    6: { start: s, end: e }
+                };
+            }
 
             // 3. Fetch Google Calendar constraints for the next 7 days
             const now = new Date();

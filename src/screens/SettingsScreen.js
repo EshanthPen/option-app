@@ -16,6 +16,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { parseStudentVueGradebook, parseStudentVuePeriods } from '../utils/studentVueParser';
 import { getDeviceId } from '../utils/auth';
+import WorkingHoursGraph from '../components/WorkingHoursGraph';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -39,9 +40,16 @@ export default function SettingsScreen() {
     const [isSchoologySyncing, setIsSchoologySyncing] = useState(false);
     const [isHelpVisible, setIsHelpVisible] = useState(false);
 
-    // Working Hours State
-    const [startHour, setStartHour] = useState('15'); // Default 3 PM
-    const [endHour, setEndHour] = useState('22'); // Default 10 PM
+    // Working Hours State (7 days. 0=Mon, ..., 6=Sun visually)
+    const [smartHours, setSmartHours] = useState({
+        0: { start: 15, end: 22 },
+        1: { start: 15, end: 22 },
+        2: { start: 15, end: 22 },
+        3: { start: 15, end: 22 },
+        4: { start: 15, end: 22 },
+        5: { start: 10, end: 23 },
+        6: { start: 10, end: 22 }
+    });
 
     // Auth State
     const [accessToken, setAccessToken] = useState(null);
@@ -84,6 +92,27 @@ export default function SettingsScreen() {
 
             const savedPass = await AsyncStorage.getItem('svPassword');
             if (savedPass) setSvPass(savedPass);
+
+            const savedHours = await AsyncStorage.getItem('smartScheduleHours');
+            if (savedHours) {
+                try {
+                    setSmartHours(JSON.parse(savedHours));
+                } catch (e) { console.error("Error parsing smart hours", e); }
+            } else {
+                // Fallback to legacy single strings if graph data doesn't exist yet
+                const oldStart = await AsyncStorage.getItem('workingStartHour');
+                const oldEnd = await AsyncStorage.getItem('workingEndHour');
+                if (oldStart && oldEnd) {
+                    const s = parseInt(oldStart) || 15;
+                    const e = parseInt(oldEnd) || 22;
+                    setSmartHours({
+                        0: { start: s, end: e }, 1: { start: s, end: e },
+                        2: { start: s, end: e }, 3: { start: s, end: e },
+                        4: { start: s, end: e }, 5: { start: s, end: e },
+                        6: { start: s, end: e }
+                    });
+                }
+            }
         };
         loadSettings();
     }, []);
@@ -166,15 +195,7 @@ export default function SettingsScreen() {
 
     const handleSaveWorkingHours = async () => {
         try {
-            const parsedStart = parseInt(startHour);
-            const parsedEnd = parseInt(endHour);
-            if (isNaN(parsedStart) || isNaN(parsedEnd) || parsedStart < 0 || parsedEnd > 24) {
-                if (Platform.OS === 'web') window.alert('Please enter valid 24-hour integers (0-24).');
-                else Alert.alert('Invalid Input', 'Please enter valid 24-hour integers (0-24).');
-                return;
-            }
-            await AsyncStorage.setItem('workingStartHour', startHour);
-            await AsyncStorage.setItem('workingEndHour', endHour);
+            await AsyncStorage.setItem('smartScheduleHours', JSON.stringify(smartHours));
             if (Platform.OS === 'web') window.alert('Saved: Smart Scheduling hours updated.');
             else Alert.alert('Saved!', 'Smart Scheduling hours updated.');
         } catch (error) {
@@ -767,30 +788,24 @@ export default function SettingsScreen() {
 
             <View style={styles.card}>
                 <Text style={styles.cardTitle}>Smart Scheduling</Text>
-                <Text style={styles.instructions}>Define your available working hours. The AI Scheduler will not place tasks outside this window (e.g. 15 for 3 PM, 22 for 10 PM).</Text>
+                <Text style={styles.instructions}>Drag the nodes to define your available working hours per day. The AI Scheduler will only place tasks between the green (Start) and blue (End) lines.</Text>
 
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 5 }}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginBottom: 8 }}>Start Hour (0-24)</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={startHour}
-                            onChangeText={setStartHour}
-                            keyboardType="numeric"
-                            placeholder="15"
-                            placeholderTextColor={theme.colors.ink3}
-                        />
+                <View style={{ marginTop: 20, marginBottom: 10 }}>
+                    <WorkingHoursGraph
+                        data={smartHours}
+                        onChange={setSmartHours}
+                        theme={theme}
+                    />
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 20 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: theme.colors.green }} />
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 }}>Start Time</Text>
                     </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginBottom: 8 }}>End Hour (0-24)</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={endHour}
-                            onChangeText={setEndHour}
-                            keyboardType="numeric"
-                            placeholder="22"
-                            placeholderTextColor={theme.colors.ink3}
-                        />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: theme.colors.blue }} />
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 }}>End Time</Text>
                     </View>
                 </View>
 
