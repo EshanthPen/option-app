@@ -90,11 +90,23 @@ export const parseStudentVueGradebook = (xmlString) => {
         // Parse the inner Gradebook XML explicitly
         const innerJson = parser.parse(gradebookXmlString);
 
-        let xmlCourses = innerJson?.Gradebook?.Courses?.Course;
-        if (!xmlCourses) return [];
+        // Extract Reporting Periods (Quarters/Semesters)
+        let xmlPeriods = innerJson?.Gradebook?.ReportingPeriods?.ReportingPeriod;
+        const formattedPeriods = [];
+        if (xmlPeriods) {
+            if (!Array.isArray(xmlPeriods)) xmlPeriods = [xmlPeriods];
+            xmlPeriods.forEach(p => {
+                formattedPeriods.push({
+                    index: parseInt(p['@_Index']),
+                    name: p['@_GradePeriod'],
+                    startDate: p['@_StartDate'],
+                    endDate: p['@_EndDate']
+                });
+            });
+        }
 
-        // Check if the XML indicates which ReportingPeriod was actually fetched
-        const reportPeriodId = innerJson?.Gradebook?.ReportingPeriod?.['@_GradePeriod'];
+        let xmlCourses = innerJson?.Gradebook?.Courses?.Course;
+        if (!xmlCourses) return { classes: [], periods: formattedPeriods };
 
         // If taking only 1 class, it might not be an array
         if (!Array.isArray(xmlCourses)) {
@@ -117,33 +129,25 @@ export const parseStudentVueGradebook = (xmlString) => {
             if (marks) {
                 const marksList = Array.isArray(marks) ? marks : [marks];
 
-                // If the response specified a ReportPeriod, try to find the matching Mark by MarkName
-                if (reportPeriodId) {
-                    targetMark = marksList.find(m => m['@_MarkName'] === reportPeriodId);
-                }
-
-                if (!targetMark) {
-                    // Try to find the most "relevant" active term.
-                    // Fallback 1: Highest index with a valid score and non-zero assignments
-                    // Fallback 2: The last one in the list (this was the original bug, often picking "Final Exam" or S1)
-                    targetMark = marksList[marksList.length - 1];
-
-                    // Heuristic: Pick the mark that actually has assignments, prioritizing later quarters (e.g Q3 over Q2)
-                    for (let i = marksList.length - 1; i >= 0; i--) {
-                        const m = marksList[i];
-                        if (!m) continue;
+                // Try to find the most "relevant" active term.
+                // We prioritize marks that have a score and assignments.
+                for (let i = marksList.length - 1; i >= 0; i--) {
+                    const m = marksList[i];
+                    if (!m) continue;
 
                         const hasScore = m['@_CalculatedScoreRaw'];
                         const hasAssignments = m.Assignments?.Assignment;
                         const markName = (m['@_MarkName'] || '').toUpperCase();
 
-                        // Avoid selecting "Final Exam" or "Semester" averages as the current active grade
-                        // if there's a Quarter grade available with assignments.
-                        if (hasScore && hasAssignments && !markName.includes('EXAM') && !markName.includes('SEMESTER')) {
-                            targetMark = m;
-                            break;
-                        }
+                    if (hasScore && hasAssignments && !markName.includes('EXAM') && !markName.includes('SEMESTER')) {
+                        targetMark = m;
+                        break;
                     }
+                }
+
+                // Fallback to the last mark if none matched the heuristic
+                if (!targetMark && marksList.length > 0) {
+                    targetMark = marksList[marksList.length - 1];
                 }
 
                 if (targetMark?.['@_CalculatedScoreRaw']) {
@@ -154,57 +158,56 @@ export const parseStudentVueGradebook = (xmlString) => {
             // Extract Assignments
             const formattedAssignments = [];
 
-            // Navigate to assignments (Marks -> Mark -> Assignments -> Assignment)
-            // Due to how schools configure it, assignments might be inside specific Marks.
-            // Let's only aggregate assignments from the specific TargetMark to ensure we only show active ones
-            let activeMarks = targetMark ? [targetMark] : [];
+            if (targetMark) {
+                let assignments = targetMark?.Assignments?.Assignment;
+                if (assignments) {
+                    if (!Array.isArray(assignments)) assignments = [assignments];
 
-            activeMarks.forEach(m => {
-                if (!m) return;
-                let assignments = m?.Assignments?.Assignment;
-                if (!assignments) return;
+                    assignments.forEach((asm, index) => {
+                        const pointsStr = asm['@_Points']; // e.g., "45.00 / 50.0000"
 
-                if (!Array.isArray(assignments)) assignments = [assignments];
-
-                assignments.forEach((asm, index) => {
-                    const pointsStr = asm['@_Points']; // e.g., "45.00 / 50.0000"
-
-                    let percentage = 0;
-                    if (pointsStr && pointsStr.includes('/')) {
-                        const parts = pointsStr.split('/');
-                        const earned = parseFloat(parts[0]);
-                        const pos = parseFloat(parts[1]);
-                        if (pos > 0 && !isNaN(earned)) {
-                            percentage = (earned / pos) * 100;
+                        let percentage = 0;
+                        let earned = 0;
+                        let total = 0;
+                        if (pointsStr && pointsStr.includes('/')) {
+                            const parts = pointsStr.split('/');
+                            earned = parseFloat(parts[0]);
+                            total = parseFloat(parts[1]);
+                            if (total > 0 && !isNaN(earned)) {
+                                percentage = (earned / total) * 100;
+                            }
                         }
-                    }
 
-                    formattedAssignments.push({
-                        id: asm['@_GradebookID'] || `${courseTitle}-asm-${index}`,
-                        title: asm['@_Measure'] || asm['@_Type'] || 'Assignment',
-                        score: parseFloat(percentage.toFixed(1)),
-                        // StudentVUE doesn't immediately expose assignment weights unless requested deeply.
-                        // Defaulting to 10 for the mock UI to function.
-                        weight: 10
+                        formattedAssignments.push({
+                            id: asm['@_GradebookID'] || `${courseTitle}-asm-${index}`,
+                            title: asm['@_Measure'] || asm['@_Type'] || 'Assignment',
+                            score: earned,
+                            total: total,
+                            percentage: parseFloat(percentage.toFixed(1)),
+                            date: asm['@_Date'] || '',
+                            category: asm['@_Type'] || 'Other'
+                        });
                     });
-                });
-            });
+                }
+            }
 
             // Put it all together into the format GradebookScreen expects
             formattedClasses.push({
                 id: course['@_ClassID'] || courseTitle,
                 name: courseTitle,
                 grade: currentGrade,
-                credits: 1.0,
-                isAP: isAP,
+                period: course['@_Period'] || '',
+                teacher: course['@_Staff'] || '',
+                room: course['@_Room'] || '',
+                type: isAP ? 'AP' : (courseTitle.includes(' HN') ? 'HN' : 'ST'),
                 assignments: formattedAssignments
             });
         });
 
-        return formattedClasses;
+        return { classes: formattedClasses, periods: formattedPeriods };
 
     } catch (err) {
         console.error("Error parsing StudentVUE XML:", err);
-        return [];
+        return { classes: [], periods: [] };
     }
 };

@@ -6,7 +6,7 @@ import {
 import { LineChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { ChevronDown, ChevronLeft, RefreshCw, ChevronRight, LayoutGrid, Calendar, Filter, Clock } from 'lucide-react-native';
+import { ChevronDown, ChevronLeft, RefreshCw, ChevronRight, LayoutGrid, Calendar, Filter, Clock, Wand2, FlaskConical } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { theme as staticTheme } from '../utils/theme';
 import { parseStudentVueGradebook } from '../utils/studentVueParser';
@@ -172,15 +172,15 @@ export default function GradebookScreen() {
                 throw new Error("Connected but no grade data was found. Your account may have no grades for this period.");
             }
 
-            const grades = parseStudentVueGradebook(xmlText);
+            const { classes: parsedClasses } = parseStudentVueGradebook(xmlText);
 
-            if (Array.isArray(grades) && grades.length > 0) {
-                setClasses(grades);
-                await AsyncStorage.setItem('studentVueGrades', JSON.stringify(grades));
+            if (parsedClasses && parsedClasses.length > 0) {
+                setClasses(parsedClasses);
+                await AsyncStorage.setItem('studentVueGrades', JSON.stringify(parsedClasses));
 
                 // Maintain the selected period info
                 const periods = JSON.parse(await AsyncStorage.getItem('studentVuePeriods') || '[]');
-                const periodName = periods.find(p => p.index === periodIndex)?.name || `Quarter ${periodIndex}`;
+                const periodName = periods.find(p => p.index === periodIndex)?.name || `Quarter ${periodIndex + 1}`;
 
                 setCurrentPeriodName(periodName);
                 setCurrentPeriodIndex(periodIndex);
@@ -365,7 +365,43 @@ export default function GradebookScreen() {
         };
     };
 
-    // ── Render: Period Picker Modal ─────────────────────────────
+    // ── Render: Quarter pills (inline) ──────────────────────────
+    const renderQuarterPills = () => {
+        if (availablePeriods.length === 0) return null;
+        return (
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginBottom: 12 }}
+                contentContainerStyle={{ gap: 6, paddingBottom: 2 }}
+            >
+                {availablePeriods.map((p) => {
+                    const isSelected = p.index === currentPeriodIndex;
+                    const isLoading = isSyncing && isSelected;
+                    return (
+                        <TouchableOpacity
+                            key={p.index}
+                            style={[
+                                styles.quarterPill,
+                                isSelected && styles.quarterPillActive,
+                            ]}
+                            onPress={() => syncPeriod(p.index)}
+                            disabled={isSyncing}
+                        >
+                            {isLoading ? (
+                                <ActivityIndicator size="small" color="#fff" style={{ marginRight: 4 }} />
+                            ) : null}
+                            <Text style={[styles.quarterPillText, isSelected && styles.quarterPillTextActive]}>
+                                {p.name}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </ScrollView>
+        );
+    };
+
+    // ── Render: Period Picker Modal (mobile fallback) ────────────
     const renderPeriodPicker = () => (
         <Modal
             visible={isPeriodPickerOpen}
@@ -698,7 +734,10 @@ export default function GradebookScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[styles.hypoToggle, isHypothetical && styles.hypoToggleActive]}
+                        style={[
+                            styles.hypoToggle,
+                            isHypothetical && styles.hypoToggleActive,
+                        ]}
                         onPress={() => {
                             if (!isHypothetical) {
                                 setHypoAssignments(JSON.parse(JSON.stringify(cls.assignments || [])));
@@ -706,10 +745,10 @@ export default function GradebookScreen() {
                             setIsHypothetical(!isHypothetical);
                         }}
                     >
-                        <Text style={[styles.hypoToggleText, isHypothetical && { color: theme.colors.blue }]}>What If Mode</Text>
-                        <View style={[styles.toggleContainer, isHypothetical && { backgroundColor: theme.colors.blue }]}>
-                            <View style={[styles.toggleCircle, isHypothetical && { transform: [{ translateX: 20 }] }]} />
-                        </View>
+                        <Wand2 size={13} color={isHypothetical ? '#fff' : theme.colors.ink3} />
+                        <Text style={[styles.hypoToggleText, isHypothetical && { color: '#fff' }]}>
+                            {isHypothetical ? 'What-If On' : 'What-If'}
+                        </Text>
                     </TouchableOpacity>
                 </View>
 
@@ -728,11 +767,6 @@ export default function GradebookScreen() {
                             <View style={styles.typeTag}>
                                 <Text style={styles.typeTagText}>GP {cls.wGP}W / {cls.uGP}U</Text>
                             </View>
-                            {isHypothetical && (
-                                <View style={[styles.typeTag, { backgroundColor: theme.colors.blue + '20', borderColor: theme.colors.blue }]}>
-                                    <Text style={[styles.typeTagText, { color: theme.colors.blue }]}>Hypothetical</Text>
-                                </View>
-                            )}
                         </View>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
@@ -755,6 +789,23 @@ export default function GradebookScreen() {
                                 </Text>
                             </TouchableOpacity>
                         ))}
+                    </View>
+                )}
+
+                {/* What-If active banner */}
+                {isHypothetical && (
+                    <View style={styles.whatIfBanner}>
+                        <Wand2 size={14} color="#fff" />
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.whatIfBannerTitle}>What-If Mode Active</Text>
+                            <Text style={styles.whatIfBannerSub}>Edit any score below — your projected grade updates live</Text>
+                        </View>
+                        <TouchableOpacity
+                            onPress={() => setIsHypothetical(false)}
+                            style={styles.whatIfBannerClose}
+                        >
+                            <Text style={styles.whatIfBannerCloseText}>Done</Text>
+                        </TouchableOpacity>
                     </View>
                 )}
 
@@ -947,30 +998,22 @@ export default function GradebookScreen() {
                         </View>
                     )}
                     <View style={styles.headerActions}>
-                        {/* Quarter selector */}
-                        <TouchableOpacity
-                            style={styles.periodSelector}
-                            onPress={() => setIsPeriodPickerOpen(true)}
-                        >
-                            <Text style={styles.periodSelectorText} numberOfLines={1}>
-                                {currentPeriodName || 'Select Quarter'}
-                            </Text>
-                            <ChevronDown size={14} color={theme.colors.ink3} />
-                        </TouchableOpacity>
-
                         {/* Refresh button */}
                         <TouchableOpacity
                             style={styles.syncBtn}
                             onPress={() => syncPeriod(currentPeriodIndex ?? 0)}
                             disabled={isSyncing}
                         >
-                            {isSyncing
+                            {isSyncing && availablePeriods.length === 0
                                 ? <ActivityIndicator size="small" color={theme.colors.ink} />
-                                : <RefreshCw size={16} color={theme.colors.ink} />
+                                : <RefreshCw size={16} color={isSyncing ? theme.colors.ink3 : theme.colors.ink} />
                             }
                         </TouchableOpacity>
                     </View>
                 </View>
+
+                {/* Quarter pills */}
+                {!selectedClass && renderQuarterPills()}
 
                 {/* GPA strip */}
                 {classes.length > 0 && (
@@ -1042,13 +1085,17 @@ const getStyles = (theme) => StyleSheet.create({
     headerBackBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
 
-    // Quarter selector
-    periodSelector: {
+    // Quarter pills
+    quarterPill: {
         flexDirection: 'row', alignItems: 'center', gap: 5,
         backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: theme.radii.r, paddingHorizontal: 10, paddingVertical: 8, maxWidth: 160,
+        borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7,
     },
-    periodSelectorText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink, flex: 1 },
+    quarterPillActive: {
+        backgroundColor: theme.colors.accent, borderColor: theme.colors.accent,
+    },
+    quarterPillText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink2, fontWeight: '600' },
+    quarterPillTextActive: { color: '#fff', fontWeight: '700' },
     syncBtn: {
         backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
         borderRadius: theme.radii.r, padding: 8, alignItems: 'center', justifyContent: 'center',
@@ -1111,7 +1158,7 @@ const getStyles = (theme) => StyleSheet.create({
     // Type tags
     typeTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 3, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
     typeTagAP: { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink },
-    typeTagHN: { backgroundColor: '#4e4c47', borderColor: '#4e4c47' },
+    typeTagHN: { backgroundColor: theme.colors.ink2, borderColor: theme.colors.ink2 },
     typeTagText: { fontFamily: theme.fonts.m, fontSize: 8, fontWeight: '600', color: theme.colors.ink2, letterSpacing: 0.5, textTransform: 'uppercase' },
 
     // Detail view
@@ -1131,7 +1178,7 @@ const getStyles = (theme) => StyleSheet.create({
     // Tabs
     tabRow: { flexDirection: 'row', backgroundColor: theme.colors.surface2, borderRadius: theme.radii.lg, padding: 3, marginBottom: 12, gap: 3 },
     tabBtn: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: theme.radii.r },
-    tabBtnActive: { backgroundColor: theme.colors.surface, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
+    tabBtnActive: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
     tabText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 },
     tabTextActive: { color: theme.colors.ink, fontWeight: '700' },
 
@@ -1170,11 +1217,11 @@ const getStyles = (theme) => StyleSheet.create({
     googleBtnText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 15, fontWeight: '600' },
 
     actionBtn: {
-        backgroundColor: '#FFFFFF', paddingVertical: 14, paddingHorizontal: 24,
+        backgroundColor: theme.colors.surface, paddingVertical: 14, paddingHorizontal: 24,
         borderRadius: theme.radii.r, alignItems: 'center', justifyContent: 'center',
-        borderWidth: 1, borderColor: '#000000',
+        borderWidth: 1, borderColor: theme.colors.border,
     },
-    actionBtnText: { color: '#000000', fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
+    actionBtnText: { color: theme.colors.ink, fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
 
     actionBtnLight: {
         backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
@@ -1210,15 +1257,33 @@ const getStyles = (theme) => StyleSheet.create({
     emptyDetail: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     emptyDetailIcon: { fontSize: 36, marginBottom: 12 },
 
-    // Hypothetical Toggle
-    hypoToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 6, paddingRight: 0, borderRadius: 20 },
-    hypoToggleActive: {},
-    hypoToggleText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+    // Hypothetical Toggle / What-If
+    hypoToggle: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        paddingVertical: 7, paddingHorizontal: 12,
+        borderRadius: 20, borderWidth: 1,
+        borderColor: theme.colors.border, backgroundColor: theme.colors.surface,
+    },
+    hypoToggleActive: {
+        backgroundColor: theme.colors.accent, borderColor: theme.colors.accent,
+    },
+    hypoToggleText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, fontWeight: '600', letterSpacing: 0.2 },
+
+    // What-If active banner
+    whatIfBanner: {
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        backgroundColor: theme.colors.accent, borderRadius: theme.radii.r,
+        padding: 12, marginBottom: 10,
+    },
+    whatIfBannerTitle: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '700', color: '#fff' },
+    whatIfBannerSub: { fontFamily: theme.fonts.m, fontSize: 10, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
+    whatIfBannerClose: { backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 20 },
+    whatIfBannerCloseText: { fontFamily: theme.fonts.m, fontSize: 11, color: '#fff', fontWeight: '700' },
 
     // Category Selector (What If)
     catSelector: { flexDirection: 'row', gap: 6, marginBottom: 15 },
     catBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: theme.radii.r, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
-    catBtnActive: { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink },
+    catBtnActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
     catBtnText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink2 },
     catBtnTextActive: { color: '#fff', fontWeight: '700' },
     resultDiff: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },

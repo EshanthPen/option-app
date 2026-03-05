@@ -65,7 +65,8 @@ export default function DashboardScreen() {
     const [classes, setClasses] = useState([]);
     const [periodName, setPeriodName] = useState('');
     const [greeting, setGreeting] = useState(getGreeting());
-    const [userName, setUserName] = useState('Joshua'); // Pull from storage if exists later
+    const [userName, setUserName] = useState('Student');
+    const [loaded, setLoaded] = useState(false);
     const focusScoreNum = (() => {
         // Mock score for now
         return 88;
@@ -77,12 +78,10 @@ export default function DashboardScreen() {
                 try {
                     const raw = await AsyncStorage.getItem('studentVueGrades');
                     const pn = await AsyncStorage.getItem('studentVuePeriodName');
-                    const savedName = await AsyncStorage.getItem('googleUserName');
-
+                    const savedName = await AsyncStorage.getItem('userName');
                     if (raw) setClasses(JSON.parse(raw));
                     if (pn) setPeriodName(pn);
                     if (savedName) setUserName(savedName);
-
                 } catch (e) {
                     console.error(e);
                 }

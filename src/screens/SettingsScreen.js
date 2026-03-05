@@ -25,6 +25,7 @@ export default function SettingsScreen() {
     const navigation = useNavigation();
     const [schoologyUrl, setSchoologyUrl] = useState('');
     const [googleUrl, setGoogleUrl] = useState('');
+    const [userName, setUserName] = useState('');
 
     // StudentVUE State
     const [svUser, setSvUser] = useState('');
@@ -65,7 +66,7 @@ export default function SettingsScreen() {
     });
 
     useEffect(() => {
-        const loadToken = async () => {
+        const loadSettings = async () => {
             let storedToken = await AsyncStorage.getItem('googleAccessToken');
             if (!storedToken && typeof window !== 'undefined') {
                 storedToken = window.localStorage.getItem('googleAccessToken');
@@ -75,14 +76,22 @@ export default function SettingsScreen() {
             const savedSchoology = await AsyncStorage.getItem('schoologyUrl');
             if (savedSchoology) setSchoologyUrl(savedSchoology);
 
-            const savedStart = await AsyncStorage.getItem('workingStartHour');
-            if (savedStart) setStartHour(savedStart);
+            const savedName = await AsyncStorage.getItem('userName');
+            if (savedName) setUserName(savedName);
 
-            const savedEnd = await AsyncStorage.getItem('workingEndHour');
-            if (savedEnd) setEndHour(savedEnd);
+            const savedUser = await AsyncStorage.getItem('svUsername');
+            if (savedUser) setSvUser(savedUser);
+
+            const savedPass = await AsyncStorage.getItem('svPassword');
+            if (savedPass) setSvPass(savedPass);
         };
-        loadToken();
+        loadSettings();
     }, []);
+
+    const handleSaveName = async (name) => {
+        setUserName(name);
+        await AsyncStorage.setItem('userName', name);
+    };
 
     useEffect(() => {
         if (typeof window !== 'undefined' && window.location.hash) {
@@ -182,9 +191,9 @@ export default function SettingsScreen() {
         setIsSchoologySyncing(true);
 
         // Robust URL Extraction: Find anything that looks like a calendar link
-        // This regex looks for webcal or http(s) links that contain '.ics'
+        // This regex looks for webcal or http(s) links that contain '.ics' OR the schoology /calendar/feed/ format
         const input = schoologyUrl.trim();
-        const urlRegex = /(?:webcal|https?):\/\/[^\s"'<>]+\.ics[^\s"'<>]*|https?:\/\/[^\s"'<>]+\/calendar\/feed\/ical\/[^\s"'<>]+/gi;
+        const urlRegex = /(?:webcal|https?):\/\/[^\s"'<>]+(?:\.(?:ics|php)[^\s"'<>]*|\/calendar\/feed\/ical\/[^\s"'<>]*)/gi;
         const matches = input.match(urlRegex);
 
         let cleanUrl = matches ? matches[matches.length - 1] : input;
@@ -194,7 +203,7 @@ export default function SettingsScreen() {
             cleanUrl = 'https://' + cleanUrl.split('http').pop().replace(/^\/+/, '');
         }
 
-        let fetchUrl = cleanUrl.replace(/^webcal:\/\//, 'https://');
+        let fetchUrl = cleanUrl.replace(/^webcal:\/\//i, 'https://');
 
         // Use absolute URL for web environment to ensure proxy is reached correctly
         const baseUrl = Platform.OS === 'web' ? window.location.origin : 'http://localhost:8081';
@@ -202,18 +211,33 @@ export default function SettingsScreen() {
 
         try {
             let icsData = '';
+            let response;
             try {
-                const response = await fetch(proxyUrl);
-                if (!response.ok) throw new Error('Proxy failed');
+                response = await fetch(proxyUrl);
+                if (!response.ok) {
+                    const errorJson = await response.json().catch(() => ({}));
+                    throw new Error(errorJson.details || `Proxy returned ${response.status}`);
+                }
                 icsData = await response.text();
             } catch (proxyErr) {
+                console.warn('Proxy fetch failed, trying direct:', proxyErr);
                 const directResponse = await fetch(fetchUrl);
-                if (!directResponse.ok) throw new Error('Direct fetch failed');
+                if (!directResponse.ok) throw new Error(`Direct fetch failed: ${directResponse.status}`);
                 icsData = await directResponse.text();
             }
 
-            if (!icsData || !icsData.includes('BEGIN:VCALENDAR')) {
-                throw new Error('No valid calendar data (BEGIN:VCALENDAR missing). If this is a Schoology link, ensure it starts with https://schoology.your-school.org/calendar/feed/...');
+            if (!icsData) {
+                throw new Error('Received empty response from Schoology.');
+            }
+
+            if (icsData.includes('<html') || icsData.includes('<!DOCTYPE html')) {
+                let msg = 'Schoology is returning a login page or error page instead of calendar data.\n\n';
+                msg += 'Please ensure you copied the "Private Link" URL from Schoology\'s "Calendar Export" settings.';
+                throw new Error(msg);
+            }
+
+            if (!icsData.includes('BEGIN:VCALENDAR')) {
+                throw new Error('The link did not contain valid calendar data (BEGIN:VCALENDAR missing). Ensure this is a Schoology /calendar/feed/... link.');
             }
 
             const jcalData = ICAL.parse(icsData);
@@ -328,37 +352,15 @@ export default function SettingsScreen() {
             const xmlText = await response.text();
 
             if (xmlText.includes('Gradebook') || xmlText.includes('RT_ERROR') === false) {
-                const { periods, currentPeriodIndex, currentPeriodName } = parseStudentVuePeriods(xmlText);
-
-                let finalXmlText = xmlText;
-
-                if (currentPeriodIndex > 0) {
-                    const secondPayload = soapPayload.replace('<ReportPeriod>0</ReportPeriod>', `<ReportPeriod>${currentPeriodIndex}</ReportPeriod>`);
-                    const secondResponse = await fetch(proxyEndpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload: secondPayload })
-                    });
-                    if (secondResponse.ok) {
-                        const secondText = await secondResponse.text();
-                        if (secondText.includes('Gradebook')) {
-                            finalXmlText = secondText;
-                        }
-                    }
-                }
-
-                const formattedClasses = parseStudentVueGradebook(finalXmlText);
+                const { classes: formattedClasses, periods } = parseStudentVueGradebook(xmlText);
                 if (formattedClasses && formattedClasses.length > 0) {
                     await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
-
                     if (periods && periods.length > 0) {
                         await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(periods));
-                        await AsyncStorage.setItem('studentVuePeriodName', currentPeriodName || 'Current Quarter');
-                        await AsyncStorage.setItem('studentVuePeriodIndex', String(currentPeriodIndex || 0));
-                    } else {
-                        await AsyncStorage.removeItem('studentVuePeriods');
-                        await AsyncStorage.setItem('studentVuePeriodName', 'Current Quarter');
-                        await AsyncStorage.setItem('studentVuePeriodIndex', '0');
+                        // Set current period to the last one by default if it's the first sync
+                        const lastPeriod = periods[periods.length - 1];
+                        await AsyncStorage.setItem('studentVuePeriodName', lastPeriod.name);
+                        await AsyncStorage.setItem('studentVuePeriodIndex', String(lastPeriod.index));
                     }
 
                     const totalAssignments = formattedClasses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
@@ -463,7 +465,19 @@ export default function SettingsScreen() {
             </View>
 
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Appearance</Text>
+                <Text style={styles.sectionTitle}>Profile</Text>
+                <View style={[styles.card, { paddingBottom: 16 }]}>
+                    <Text style={styles.label}>Display Name</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="What should we call you?"
+                        placeholderTextColor={theme.colors.ink3}
+                        value={userName}
+                        onChangeText={handleSaveName}
+                    />
+                </View>
+
+                <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Appearance</Text>
                 <TouchableOpacity
                     style={styles.settingRow}
                     onPress={toggleTheme}
