@@ -69,7 +69,25 @@ export default function MatrixScreen() {
     const fetchTasks = async (idToUse = deviceId) => {
         if (!idToUse) return;
         const { data, error } = await supabase.from('tasks').select('*').eq('user_id', idToUse).order('created_at', { ascending: false });
-        if (data) setTasks(data);
+
+        // Local state augmentation for columns missing in Supabase schema
+        let worktimes = [];
+        let plannedIds = [];
+        try {
+            const wtStr = await AsyncStorage.getItem('@option_app_worktimes');
+            const plStr = await AsyncStorage.getItem('@option_app_planned_assignments');
+            if (wtStr) worktimes = JSON.parse(wtStr);
+            if (plStr) plannedIds = JSON.parse(plStr);
+        } catch (e) { console.error('Error loading local data', e); }
+
+        if (data) {
+            const augmentedData = data.map(t => ({
+                ...t,
+                type: 'assignment',
+                is_planned: plannedIds.includes(t.id)
+            }));
+            setTasks([...worktimes, ...augmentedData]);
+        }
     };
 
     const handleAddTask = async () => {
@@ -82,8 +100,6 @@ export default function MatrixScreen() {
             duration: parseInt(duration) || 60,
             due_date: taskDate,
             source: 'manual',
-            type: 'assignment',
-            is_planned: false,
             user_id: deviceId
         };
         try {
@@ -156,8 +172,6 @@ export default function MatrixScreen() {
                     duration: 60,
                     due_date: dueDate.toISOString().split('T')[0],
                     source: 'schoology_import',
-                    type: 'assignment',
-                    is_planned: false,
                     user_id: deviceId
                 };
             }).filter(t => t !== null);
@@ -184,8 +198,20 @@ export default function MatrixScreen() {
         if (selectedTaskIds.length === 0) return;
         setSaving(true);
         try {
-            const { error } = await supabase.from('tasks').delete().in('id', selectedTaskIds);
-            if (error) throw error;
+            const supabaseIds = selectedTaskIds.filter(id => !String(id).startsWith('wt_'));
+            const localIds = selectedTaskIds.filter(id => String(id).startsWith('wt_'));
+
+            if (supabaseIds.length > 0) {
+                const { error } = await supabase.from('tasks').delete().in('id', supabaseIds);
+                if (error) throw error;
+            }
+            if (localIds.length > 0) {
+                const wtStr = await AsyncStorage.getItem('@option_app_worktimes');
+                let existingWt = wtStr ? JSON.parse(wtStr) : [];
+                existingWt = existingWt.filter(t => !localIds.includes(t.id));
+                await AsyncStorage.setItem('@option_app_worktimes', JSON.stringify(existingWt));
+            }
+
             setTasks(prev => prev.filter(t => !selectedTaskIds.includes(t.id)));
             setSelectedTaskIds([]);
         } catch (error) {
@@ -249,6 +275,7 @@ export default function MatrixScreen() {
 
             let successCount = 0;
             const originalIdsToUpdate = [];
+            const newWorktimes = [];
 
             for (const worktimeTask of optimizedTasks) {
                 // Save to Google Calendar
@@ -262,22 +289,32 @@ export default function MatrixScreen() {
                 const calSuccess = await createGoogleCalendarEvent(token, event);
 
                 if (calSuccess) {
-                    // Save the new worktime task to Supabase
-                    const { data: insertedData, error: insertError } = await supabase.from('tasks').insert([worktimeTask]).select();
-                    if (!insertError) {
-                        successCount++;
-                        if (worktimeTask.parent_task_id && !originalIdsToUpdate.includes(worktimeTask.parent_task_id)) {
-                            originalIdsToUpdate.push(worktimeTask.parent_task_id);
-                        }
-                    } else {
-                        console.error('Failed to insert worktime task:', insertError);
+                    // Save locally instead of Supabase to avoid schema conflicts
+                    worktimeTask.id = 'wt_' + Date.now() + Math.random().toString(36).substr(2, 9);
+                    newWorktimes.push(worktimeTask);
+                    successCount++;
+
+                    if (worktimeTask.parent_task_id && !originalIdsToUpdate.includes(worktimeTask.parent_task_id)) {
+                        originalIdsToUpdate.push(worktimeTask.parent_task_id);
                     }
                 }
             }
 
-            // Mark the parent assignments as planned so they aren't scheduled again
+            if (newWorktimes.length > 0) {
+                try {
+                    const wtStr = await AsyncStorage.getItem('@option_app_worktimes');
+                    const existingWt = wtStr ? JSON.parse(wtStr) : [];
+                    await AsyncStorage.setItem('@option_app_worktimes', JSON.stringify([...existingWt, ...newWorktimes]));
+                } catch (e) { console.error('Local save error', e); }
+            }
+
+            // Mark the parent assignments as planned via local store
             if (originalIdsToUpdate.length > 0) {
-                await supabase.from('tasks').update({ is_planned: true }).in('id', originalIdsToUpdate);
+                try {
+                    const plStr = await AsyncStorage.getItem('@option_app_planned_assignments');
+                    const existingPl = plStr ? JSON.parse(plStr) : [];
+                    await AsyncStorage.setItem('@option_app_planned_assignments', JSON.stringify([...new Set([...existingPl, ...originalIdsToUpdate])]));
+                } catch (e) { console.error('Local save error', e); }
             }
 
             // Reload visual state completely so users see the times
