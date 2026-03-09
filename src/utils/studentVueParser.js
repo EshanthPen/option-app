@@ -11,7 +11,7 @@ export const parseStudentVuePeriods = (xmlString) => {
         gradebookXmlString = gradebookXmlString.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
         const innerJson = parser.parse(gradebookXmlString);
 
-        let reportPeriods = innerJson?.Gradebook?.ReportingPeriods?.ReportPeriod;
+        let reportPeriods = innerJson?.Gradebook?.ReportingPeriods?.ReportPeriod || innerJson?.Gradebook?.ReportingPeriods?.ReportingPeriod;
         let periods = [];
         if (reportPeriods) {
             if (!Array.isArray(reportPeriods)) reportPeriods = [reportPeriods];
@@ -91,14 +91,14 @@ export const parseStudentVueGradebook = (xmlString) => {
         const innerJson = parser.parse(gradebookXmlString);
 
         // Extract Reporting Periods (Quarters/Semesters)
-        let xmlPeriods = innerJson?.Gradebook?.ReportingPeriods?.ReportingPeriod;
+        let xmlPeriods = innerJson?.Gradebook?.ReportingPeriods?.ReportPeriod || innerJson?.Gradebook?.ReportingPeriods?.ReportingPeriod;
         const formattedPeriods = [];
         if (xmlPeriods) {
             if (!Array.isArray(xmlPeriods)) xmlPeriods = [xmlPeriods];
             xmlPeriods.forEach(p => {
                 formattedPeriods.push({
                     index: parseInt(p['@_Index']),
-                    name: p['@_GradePeriod'],
+                    name: p['@_GradePeriod'] || p['@_MarkingPeriod'] || `Quarter ${p['@_Index']}`,
                     startDate: p['@_StartDate'],
                     endDate: p['@_EndDate']
                 });
@@ -135,9 +135,9 @@ export const parseStudentVueGradebook = (xmlString) => {
                     const m = marksList[i];
                     if (!m) continue;
 
-                        const hasScore = m['@_CalculatedScoreRaw'];
-                        const hasAssignments = m.Assignments?.Assignment;
-                        const markName = (m['@_MarkName'] || '').toUpperCase();
+                    const hasScore = m['@_CalculatedScoreRaw'];
+                    const hasAssignments = m.Assignments?.Assignment;
+                    const markName = (m['@_MarkName'] || '').toUpperCase();
 
                     if (hasScore && hasAssignments && !markName.includes('EXAM') && !markName.includes('SEMESTER')) {
                         targetMark = m;

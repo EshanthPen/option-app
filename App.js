@@ -44,6 +44,7 @@ export default function App() {
     'InstrumentSans-SemiBold': InstrumentSans_600SemiBold,
     'InstrumentSans-Bold': InstrumentSans_700Bold,
     'Chewy': Chewy_400Regular,
+    'SourGummy': require('./assets/fonts/SourGummy.ttf'),
   });
 
   if (!fontsLoaded) {

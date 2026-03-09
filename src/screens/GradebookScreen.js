@@ -160,11 +160,16 @@ export default function GradebookScreen() {
             if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.cause || res.statusText); }
             const xml = await res.text();
             if (!xml.includes('Gradebook') && xml.includes('RT_ERROR')) throw new Error('No grade data for this period.');
-            const { classes: parsed } = parseStudentVueGradebook(xml);
+            const { classes: parsed, periods: fetchedPeriods } = parseStudentVueGradebook(xml);
             if (parsed?.length > 0) {
                 setSvClasses(parsed);
                 await AsyncStorage.setItem('studentVueGrades', JSON.stringify(parsed));
-                const ps = JSON.parse(await AsyncStorage.getItem('studentVuePeriods') || '[]');
+                let ps = JSON.parse(await AsyncStorage.getItem('studentVuePeriods') || '[]');
+                if (ps.length === 0 && fetchedPeriods?.length > 0) {
+                    await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(fetchedPeriods));
+                    setPeriods(fetchedPeriods);
+                    ps = fetchedPeriods;
+                }
                 const pName = ps.find(p => p.index === periodIndex)?.name || `Quarter ${periodIndex + 1}`;
                 setCurPeriodName(pName); setCurPeriodIdx(periodIndex);
                 await AsyncStorage.setItem('studentVuePeriodName', pName);
