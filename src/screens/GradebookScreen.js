@@ -1,1291 +1,786 @@
 import React, { useState, useCallback } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, FlatList,
-    TextInput, Alert, ScrollView, Dimensions, Modal, ActivityIndicator
+    View, Text, StyleSheet, TouchableOpacity, TextInput,
+    Alert, ScrollView, Modal, ActivityIndicator, Platform,
+    KeyboardAvoidingView, Pressable
 } from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { ChevronDown, ChevronLeft, RefreshCw, ChevronRight, LayoutGrid, Calendar, Filter, Clock, Wand2, FlaskConical } from 'lucide-react-native';
+import { ChevronLeft, RefreshCw, Plus, Wand2, Target, BookOpen, Trash2 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
-import { theme as staticTheme } from '../utils/theme';
 import { parseStudentVueGradebook } from '../utils/studentVueParser';
-import { useNavigation } from '@react-navigation/native';
 
-const screenWidth = Dimensions.get('window').width;
-
-// ── Color helpers ────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────
 const gradeColor = (pct, theme) => {
     if (pct >= 90) return theme.colors.green;
     if (pct >= 80) return theme.colors.blue;
     if (pct >= 70) return theme.colors.orange;
     return theme.colors.red;
 };
-
 const gradeLetter = (pct) => {
-    if (pct >= 93) return 'A';
-    if (pct >= 90) return 'A-';
-    if (pct >= 87) return 'B+';
-    if (pct >= 83) return 'B';
-    if (pct >= 80) return 'B-';
-    if (pct >= 77) return 'C+';
-    if (pct >= 73) return 'C';
-    if (pct >= 70) return 'C-';
+    if (pct >= 93) return 'A'; if (pct >= 90) return 'A-';
+    if (pct >= 87) return 'B+'; if (pct >= 83) return 'B';
+    if (pct >= 80) return 'B-'; if (pct >= 77) return 'C+';
+    if (pct >= 73) return 'C'; if (pct >= 70) return 'C-';
     return 'D';
 };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+
+// ── Grade calculation (weighted: Summative 70%, Formative 30%, Final 20% of total) ──
+const calcGrade = (assignments) => {
+    const cats = { Summative: { e: 0, p: 0 }, Formative: { e: 0, p: 0 }, Final: { e: 0, p: 0 } };
+    (assignments || []).forEach(a => {
+        const s = parseFloat(a.score), t = parseFloat(a.total);
+        if (isNaN(s) || isNaN(t) || t <= 0) return;
+        const cat = a.category || 'Formative';
+        if (cats[cat]) { cats[cat].e += s; cats[cat].p += t; }
+        else { cats.Formative.e += s; cats.Formative.p += t; }
+    });
+    const sAvg = cats.Summative.p > 0 ? (cats.Summative.e / cats.Summative.p) * 100 : null;
+    const fAvg = cats.Formative.p > 0 ? (cats.Formative.e / cats.Formative.p) * 100 : null;
+    const feAvg = cats.Final.p > 0 ? (cats.Final.e / cats.Final.p) * 100 : null;
+    let w = sAvg !== null && fAvg !== null ? sAvg * 0.7 + fAvg * 0.3 : sAvg ?? fAvg ?? null;
+    if (w === null) return null;
+    return feAvg !== null ? w * 0.8 + feAvg * 0.2 : w;
+};
+
+const buildGP = (pct, type) => {
+    const base = pct >= 93 ? 4 : pct >= 90 ? 3.7 : pct >= 87 ? 3.3 : pct >= 83 ? 3 : pct >= 80 ? 2.7 : pct >= 77 ? 2.3 : pct >= 73 ? 2 : pct >= 70 ? 1.7 : 1;
+    const bonus = type === 'AP' ? 1 : type === 'HN' ? 0.5 : 0;
+    return { wGP: +(base + bonus).toFixed(1), uGP: +base.toFixed(1) };
+};
+
+// ── Storage helpers ───────────────────────────────────────────
+const MANUAL_KEY = 'manualGrades';
+const saveManual = async (classes) => AsyncStorage.setItem(MANUAL_KEY, JSON.stringify(classes));
+const loadManual = async () => JSON.parse(await AsyncStorage.getItem(MANUAL_KEY) || '[]');
 
 export default function GradebookScreen() {
-    const { theme, isDarkMode } = useTheme();
-    const styles = getStyles(theme);
-    const navigation = useNavigation();
-    const [classes, setClasses] = useState([]);
+    const { theme } = useTheme();
+    const S = getStyles(theme);
+
+    // Core state
+    const [svClasses, setSvClasses] = useState([]);   // StudentVUE synced
+    const [manClasses, setManClasses] = useState([]); // Manual entries
+    const [periods, setPeriods] = useState([]);
+    const [curPeriodIdx, setCurPeriodIdx] = useState(null);
+    const [curPeriodName, setCurPeriodName] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
+
+    // Navigation
     const [selectedClass, setSelectedClass] = useState(null);
-    const [viewMode, setViewMode] = useState('assignments'); // 'assignments' | 'whatIf' | 'target'
-    const [interval, setInterval] = useState('3m'); // '1m', '3m', '6m', 'all'
+    const [viewMode, setViewMode] = useState('assignments');
 
-    // ── Period / Quarter state ──────────────────────────────────
-    const [availablePeriods, setAvailablePeriods] = useState([]);
-    const [currentPeriodIndex, setCurrentPeriodIndex] = useState(null);
-    const [currentPeriodName, setCurrentPeriodName] = useState('');
-    const [isPeriodPickerOpen, setIsPeriodPickerOpen] = useState(false);
+    // What-If
+    const [wiScore, setWiScore] = useState('');
+    const [wiTotal, setWiTotal] = useState('');
+    const [wiCat, setWiCat] = useState('Summative');
+    const [wiResult, setWiResult] = useState(null);
 
-    // ── What If state ───────────────────────────────────────────
+    // Target
+    const [tGrade, setTGrade] = useState('');
+    const [tPts, setTPts] = useState('');
+    const [tCat, setTCat] = useState('Summative');
+    const [tResult, setTResult] = useState(null);
+
+    // Modals
+    const [showAddClass, setShowAddClass] = useState(false);
+    const [showAddAsgn, setShowAddAsgn] = useState(false);
+    const [newClassName, setNewClassName] = useState('');
+    const [newClassTeacher, setNewClassTeacher] = useState('');
+    const [newClassType, setNewClassType] = useState('ST');
+    const [newAsgnName, setNewAsgnName] = useState('');
     const [newAsgnScore, setNewAsgnScore] = useState('');
-    const [newAsgnTotal, setNewAsgnTotal] = useState('');
-    const [newAsgnCat, setNewAsgnCat] = useState('Summative'); // Summative | Formative | Final
-    const [hypotheticalResult, setHypotheticalResult] = useState(null);
+    const [newAsgnTotal, setNewAsgnTotal] = useState('100');
+    const [newAsgnCat, setNewAsgnCat] = useState('Summative');
+    const [newAsgnDate, setNewAsgnDate] = useState('');
 
-    // ── Hypothetical Edit Mode state ────────────────────────────
-    const [isHypothetical, setIsHypothetical] = useState(false);
-    const [hypoAssignments, setHypoAssignments] = useState([]);
+    // Load data
+    useFocusEffect(useCallback(() => {
+        (async () => {
+            try {
+                const [svRaw, perRaw, pName, pIdx, manRaw] = await Promise.all([
+                    AsyncStorage.getItem('studentVueGrades'),
+                    AsyncStorage.getItem('studentVuePeriods'),
+                    AsyncStorage.getItem('studentVuePeriodName'),
+                    AsyncStorage.getItem('studentVuePeriodIndex'),
+                    AsyncStorage.getItem(MANUAL_KEY),
+                ]);
+                if (svRaw) setSvClasses(JSON.parse(svRaw));
+                if (perRaw) setPeriods(JSON.parse(perRaw));
+                if (pName) setCurPeriodName(pName);
+                if (pIdx !== null) setCurPeriodIdx(parseInt(pIdx));
+                if (manRaw) setManClasses(JSON.parse(manRaw));
+            } catch (e) { console.error(e); }
+            finally { setIsLoading(false); }
+        })();
+    }, []));
 
-    // ── Target state ────────────────────────────────────────────
-    const [targetGrade, setTargetGrade] = useState('');
-    const [targetCat, setTargetCat] = useState('Summative');
-    const [targetPossible, setTargetPossible] = useState('');
-    const [requiredScore, setRequiredScore] = useState(null);
-    const [selectedGraphAsgn, setSelectedGraphAsgn] = useState(null);
+    const allClasses = [...svClasses, ...manClasses];
 
-    // ── Load grades from AsyncStorage (or trigger sync) ─────────
-    useFocusEffect(
-        useCallback(() => {
-            const loadGrades = async () => {
-                try {
-                    const storedGrades = await AsyncStorage.getItem('studentVueGrades');
-                    const storedPeriods = await AsyncStorage.getItem('studentVuePeriods');
-                    const storedPeriodName = await AsyncStorage.getItem('studentVuePeriodName');
-                    const storedPeriodIndex = await AsyncStorage.getItem('studentVuePeriodIndex');
-
-                    if (storedGrades) setClasses(JSON.parse(storedGrades));
-                    if (storedPeriods) setAvailablePeriods(JSON.parse(storedPeriods));
-                    if (storedPeriodName) setCurrentPeriodName(storedPeriodName);
-                    if (storedPeriodIndex !== null) setCurrentPeriodIndex(parseInt(storedPeriodIndex));
-                } catch (e) {
-                    console.error("Failed to load grades from storage:", e);
-                } finally {
-                    setIsLoading(false);
-                }
-            };
-            loadGrades();
-        }, [])
-    );
-
-    // ── Sync a specific quarter ─────────────────────────────────
+    // ── Sync quarter ──────────────────────────────────────────
     const syncPeriod = async (periodIndex) => {
         try {
             const isDemo = await AsyncStorage.getItem('isDemoData') === 'true';
-
             if (isDemo) {
-                // In demo mode, load from the pre-generated quarter cache
                 setIsSyncing(true);
-                // Artificial delay for realism
-                await new Promise(r => setTimeout(r, 600));
-
+                await new Promise(r => setTimeout(r, 500));
                 const raw = await AsyncStorage.getItem(`studentVueGradesQ${periodIndex}`);
-                const periodsRaw = await AsyncStorage.getItem('studentVuePeriods');
-                const periods = JSON.parse(periodsRaw || '[]');
-                const periodName = periods.find(p => p.index === periodIndex)?.name || `Quarter ${periodIndex + 1}`;
-
+                const perRaw = await AsyncStorage.getItem('studentVuePeriods');
+                const ps = JSON.parse(perRaw || '[]');
+                const pName = ps.find(p => p.index === periodIndex)?.name || `Quarter ${periodIndex + 1}`;
                 if (raw) {
-                    const grades = JSON.parse(raw);
-                    setClasses(grades);
+                    const g = JSON.parse(raw);
+                    setSvClasses(g);
                     await AsyncStorage.setItem('studentVueGrades', raw);
-                    setCurrentPeriodName(periodName);
-                    await AsyncStorage.setItem('studentVuePeriodName', periodName);
-                    setCurrentPeriodIndex(periodIndex);
+                    setCurPeriodName(pName);
+                    setCurPeriodIdx(periodIndex);
+                    await AsyncStorage.setItem('studentVuePeriodName', pName);
                     await AsyncStorage.setItem('studentVuePeriodIndex', String(periodIndex));
                     setSelectedClass(null);
                 }
                 setIsSyncing(false);
                 return;
             }
-
-            const svUser = await AsyncStorage.getItem('svUsername');
-            const svPass = await AsyncStorage.getItem('svPassword');
-            const svUrl = await AsyncStorage.getItem('svDistrictUrl');
-
+            const [svUser, svPass, svUrl] = await Promise.all([
+                AsyncStorage.getItem('svUsername'),
+                AsyncStorage.getItem('svPassword'),
+                AsyncStorage.getItem('svDistrictUrl'),
+            ]);
             if (!svUser || !svPass || !svUrl) {
-                Alert.alert('Not configured', 'Please enter your StudentVUE credentials in Settings first.');
+                Alert.alert('Not configured', 'Enter credentials in Settings first.');
                 return;
             }
-
             setIsSyncing(true);
-
-            // Reconstruct the logic from SettingsScreen to safely proxy through Vercel
-            const finalTargetUrl = svUrl.endsWith('Service/PXPCommunication.asmx')
-                ? svUrl
-                : `${svUrl}/Service/PXPCommunication.asmx`;
-
-            const soapPayload = `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/">
-      <userID>${svUser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</userID>
-      <password>${svPass.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</password>
-      <skipLoginLog>1</skipLoginLog>
-      <parent>0</parent>
-      <webServiceHandleName>PXPWebServices</webServiceHandleName>
-      <methodName>Gradebook</methodName>
-      <paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;${periodIndex}&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr>
-    </ProcessWebServiceRequest>
-  </soap:Body>
-</soap:Envelope>`;
-
-            // Always use the relative `/api` on the web or full domain in React Native App
-            const proxyBase = Platform.OS === 'web' ? '' : 'https://optionapp.online';
-            const response = await fetch(`${proxyBase}/api/studentvue`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload: soapPayload })
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData?.cause || errData?.details || response.statusText);
-            }
-
-            const xmlText = await response.text();
-
-            if (!xmlText.includes('Gradebook') && xmlText.includes('RT_ERROR')) {
-                throw new Error("Connected but no grade data was found. Your account may have no grades for this period.");
-            }
-
-            const { classes: parsedClasses } = parseStudentVueGradebook(xmlText);
-
-            if (parsedClasses && parsedClasses.length > 0) {
-                setClasses(parsedClasses);
-                await AsyncStorage.setItem('studentVueGrades', JSON.stringify(parsedClasses));
-
-                // Maintain the selected period info
-                const periods = JSON.parse(await AsyncStorage.getItem('studentVuePeriods') || '[]');
-                const periodName = periods.find(p => p.index === periodIndex)?.name || `Quarter ${periodIndex + 1}`;
-
-                setCurrentPeriodName(periodName);
-                setCurrentPeriodIndex(periodIndex);
-                await AsyncStorage.setItem('studentVuePeriodName', periodName);
+            const finalUrl = svUrl.endsWith('Service/PXPCommunication.asmx') ? svUrl : `${svUrl}/Service/PXPCommunication.asmx`;
+            const soap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser}</userID><password>${svPass}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;${periodIndex}&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
+            const base = Platform.OS === 'web' ? '' : 'https://optionapp.online';
+            const res = await fetch(`${base}/api/studentvue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalUrl, soapPayload: soap }) });
+            if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.cause || res.statusText); }
+            const xml = await res.text();
+            if (!xml.includes('Gradebook') && xml.includes('RT_ERROR')) throw new Error('No grade data for this period.');
+            const { classes: parsed } = parseStudentVueGradebook(xml);
+            if (parsed?.length > 0) {
+                setSvClasses(parsed);
+                await AsyncStorage.setItem('studentVueGrades', JSON.stringify(parsed));
+                const ps = JSON.parse(await AsyncStorage.getItem('studentVuePeriods') || '[]');
+                const pName = ps.find(p => p.index === periodIndex)?.name || `Quarter ${periodIndex + 1}`;
+                setCurPeriodName(pName); setCurPeriodIdx(periodIndex);
+                await AsyncStorage.setItem('studentVuePeriodName', pName);
                 await AsyncStorage.setItem('studentVuePeriodIndex', String(periodIndex));
-
                 setSelectedClass(null);
-            } else {
-                Alert.alert('No Data', 'No grades found for this period.');
-            }
-        } catch (e) {
-            Alert.alert('Sync Error', e.message);
-        } finally {
-            setIsSyncing(false);
-        }
+            } else { Alert.alert('No Data', 'No grades found for this period.'); }
+        } catch (e) { Alert.alert('Sync Error', e.message); }
+        finally { setIsSyncing(false); }
     };
 
-    // ── GPA calculation ─────────────────────────────────────────
-    const calculateOverallGPA = () => {
-        if (classes.length === 0) return '—';
-        const pts = classes.reduce((sum, c) => {
-            const bonus = c.type === 'AP' ? 1 : c.type === 'HN' ? 0.5 : 0;
-            const base = c.grade >= 93 ? 4 : c.grade >= 90 ? 3.7 : c.grade >= 87 ? 3.3 : c.grade >= 83 ? 3 : c.grade >= 80 ? 2.7 : c.grade >= 77 ? 2.3 : c.grade >= 73 ? 2 : c.grade >= 70 ? 1.7 : 1;
-            return sum + base + bonus;
+    // ── Manual class CRUD ─────────────────────────────────────
+    const addManualClass = async () => {
+        if (!newClassName.trim()) return;
+        const cls = {
+            id: uid(), name: newClassName.trim(), teacher: newClassTeacher.trim(),
+            type: newClassType, period: '', room: '', grade: 0,
+            assignments: [], isManual: true,
+            ...buildGP(0, newClassType),
+        };
+        const updated = [...manClasses, cls];
+        setManClasses(updated);
+        await saveManual(updated);
+        setShowAddClass(false);
+        setNewClassName(''); setNewClassTeacher(''); setNewClassType('ST');
+        setSelectedClass(cls);
+        setViewMode('assignments');
+    };
+
+    const deleteManualClass = async (id) => {
+        const updated = manClasses.filter(c => c.id !== id);
+        setManClasses(updated);
+        await saveManual(updated);
+        setSelectedClass(null);
+    };
+
+    const addAssignment = async () => {
+        if (!selectedClass?.isManual) return;
+        if (!newAsgnName.trim() || !newAsgnScore || !newAsgnTotal) return;
+        const asgn = {
+            id: uid(), name: newAsgnName.trim(), title: newAsgnName.trim(),
+            score: parseFloat(newAsgnScore), total: parseFloat(newAsgnTotal),
+            category: newAsgnCat, date: newAsgnDate || new Date().toLocaleDateString(),
+        };
+        const updatedAsgns = [...(selectedClass.assignments || []), asgn];
+        const newGrade = calcGrade(updatedAsgns) ?? 0;
+        const gp = buildGP(newGrade, selectedClass.type);
+        const updatedCls = { ...selectedClass, assignments: updatedAsgns, grade: +newGrade.toFixed(1), ...gp };
+        const updated = manClasses.map(c => c.id === selectedClass.id ? updatedCls : c);
+        setManClasses(updated);
+        setSelectedClass(updatedCls);
+        await saveManual(updated);
+        setShowAddAsgn(false);
+        setNewAsgnName(''); setNewAsgnScore(''); setNewAsgnTotal('100');
+        setNewAsgnCat('Summative'); setNewAsgnDate('');
+    };
+
+    const deleteAssignment = async (asgnId) => {
+        if (!selectedClass?.isManual) return;
+        const updatedAsgns = selectedClass.assignments.filter(a => a.id !== asgnId);
+        const newGrade = calcGrade(updatedAsgns) ?? 0;
+        const gp = buildGP(newGrade, selectedClass.type);
+        const updatedCls = { ...selectedClass, assignments: updatedAsgns, grade: +newGrade.toFixed(1), ...gp };
+        const updated = manClasses.map(c => c.id === selectedClass.id ? updatedCls : c);
+        setManClasses(updated);
+        setSelectedClass(updatedCls);
+        await saveManual(updated);
+    };
+
+    // ── GPA calc ─────────────────────────────────────────────
+    const overallGPA = () => {
+        if (!allClasses.length) return '—';
+        const pts = allClasses.reduce((s, c) => {
+            const g = parseFloat(c.grade) || 0;
+            const { wGP } = buildGP(g, c.type);
+            return s + wGP;
         }, 0);
-        return (pts / classes.length).toFixed(2);
+        return (pts / allClasses.length).toFixed(2);
     };
 
-    // ── What If / Target calculations ──────────────────────────
-    const getCategoryTotals = (course) => {
-        const cats = {
-            Summative: { earned: 0, possible: 0 },
-            Formative: { earned: 0, possible: 0 },
-            Final: { earned: 0, possible: 0 }
-        };
-
-        (course.assignments || []).forEach(a => {
-            const catStr = (a.category || a.type || '').toLowerCase();
-            const nameStr = (a.name || a.title || '').toLowerCase();
-
-            // Only strictly "Final Exam" or "Final" category counts as the 20% slot
-            // "Final Project" or "Final Quiz" usually count as Summative
-            let type = 'Formative';
-            if (/summat|exam|test|quiz|assessment|frq|major/i.test(catStr) || /exam|test|major/i.test(nameStr)) {
-                type = 'Summative';
-            }
-            if (catStr === 'final' || catStr === 'final exam' || nameStr === 'final exam') {
-                type = 'Final';
-            }
-            if (/homework|classwork|daily|participation|bell|exit|formative/i.test(catStr)) {
-                type = 'Formative';
-            }
-
-            cats[type].earned += a.score || 0;
-            cats[type].possible += a.total || 0;
-        });
-
-        return cats;
-    };
-
-    const calculateHypothetical = () => {
+    // ── What-If calc ──────────────────────────────────────────
+    const runWhatIf = () => {
         if (!selectedClass) return;
-        const score = parseFloat(newAsgnScore);
-        const total = parseFloat(newAsgnTotal);
-        if (isNaN(score) || isNaN(total) || total <= 0) {
-            if (Platform.OS === 'web') window.alert('Invalid Input: Enter score and total possible pts.');
-            else Alert.alert('Invalid Input', 'Enter score and total possible pts.');
-            return;
-        }
-
-        const cats = getCategoryTotals(selectedClass);
-        // Add the hypothetical one
-        cats[newAsgnCat].earned += score;
-        cats[newAsgnCat].possible += total;
-
-        // Formula: FinalGrade = ( (SummativePct*0.7 + FormativePct*0.3) * 0.8 ) + ( FinalExamPct * 0.2 )
-        const sAvg = cats.Summative.possible > 0 ? (cats.Summative.earned / cats.Summative.possible) * 100 : null;
-        const fAvg = cats.Formative.possible > 0 ? (cats.Formative.earned / cats.Formative.possible) * 100 : null;
-        const feAvg = cats.Final.possible > 0 ? (cats.Final.earned / cats.Final.possible) * 100 : null;
-
-        // 80% weight portion (Summative/Formative mix)
-        let weight80 = 0;
-        if (sAvg !== null && fAvg !== null) weight80 = (sAvg * 0.7) + (fAvg * 0.3);
-        else if (sAvg !== null) weight80 = sAvg;
-        else if (fAvg !== null) weight80 = fAvg;
-        else weight80 = 100;
-
-        let finalGrade = 0;
-        if (feAvg !== null) {
-            finalGrade = (weight80 * 0.8) + (feAvg * 0.2);
-        } else {
-            // If No final exam yet, the 80% part is effectively 100% of the CURRENT grade
-            finalGrade = weight80;
-        }
-
-        setHypotheticalResult(finalGrade.toFixed(2));
+        const score = parseFloat(wiScore), total = parseFloat(wiTotal);
+        if (isNaN(score) || isNaN(total) || total <= 0) return;
+        const base = calcGrade(selectedClass.assignments);
+        const hypo = [...(selectedClass.assignments || []), { id: 'wi', score, total, category: wiCat }];
+        const proj = calcGrade(hypo);
+        setWiResult({ base: base?.toFixed(2) ?? '—', proj: proj?.toFixed(2) ?? '—', diff: proj !== null && base !== null ? (proj - base).toFixed(2) : '0' });
     };
 
-    const calculateRequiredScore = () => {
+    // ── Target calc ───────────────────────────────────────────
+    const runTarget = () => {
         if (!selectedClass) return;
-        const target = parseFloat(targetGrade);
-        const possible = parseFloat(targetPossible);
-        if (isNaN(target) || isNaN(possible) || possible <= 0) {
-            if (Platform.OS === 'web') window.alert('Invalid Input: Enter target % and points possible.');
-            else Alert.alert('Invalid Input', 'Enter target % and points possible.');
-            return;
+        const target = parseFloat(tGrade), possible = parseFloat(tPts);
+        if (isNaN(target) || isNaN(possible) || possible <= 0) return;
+        let lo = 0, hi = possible * 2, best = 0;
+        for (let i = 0; i < 40; i++) {
+            const mid = (lo + hi) / 2;
+            const proj = calcGrade([...(selectedClass.assignments || []), { id: 't', score: mid, total: possible, category: tCat }]);
+            if ((proj ?? 0) < target) lo = mid; else hi = mid;
+            best = mid;
         }
-
-        const cats = getCategoryTotals(selectedClass);
-        let low = 0, high = possible * 2;
-        let bestX = 0;
-
-        for (let i = 0; i < 30; i++) {
-            let mid = (low + high) / 2;
-            const testCats = JSON.parse(JSON.stringify(cats));
-            testCats[targetCat].earned += mid;
-            testCats[targetCat].possible += possible;
-
-            const sAvg = testCats.Summative.possible > 0 ? (testCats.Summative.earned / testCats.Summative.possible) * 100 : null;
-            const fAvg = testCats.Formative.possible > 0 ? (testCats.Formative.earned / testCats.Formative.possible) * 100 : null;
-            const foAvg = testCats.Final.possible > 0 ? (testCats.Final.earned / testCats.Final.possible) * 100 : null;
-
-            let w80 = (sAvg !== null && fAvg !== null) ? (sAvg * 0.7 + fAvg * 0.3) : (sAvg ?? fAvg ?? 100);
-            let fG = (foAvg !== null) ? (w80 * 0.8 + foAvg * 0.2) : w80;
-
-            if (fG < target) low = mid;
-            else high = mid;
-            bestX = mid;
-        }
-        setRequiredScore(bestX.toFixed(1));
+        setTResult({ score: best.toFixed(1), pct: ((best / possible) * 100).toFixed(1) });
     };
 
-    // ── Grade trend chart data ──────────────────────────────────
-    const getChartData = () => {
-        if (!selectedClass || selectedClass.assignments.length === 0) return null;
-        const scored = [...selectedClass.assignments]
-            .filter(a => a.score !== undefined && a.total > 0)
-            .reverse();
+    // ─────────────────────────────────────────────────────────
+    // RENDER
+    // ─────────────────────────────────────────────────────────
 
-        const now = new Date();
-        const intervalDays = interval === '1m' ? 30 : interval === '3m' ? 90 : interval === '6m' ? 180 : 9999;
-
-        const filtered = scored.filter(a => {
-            const dateStr = a.isoDate || a.date;
-            if (!dateStr) return true; // Include if no date
-            const d = new Date(dateStr);
-            if (isNaN(d.getTime())) return true;
-            const diff = (now - d) / (1000 * 60 * 60 * 24);
-            return diff <= intervalDays;
-        });
-
-        if (filtered.length < 1) return null;
-
-        // If only 1 point, duplicate it so LineChart has a segment to draw
-        const displayAsgns = filtered.length === 1 ? [filtered[0], filtered[0]] : filtered.slice(-10);
-
-        // Calculate running average for the entire history but only graph the relevant window
-        let runningSum = 0;
-        let runningTotal = 0;
-        const allAvgs = scored.map(a => {
-            runningSum += a.score;
-            runningTotal += a.total;
-            return Math.round((runningSum / runningTotal) * 100);
-        });
-
-        // Map the display assignments back to their running averages
-        const displayData = displayAsgns.map(f => {
-            const idx = scored.findIndex(s => s.id === f.id);
-            return allAvgs[idx];
-        });
-
-        const finalDisplayAsgns = displayAsgns;
-
-        return {
-            labels: finalDisplayAsgns.map(() => ''),
-            datasets: [{
-                data: displayData,
-                fullNames: finalDisplayAsgns.map(a => a.name || a.title || 'Assignment'),
-                rawScores: finalDisplayAsgns.map(a => `${a.score}/${a.total}`),
-                dates: finalDisplayAsgns.map(a => a.date)
-            }],
-        };
-    };
-
-    // ── Render: Quarter pills (inline) ──────────────────────────
-    const renderQuarterPills = () => {
-        if (availablePeriods.length === 0) return null;
-        return (
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ marginBottom: 12 }}
-                contentContainerStyle={{ gap: 6, paddingBottom: 2 }}
-            >
-                {availablePeriods.map((p) => {
-                    const isSelected = p.index === currentPeriodIndex;
-                    const isLoading = isSyncing && isSelected;
-                    return (
-                        <TouchableOpacity
-                            key={p.index}
-                            style={[
-                                styles.quarterPill,
-                                isSelected && styles.quarterPillActive,
-                            ]}
-                            onPress={() => syncPeriod(p.index)}
-                            disabled={isSyncing}
-                        >
-                            {isLoading ? (
-                                <ActivityIndicator size="small" color="#fff" style={{ marginRight: 4 }} />
-                            ) : null}
-                            <Text style={[styles.quarterPillText, isSelected && styles.quarterPillTextActive]}>
-                                {p.name}
-                            </Text>
-                        </TouchableOpacity>
-                    );
-                })}
-            </ScrollView>
-        );
-    };
-
-    // ── Render: Period Picker Modal (mobile fallback) ────────────
-    const renderPeriodPicker = () => (
-        <Modal
-            visible={isPeriodPickerOpen}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setIsPeriodPickerOpen(false)}
-        >
-            <TouchableOpacity
-                style={styles.modalOverlay}
-                activeOpacity={1}
-                onPress={() => setIsPeriodPickerOpen(false)}
-            >
-                <View style={styles.periodPickerContainer}>
-                    <Text style={styles.periodPickerTitle}>Select Quarter</Text>
-                    {availablePeriods.length === 0 ? (
-                        <Text style={styles.periodPickerEmpty}>
-                            Periods not yet loaded. Sync grades first.
-                        </Text>
-                    ) : (
-                        availablePeriods.map((p) => {
-                            const isSelected = p.index === currentPeriodIndex;
-                            return (
-                                <TouchableOpacity
-                                    key={p.index}
-                                    style={[styles.periodItem, isSelected && styles.periodItemSelected]}
-                                    onPress={() => {
-                                        setIsPeriodPickerOpen(false);
-                                        syncPeriod(p.index);
-                                    }}
-                                >
-                                    <Text style={[styles.periodItemText, isSelected && styles.periodItemTextSelected]}>
-                                        {p.name}
-                                    </Text>
-                                    {isSelected && (
-                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.green }}>
-                                            ✓ Current
-                                        </Text>
-                                    )}
-                                </TouchableOpacity>
-                            );
-                        })
-                    )}
-                </View>
-            </TouchableOpacity>
-        </Modal>
+    if (isLoading) return (
+        <View style={[S.center, { backgroundColor: theme.colors.bg }]}>
+            <ActivityIndicator size="large" color={theme.colors.accent} />
+        </View>
     );
 
-    // ── Render: Main class card ─────────────────────────────────
-    const renderClassItem = ({ item }) => {
-        const color = gradeColor(item.grade, theme);
-        const letter = item.letter && item.letter !== 'N/A' ? item.letter : gradeLetter(item.grade);
-        const isSelected = selectedClass?.id === item.id;
+    const cls = selectedClass;
+    const gColor = cls ? gradeColor(parseFloat(cls.grade) || 0, theme) : theme.colors.accent;
 
-        return (
-            <TouchableOpacity
-                style={[
-                    styles.classCard,
-                    isSelected && styles.classCardSelected,
-                    { borderLeftColor: color, borderLeftWidth: 4 },
-                ]}
-                onPress={() => {
-                    setSelectedClass(item);
-                    setViewMode('assignments');
-                    setHypotheticalResult(null);
-                    setRequiredScore(null);
-                    setIsHypothetical(false);
-                    setHypoAssignments(JSON.parse(JSON.stringify(item.assignments || [])));
-                }}
-                activeOpacity={0.7}
-            >
-                {/* Left: course info */}
-                <View style={{ flex: 1, paddingRight: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                        {item.period ? (
-                            <Text style={styles.classCode}>Period {item.period}</Text>
-                        ) : null}
-                        <View style={[
-                            styles.typeTag,
-                            item.type === 'AP' && styles.typeTagAP,
-                            item.type === 'HN' && styles.typeTagHN,
-                        ]}>
-                            <Text style={[
-                                styles.typeTagText,
-                                (item.type === 'AP' || item.type === 'HN') && { color: '#fff' },
-                            ]}>{item.type}</Text>
-                        </View>
+    return (
+        <View style={S.root}>
+            {/* Header */}
+            <View style={S.header}>
+                {cls ? (
+                    <TouchableOpacity style={S.backBtn} onPress={() => { setSelectedClass(null); setWiResult(null); setTResult(null); }}>
+                        <ChevronLeft size={18} color={theme.colors.ink3} />
+                        <Text style={S.backTxt}>Gradebook</Text>
+                    </TouchableOpacity>
+                ) : (
+                    <View>
+                        <Text style={S.title}>Gradebook</Text>
+                        {curPeriodName ? <Text style={S.titleSub}>{curPeriodName}</Text> : null}
                     </View>
-                    <Text style={styles.className} numberOfLines={2}>{item.name}</Text>
-                    {item.teacher ? (
-                        <Text style={styles.classTeacher}>{item.teacher}</Text>
-                    ) : null}
-                    <View style={styles.gpRow}>
-                        <Text style={styles.gpText}>W {item.wGP}</Text>
-                        <Text style={[styles.gpText, { color: theme.colors.border2 }]}> · </Text>
-                        <Text style={styles.gpText}>U {item.uGP}</Text>
-                    </View>
+                )}
+                <View style={S.headerRight}>
+                    {!cls && (
+                        <TouchableOpacity style={S.syncBtn} onPress={() => syncPeriod(curPeriodIdx ?? 0)} disabled={isSyncing}>
+                            {isSyncing ? <ActivityIndicator size="small" color={theme.colors.ink3} /> : <RefreshCw size={15} color={theme.colors.ink3} />}
+                        </TouchableOpacity>
+                    )}
                 </View>
+            </View>
 
-                {/* Right: grade */}
-                <View style={styles.gradeBlock}>
-                    <Text style={[styles.gradeLetter, { color }]}>{letter}</Text>
-                    <Text style={[styles.gradePct, { color }]}>{item.grade}%</Text>
-                </View>
-            </TouchableOpacity>
-        );
-    };
-
-    // ── Render: Assignment row (grouped by category) ────────────
-    const renderAssignmentsGrouped = (cls) => {
-        const assignmentsToList = isHypothetical ? hypoAssignments : (cls.assignments || []);
-
-        if (!assignmentsToList || assignmentsToList.length === 0) {
-            return (
-                <View style={styles.emptyAssignments}>
-                    <Text style={styles.placeholderText}>No assignments recorded for this period.</Text>
-                </View>
-            );
-        }
-
-        // Group by category
-        const groups = {};
-        for (const a of assignmentsToList) {
-            const key = a.category || a.type || 'Other';
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(a);
-        }
-
-        // Category average
-        const catAvg = (items) => {
-            const scored = items.filter(a => a.score !== undefined && a.total > 0 && !isNaN(parseFloat(a.score)) && !isNaN(parseFloat(a.total)));
-            if (!scored.length) return null;
-            return (scored.reduce((s, a) => s + parseFloat(a.score), 0) / scored.reduce((s, a) => s + parseFloat(a.total), 0)) * 100;
-        };
-
-        const updateHypoAssignment = (id, field, value) => {
-            setHypoAssignments(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a));
-        };
-
-        const renderGroup = (cat) => {
-            const items = groups[cat];
-            const avg = catAvg(items);
-            const avgColor = avg !== null ? gradeColor(avg, theme) : theme.colors.ink3;
-
-            return (
-                <View key={cat} style={{ marginBottom: 16 }}>
-                    {/* Category header */}
-                    <View style={styles.categoryHeader}>
-                        <Text style={styles.categoryLabel}>{cat}</Text>
-                        {avg !== null && (
-                            <Text style={[styles.categoryAvg, { color: avgColor }]}>
-                                {avg.toFixed(1)}% avg
-                            </Text>
-                        )}
-                    </View>
-
-                    {/* Assignments */}
-                    {items.map((a, i) => {
-                        const hasPts = a.score !== undefined && a.total !== undefined && a.total > 0;
-                        const validPts = hasPts && !isNaN(parseFloat(a.score)) && !isNaN(parseFloat(a.total));
-                        const apt = validPts ? (parseFloat(a.score) / parseFloat(a.total)) * 100 : null;
-                        const isMissing = a.rawScore && /miss|incomplete|ng/i.test(a.rawScore);
-                        const isExcused = a.rawScore && /exc|excused/i.test(a.rawScore);
-                        const accentColor = apt !== null ? gradeColor(apt, theme) : theme.colors.border;
-
+            {/* Quarter tabs */}
+            {!cls && periods.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={S.tabsScroll} contentContainerStyle={S.tabsContent}>
+                    {periods.map(p => {
+                        const active = p.index === curPeriodIdx;
                         return (
-                            <View
-                                key={`${cat}-${a.id || i}`}
-                                style={[styles.assignmentRow, { borderLeftColor: accentColor, borderLeftWidth: 3 }]}
-                            >
-                                <View style={{ flex: 1, paddingRight: 8 }}>
-                                    {isHypothetical ? (
-                                        <TextInput
-                                            style={[styles.assignmentName, { padding: 0, margin: 0, backgroundColor: 'transparent' }]}
-                                            value={a.name || a.title}
-                                            onChangeText={(t) => updateHypoAssignment(a.id, 'name', t)}
-                                            selectTextOnFocus
-                                        />
-                                    ) : (
-                                        <Text style={styles.assignmentName} numberOfLines={2}>{a.name || a.title}</Text>
-                                    )}
-                                    {a.notes && !isHypothetical ? <Text style={styles.assignmentNotes}>{a.notes}</Text> : null}
-                                    <Text style={styles.assignmentDate}>{a.date}</Text>
-                                </View>
-                                {isHypothetical ? (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                        <TextInput
-                                            style={[styles.assignmentScore, { color: accentColor, backgroundColor: theme.colors.surface2, paddingHorizontal: 4, borderRadius: 4, textAlign: 'right', minWidth: 25 }]}
-                                            value={String(a.score ?? '')}
-                                            onChangeText={(t) => updateHypoAssignment(a.id, 'score', t)}
-                                            keyboardType="numeric"
-                                            selectTextOnFocus
-                                        />
-                                        <Text style={[styles.assignmentScore, { color: theme.colors.ink3 }]}>/</Text>
-                                        <TextInput
-                                            style={[styles.assignmentScore, { color: accentColor, backgroundColor: theme.colors.surface2, paddingHorizontal: 4, borderRadius: 4, textAlign: 'right', minWidth: 25 }]}
-                                            value={String(a.total ?? '')}
-                                            onChangeText={(t) => updateHypoAssignment(a.id, 'total', t)}
-                                            keyboardType="numeric"
-                                            selectTextOnFocus
-                                        />
-                                    </View>
-                                ) : hasPts ? (
-                                    <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={[styles.assignmentScore, { color: accentColor }]}>
-                                            {Number.isInteger(a.score) ? a.score : parseFloat(a.score).toFixed(1)}/{Number.isInteger(a.total) ? a.total : parseFloat(a.total).toFixed(1)}
-                                        </Text>
-                                        <Text style={[styles.assignmentPct, { color: accentColor }]}>
-                                            {Math.round(apt)}%
-                                        </Text>
-                                    </View>
-                                ) : isMissing ? (
-                                    <Text style={[styles.assignmentScore, { color: theme.colors.red }]}>Missing</Text>
-                                ) : isExcused ? (
-                                    <Text style={[styles.assignmentScore, { color: theme.colors.blue }]}>Exc</Text>
-                                ) : (
-                                    <Text style={[styles.assignmentScore, { color: theme.colors.ink4 }]}>—</Text>
-                                )}
-                            </View>
+                            <TouchableOpacity key={p.index} style={[S.qTab, active && S.qTabActive]} onPress={() => syncPeriod(p.index)} disabled={isSyncing}>
+                                {isSyncing && active ? <ActivityIndicator size="small" color="#fff" style={{ marginRight: 5 }} /> : null}
+                                <Text style={[S.qTabTxt, active && S.qTabTxtActive]}>{p.name}</Text>
+                            </TouchableOpacity>
                         );
                     })}
-                </View>
-            );
-        };
+                </ScrollView>
+            )}
 
-        const content = Object.keys(groups).sort().map(renderGroup);
-
-        if (isHypothetical) {
-            content.push(
-                <TouchableOpacity
-                    key="add-assignment"
-                    style={[styles.calcButton, { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, marginTop: -6 }]}
-                    onPress={() => {
-                        const newAsgn = {
-                            id: `hypo-${Date.now()}`,
-                            title: 'New Assignment',
-                            name: 'New Assignment',
-                            category: 'Summative',
-                            score: 100,
-                            total: 100,
-                            date: new Date().toLocaleDateString(),
-                            type: 'Summative'
-                        };
-                        setHypoAssignments([newAsgn, ...hypoAssignments]);
-                    }}
-                >
-                    <Text style={[styles.calcButtonText, { color: theme.colors.ink }]}>+ Add Target Assignment</Text>
-                </TouchableOpacity>
-            );
-        }
-
-        return content;
-    };
-
-    // ── Live Grade Calculator ───────────────────────────────────
-    const calculateLiveGrade = (assignmentsList) => {
-        const cats = {
-            Summative: { earned: 0, possible: 0 },
-            Formative: { earned: 0, possible: 0 },
-            Final: { earned: 0, possible: 0 }
-        };
-
-        (assignmentsList || []).forEach(a => {
-            const catStr = (a.category || a.type || '').toLowerCase();
-            const nameStr = (a.name || a.title || '').toLowerCase();
-
-            let type = 'Formative';
-            if (/summat|exam|test|quiz|assessment|frq|major/i.test(catStr) || /exam|test|major/i.test(nameStr)) {
-                type = 'Summative';
-            }
-            if (catStr === 'final' || catStr === 'final exam' || nameStr === 'final exam') {
-                type = 'Final';
-            }
-            if (/homework|classwork|daily|participation|bell|exit|formative/i.test(catStr)) {
-                type = 'Formative';
-            }
-
-            const s = parseFloat(a.score);
-            const t = parseFloat(a.total);
-            if (!isNaN(s) && !isNaN(t) && t > 0) {
-                cats[type].earned += s;
-                cats[type].possible += t;
-            }
-        });
-
-        const sAvg = cats.Summative.possible > 0 ? (cats.Summative.earned / cats.Summative.possible) * 100 : null;
-        const fAvg = cats.Formative.possible > 0 ? (cats.Formative.earned / cats.Formative.possible) * 100 : null;
-        const feAvg = cats.Final.possible > 0 ? (cats.Final.earned / cats.Final.possible) * 100 : null;
-
-        let weight80 = 0;
-        if (sAvg !== null && fAvg !== null) weight80 = (sAvg * 0.7) + (fAvg * 0.3);
-        else if (sAvg !== null) weight80 = sAvg;
-        else if (fAvg !== null) weight80 = fAvg;
-        else return null;
-
-        if (feAvg !== null) return ((weight80 * 0.8) + (feAvg * 0.2)).toFixed(2);
-        return weight80.toFixed(2);
-    };
-
-    // ── Render: Detail view ─────────────────────────────────────
-    const renderDetail = () => {
-        if (!selectedClass) {
-            return (
-                <View style={styles.emptyDetail}>
-                    <Text style={styles.emptyDetailIcon}>📋</Text>
-                    <Text style={styles.placeholderText}>Select a class to view assignments</Text>
-                </View>
-            );
-        }
-
-        const cls = selectedClass;
-
-        // Use dynamically calculated grade if hypothetical
-        const liveGradeNum = isHypothetical ? calculateLiveGrade(hypoAssignments) : cls.grade;
-        const displayGrade = liveGradeNum !== null ? liveGradeNum : 'N/A';
-        const letterColor = displayGrade !== 'N/A' ? gradeColor(parseFloat(displayGrade), theme) : theme.colors.border;
-        const letter = displayGrade !== 'N/A' ? gradeLetter(parseFloat(displayGrade)) : 'N/A';
-
-        const chartData = getChartData();
-
-        return (
-            <View style={{ flex: 1 }}>
-                {/* Back button + class header */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <TouchableOpacity
-                        style={styles.backRow}
-                        onPress={() => setSelectedClass(null)}
-                    >
-                        <ChevronLeft size={13} color={theme.colors.ink3} />
-                        <Text style={styles.backText}>All Classes</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[
-                            styles.hypoToggle,
-                            isHypothetical && styles.hypoToggleActive,
-                        ]}
-                        onPress={() => {
-                            if (!isHypothetical) {
-                                setHypoAssignments(JSON.parse(JSON.stringify(cls.assignments || [])));
-                            }
-                            setIsHypothetical(!isHypothetical);
-                        }}
-                    >
-                        <Wand2 size={13} color={isHypothetical ? '#fff' : theme.colors.ink3} />
-                        <Text style={[styles.hypoToggleText, isHypothetical && { color: '#fff' }]}>
-                            {isHypothetical ? 'What-If On' : 'What-If'}
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                <View style={[styles.detailHeader, { borderLeftColor: letterColor, borderLeftWidth: 4 }]}>
-                    <View style={{ flex: 1, paddingRight: 12 }}>
-                        <Text style={styles.detailClassName}>{cls.name}</Text>
-                        <Text style={styles.detailMeta}>
-                            {cls.teacher ? `${cls.teacher}` : ''}
-                            {cls.room ? ` · Room ${cls.room}` : ''}
-                            {cls.period ? ` · Period ${cls.period}` : ''}
-                        </Text>
-                        <View style={styles.detailTags}>
-                            <View style={[styles.typeTag, cls.type === 'AP' && styles.typeTagAP, cls.type === 'HN' && styles.typeTagHN]}>
-                                <Text style={[styles.typeTagText, (cls.type === 'AP' || cls.type === 'HN') && { color: '#fff' }]}>{cls.type}</Text>
+            {/* CLASS LIST */}
+            {!cls && (
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={S.listContent} showsVerticalScrollIndicator={false}>
+                    {/* GPA Banner */}
+                    {allClasses.length > 0 && (
+                        <View style={S.gpaBanner}>
+                            <View>
+                                <Text style={S.gpaBannerLabel}>WEIGHTED GPA</Text>
+                                <Text style={S.gpaBannerVal}>{overallGPA()}</Text>
                             </View>
-                            <View style={styles.typeTag}>
-                                <Text style={styles.typeTagText}>GP {cls.wGP}W / {cls.uGP}U</Text>
+                            <View>
+                                <Text style={S.gpaBannerLabel}>CLASSES</Text>
+                                <Text style={S.gpaBannerVal}>{allClasses.length}</Text>
                             </View>
                         </View>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={[styles.detailLetter, { color: letterColor }]}>{letter}</Text>
-                        <Text style={[styles.detailPct, { color: letterColor }]}>{displayGrade}{displayGrade !== 'N/A' && '%'}</Text>
-                    </View>
-                </View>
+                    )}
 
-                {/* Tabs */}
-                {!isHypothetical && (
-                    <View style={styles.tabRow}>
-                        {['assignments', 'whatIf', 'target'].map((m, i) => (
-                            <TouchableOpacity
-                                key={m}
-                                style={[styles.tabBtn, viewMode === m && styles.tabBtnActive]}
-                                onPress={() => setViewMode(m)}
-                            >
-                                <Text style={[styles.tabText, viewMode === m && styles.tabTextActive]}>
-                                    {['Assignments', 'Quick Calc', 'Target'][i]}
-                                </Text>
+                    {/* No data state */}
+                    {allClasses.length === 0 && (
+                        <View style={S.emptyState}>
+                            <Text style={S.emptyIcon}>📚</Text>
+                            <Text style={S.emptyTitle}>No grades yet</Text>
+                            <Text style={S.emptySub}>Connect StudentVUE in Settings or add classes manually with the + button</Text>
+                        </View>
+                    )}
+
+                    {/* Cards */}
+                    {allClasses.map((item) => {
+                        const g = parseFloat(item.grade) || 0;
+                        const color = gradeColor(g, theme);
+                        const letter = gradeLetter(g);
+                        return (
+                            <TouchableOpacity key={item.id} style={S.classCard} onPress={() => { setSelectedClass(item); setViewMode('assignments'); setWiResult(null); setTResult(null); }} activeOpacity={0.75}>
+                                <View style={[S.classCardAccent, { backgroundColor: color }]} />
+                                <View style={S.classCardBody}>
+                                    <View style={{ flex: 1 }}>
+                                        <View style={S.classCardTags}>
+                                            <View style={[S.tag, item.type === 'AP' && S.tagAP, item.type === 'HN' && S.tagHN]}>
+                                                <Text style={[S.tagTxt, (item.type === 'AP' || item.type === 'HN') && { color: '#fff' }]}>{item.type || 'ST'}</Text>
+                                            </View>
+                                            {item.period ? <Text style={S.periodTxt}>Period {item.period}</Text> : null}
+                                            {item.isManual && <Text style={[S.periodTxt, { color: theme.colors.blue }]}>Manual</Text>}
+                                        </View>
+                                        <Text style={S.className} numberOfLines={2}>{item.name}</Text>
+                                        {item.teacher ? <Text style={S.teacherTxt}>{item.teacher}</Text> : null}
+                                    </View>
+                                    <View style={S.gradeBlock}>
+                                        <Text style={[S.gradeLetterBig, { color }]}>{letter}</Text>
+                                        <Text style={[S.gradePctSmall, { color }]}>{g.toFixed(1)}%</Text>
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    })}
+                    <View style={{ height: 100 }} />
+                </ScrollView>
+            )}
+
+            {/* CLASS DETAIL */}
+            {cls && (
+                <View style={{ flex: 1 }}>
+                    {/* Class header card */}
+                    <View style={[S.detailHeader, { borderLeftColor: gColor }]}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={S.detailName} numberOfLines={2}>{cls.name}</Text>
+                            {cls.teacher ? <Text style={S.detailMeta}>{cls.teacher}{cls.period ? ` · Period ${cls.period}` : ''}</Text> : null}
+                            <View style={S.detailTags}>
+                                <View style={[S.tag, cls.type === 'AP' && S.tagAP, cls.type === 'HN' && S.tagHN]}>
+                                    <Text style={[S.tagTxt, (cls.type === 'AP' || cls.type === 'HN') && { color: '#fff' }]}>{cls.type || 'ST'}</Text>
+                                </View>
+                                <View style={S.tag}><Text style={S.tagTxt}>W{cls.wGP || '—'} / U{cls.uGP || '—'}</Text></View>
+                            </View>
+                        </View>
+                        <View style={S.gradeBlock}>
+                            <Text style={[S.gradeLetterBig, { color: gColor, fontSize: 56 }]}>{gradeLetter(parseFloat(cls.grade) || 0)}</Text>
+                            <Text style={[S.gradePctSmall, { color: gColor, fontSize: 14 }]}>{(parseFloat(cls.grade) || 0).toFixed(1)}%</Text>
+                        </View>
+                    </View>
+
+                    {/* Tab row */}
+                    <View style={S.detailTabRow}>
+                        {[['assignments', BookOpen, 'Assignments'], ['whatif', Wand2, 'What-If'], ['target', Target, 'Target']].map(([mode, Icon, label]) => (
+                            <TouchableOpacity key={mode} style={[S.detailTab, viewMode === mode && S.detailTabActive]} onPress={() => setViewMode(mode)}>
+                                <Icon size={13} color={viewMode === mode ? theme.colors.accent : theme.colors.ink3} />
+                                <Text style={[S.detailTabTxt, viewMode === mode && S.detailTabTxtActive]}>{label}</Text>
                             </TouchableOpacity>
                         ))}
                     </View>
-                )}
 
-                {/* What-If active banner */}
-                {isHypothetical && (
-                    <View style={styles.whatIfBanner}>
-                        <Wand2 size={14} color="#fff" />
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.whatIfBannerTitle}>What-If Mode Active</Text>
-                            <Text style={styles.whatIfBannerSub}>Edit any score below — your projected grade updates live</Text>
-                        </View>
-                        <TouchableOpacity
-                            onPress={() => setIsHypothetical(false)}
-                            style={styles.whatIfBannerClose}
-                        >
-                            <Text style={styles.whatIfBannerCloseText}>Done</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-
-                {/* Assignments */}
-                {(viewMode === 'assignments' || isHypothetical) && (
-                    <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 4 }}>
-                        {chartData && !isHypothetical && (
-                            <View style={styles.chartContainer}>
-                                <View style={styles.chartHeader}>
-                                    <Text style={styles.chartTitle}>Grade Trend</Text>
-                                    <View style={styles.intervalPicker}>
-                                        {['1m', '3m', '6m', 'all'].map(i => (
-                                            <TouchableOpacity
-                                                key={i}
-                                                onPress={() => setInterval(i)}
-                                                style={[styles.intervalBtn, interval === i && styles.intervalBtnActive]}
-                                            >
-                                                <Text style={[styles.intervalText, interval === i && styles.intervalTextActive]}>{i.toUpperCase()}</Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
+                    {/* ASSIGNMENTS TAB */}
+                    {viewMode === 'assignments' && (
+                        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+                            {(!cls.assignments || cls.assignments.length === 0) && (
+                                <View style={S.emptyState}>
+                                    <Text style={S.emptyIcon}>📝</Text>
+                                    <Text style={S.emptyTitle}>No assignments</Text>
+                                    {cls.isManual && <Text style={S.emptySub}>Tap + to add an assignment</Text>}
                                 </View>
-
-                                <View style={styles.chartWrapper}>
-                                    <LineChart
-                                        data={chartData}
-                                        width={Dimensions.get('window').width > 1000 ? 920 : Dimensions.get('window').width - 80}
-                                        height={200}
-                                        chartConfig={{
-                                            backgroundColor: theme.colors.surface,
-                                            backgroundGradientFrom: theme.colors.surface,
-                                            backgroundGradientTo: theme.colors.surface,
-                                            decimalPlaces: 0,
-                                            color: (opacity = 1) => theme.colors.accent,
-                                            labelColor: (opacity = 1) => theme.colors.ink3,
-                                            style: { borderRadius: 16 },
-                                            propsForDots: { r: "4", strokeWidth: "2", stroke: theme.colors.surface },
-                                            yAxisLabel: "",
-                                            yAxisSuffix: "%",
-                                        }}
-                                        onDataPointClick={({ value, dataset, getColor, index }) => {
-                                            setSelectedGraphAsgn({
-                                                name: dataset.fullNames[index],
-                                                score: dataset.rawScores[index],
-                                                date: dataset.dates[index],
-                                                finalGrade: value
-                                            });
-                                        }}
-                                        bezier
-                                        fromZero={false}
-                                        segments={5}
-                                        style={{ borderRadius: 8, paddingRight: 40 }}
-                                    />
-                                </View>
-
-                                {selectedGraphAsgn && (
-                                    <View style={styles.graphDetailBox}>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.graphDetailName}>{selectedGraphAsgn.name}</Text>
-                                            <Text style={styles.graphDetailDate}>{selectedGraphAsgn.date}</Text>
-                                        </View>
-                                        <View style={{ alignItems: 'flex-end' }}>
-                                            <Text style={styles.graphDetailScore}>{selectedGraphAsgn.score}</Text>
-                                            <Text style={[styles.graphDetailPct, { color: gradeColor(selectedGraphAsgn.finalGrade, theme) }]}>{selectedGraphAsgn.finalGrade}%</Text>
-                                        </View>
-                                        <TouchableOpacity onPress={() => setSelectedGraphAsgn(null)} style={{ marginLeft: 10 }}>
-                                            <ChevronDown size={14} color={theme.colors.ink3} style={{ transform: [{ rotate: '90deg' }] }} />
-                                        </TouchableOpacity>
-                                    </View>
-                                )}
-                            </View>
-                        )}
-                        {renderAssignmentsGrouped(cls)}
-                        <View style={{ height: 40 }} />
-                    </ScrollView>
-                )}
-
-                {/* What If */}
-                {viewMode === 'whatIf' && (
-                    <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 10 }}>
-                        <Text style={styles.inputLabel}>New Assignment Score</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 15 }}>
-                            <TextInput style={[styles.input, { flex: 1, marginBottom: 0 }]} placeholder="Points Earned" placeholderTextColor={theme.colors.ink3} keyboardType="numeric" value={newAsgnScore} onChangeText={setNewAsgnScore} />
-                            <Text style={{ fontFamily: theme.fonts.m, color: theme.colors.ink3 }}>/</Text>
-                            <TextInput style={[styles.input, { flex: 1, marginBottom: 0 }]} placeholder="Total Pts" placeholderTextColor={theme.colors.ink3} keyboardType="numeric" value={newAsgnTotal} onChangeText={setNewAsgnTotal} />
-                        </View>
-
-                        <Text style={styles.inputLabel}>Category</Text>
-                        <View style={styles.catSelector}>
-                            {['Summative', 'Formative', 'Final'].map(c => (
-                                <TouchableOpacity
-                                    key={c}
-                                    style={[styles.catBtn, newAsgnCat === c && styles.catBtnActive]}
-                                    onPress={() => setNewAsgnCat(c)}
-                                >
-                                    <Text style={[styles.catBtnText, newAsgnCat === c && styles.catBtnTextActive]}>{c}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <TouchableOpacity style={styles.calcButton} onPress={calculateHypothetical}>
-                            <Text style={styles.calcButtonText}>Calculate New Grade</Text>
-                        </TouchableOpacity>
-
-                        {hypotheticalResult && (
-                            <View style={styles.resultBox}>
-                                <Text style={styles.resultLabel}>Your new average would be:</Text>
-                                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                                    <Text style={[styles.resultValue, { color: gradeColor(parseFloat(hypotheticalResult), theme) }]}>{hypotheticalResult}%</Text>
-                                    <Text style={styles.resultDiff}>
-                                        ({(parseFloat(hypotheticalResult) - selectedClass.grade).toFixed(2).replace(/^([^+-])/, '+$1')}%)
-                                    </Text>
-                                </View>
-                            </View>
-                        )}
-                    </ScrollView>
-                )}
-
-                {/* Target */}
-                {viewMode === 'target' && (
-                    <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 10 }}>
-                        <Text style={styles.inputLabel}>I want to reach this % average:</Text>
-                        <TextInput style={styles.input} placeholder="e.g. 90" placeholderTextColor={theme.colors.ink3} keyboardType="numeric" value={targetGrade} onChangeText={setTargetGrade} />
-
-                        <Text style={styles.inputLabel}>On an assignment worth this many points:</Text>
-                        <TextInput style={styles.input} placeholder="e.g. 50" placeholderTextColor={theme.colors.ink3} keyboardType="numeric" value={targetPossible} onChangeText={setTargetPossible} />
-
-                        <Text style={styles.inputLabel}>In this category:</Text>
-                        <View style={styles.catSelector}>
-                            {['Summative', 'Formative', 'Final'].map(c => (
-                                <TouchableOpacity
-                                    key={c}
-                                    style={[styles.catBtn, targetCat === c && styles.catBtnActive]}
-                                    onPress={() => setTargetCat(c)}
-                                >
-                                    <Text style={[styles.catBtnText, targetCat === c && styles.catBtnTextActive]}>{c}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <TouchableOpacity style={styles.calcButton} onPress={calculateRequiredScore}>
-                            <Text style={styles.calcButtonText}>Find Needed Score</Text>
-                        </TouchableOpacity>
-
-                        {requiredScore && (
-                            <View style={styles.resultBox}>
-                                <Text style={styles.resultLabel}>To get a {targetGrade}%, you need:</Text>
-                                <Text style={[styles.resultValue, { color: parseFloat(requiredScore) > targetPossible ? theme.colors.red : theme.colors.green }]}>
-                                    {requiredScore} / {targetPossible}
-                                </Text>
-                                <Text style={styles.resultPct}>({((parseFloat(requiredScore) / parseFloat(targetPossible)) * 100).toFixed(1)}%)</Text>
-                                {parseFloat(requiredScore) > parseFloat(targetPossible) && (
-                                    <Text style={{ color: theme.colors.red, fontFamily: theme.fonts.m, fontSize: 10, marginTop: 6, textTransform: 'uppercase', letterSpacing: 1 }}>
-                                        ⚠ Requires score higher than total possible
-                                    </Text>
-                                )}
-                            </View>
-                        )}
-                    </ScrollView>
-                )}
-            </View>
-        );
-    };
-
-    // ── Main render ─────────────────────────────────────────────
-    return (
-        <View style={styles.container}>
-            <View style={styles.contentWrapper}>
-                {/* Header */}
-                <View style={styles.headerRow}>
-                    {selectedClass ? (
-                        /* When in detail view: show a big back button in place of title */
-                        <TouchableOpacity
-                            style={styles.headerBackBtn}
-                            onPress={() => setSelectedClass(null)}
-                            activeOpacity={0.6}
-                        >
-                            <ChevronLeft size={22} color={theme.colors.ink} />
-                            <View>
-                                <Text style={styles.header}>Gradebook</Text>
-                                <Text style={styles.headerSub}>← Back to all classes</Text>
-                            </View>
-                        </TouchableOpacity>
-                    ) : (
-                        <View>
-                            <Text style={styles.header}>Gradebook</Text>
-                            <Text style={styles.headerSub}>
-                                {currentPeriodName || 'No period loaded'}
-                            </Text>
-                        </View>
-                    )}
-                    <View style={styles.headerActions}>
-                        {/* Refresh button */}
-                        <TouchableOpacity
-                            style={styles.syncBtn}
-                            onPress={() => syncPeriod(currentPeriodIndex ?? 0)}
-                            disabled={isSyncing}
-                        >
-                            {isSyncing && availablePeriods.length === 0
-                                ? <ActivityIndicator size="small" color={theme.colors.ink} />
-                                : <RefreshCw size={16} color={isSyncing ? theme.colors.ink3 : theme.colors.ink} />
-                            }
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* Quarter pills */}
-                {!selectedClass && renderQuarterPills()}
-
-                {/* GPA strip */}
-                {classes.length > 0 && (
-                    <View style={styles.gpaBanner}>
-                        <Text style={styles.gpaBannerLabel}>Weighted GPA</Text>
-                        <Text style={styles.gpaBannerValue}>{calculateOverallGPA()}</Text>
-                    </View>
-                )}
-
-                {/* Content */}
-                {isLoading ? (
-                    <View style={styles.centeredState}>
-                        <ActivityIndicator size="large" color={theme.colors.ink} />
-                        <Text style={[styles.placeholderText, { marginTop: 12 }]}>Loading…</Text>
-                    </View>
-                ) : selectedClass ? (
-                    /* Detail view */
-                    <View style={styles.detailWrapper}>
-                        {renderDetail()}
-                    </View>
-                ) : classes.length === 0 ? (
-                    <View style={styles.centeredState}>
-                        <Text style={{ fontSize: 32, marginBottom: 12 }}>📚</Text>
-                        <Text style={styles.placeholderText}>No grades yet.</Text>
-                        <Text style={styles.placeholderSub}>Go to Settings, enter your StudentVUE credentials, and sync.</Text>
-                    </View>
-                ) : (
-                    /* Class list (Grid Layout) */
-                    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                        <View style={styles.gridContainer}>
-                            {classes.map((item, index) => {
-                                const gradeNum = parseFloat(item.grade);
-                                const gradeColor = gradeNum >= 90 ? theme.colors.green : gradeNum >= 80 ? theme.colors.blue : gradeNum >= 70 ? theme.colors.orange : theme.colors.red;
-                                return (
-                                    <TouchableOpacity
-                                        key={index}
-                                        style={styles.gridItem}
-                                        onPress={() => setSelectedClass(item)}
-                                    >
-                                        <View style={[styles.gridGradeBox, { borderLeftColor: gradeColor }]}>
-                                            <Text style={[styles.gridGradeText, { color: gradeColor }]}>{item.grade}%</Text>
-                                            <View style={styles.gridInfo}>
-                                                <Text style={styles.gridClassName} numberOfLines={1}>{item.name}</Text>
-                                                <Text style={styles.gridTeacher} numberOfLines={1}>{item.teacher}</Text>
+                            )}
+                            {(() => {
+                                const groups = {};
+                                (cls.assignments || []).forEach(a => {
+                                    const k = a.category || 'Other';
+                                    if (!groups[k]) groups[k] = [];
+                                    groups[k].push(a);
+                                });
+                                return Object.keys(groups).map(cat => {
+                                    const items = groups[cat];
+                                    const scored = items.filter(a => parseFloat(a.total) > 0 && !isNaN(parseFloat(a.score)));
+                                    const avg = scored.length ? scored.reduce((s, a) => s + parseFloat(a.score) / parseFloat(a.total), 0) / scored.length * 100 : null;
+                                    const avgColor = avg !== null ? gradeColor(avg, theme) : theme.colors.ink3;
+                                    return (
+                                        <View key={cat} style={{ marginBottom: 20 }}>
+                                            <View style={S.catHeader}>
+                                                <Text style={S.catLabel}>{cat.toUpperCase()}</Text>
+                                                {avg !== null && <Text style={[S.catAvg, { color: avgColor }]}>{avg.toFixed(1)}%</Text>}
                                             </View>
+                                            {items.map((a, i) => {
+                                                const s = parseFloat(a.score), t = parseFloat(a.total);
+                                                const hasPts = !isNaN(s) && !isNaN(t) && t > 0;
+                                                const pct = hasPts ? (s / t) * 100 : null;
+                                                const ac = pct !== null ? gradeColor(pct, theme) : theme.colors.border;
+                                                return (
+                                                    <View key={a.id || i} style={[S.asgnRow, { borderLeftColor: ac }]}>
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={S.asgnName} numberOfLines={2}>{a.name || a.title}</Text>
+                                                            {a.date ? <Text style={S.asgnDate}>{a.date}</Text> : null}
+                                                        </View>
+                                                        <View style={{ alignItems: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                            {hasPts ? (
+                                                                <View style={{ alignItems: 'flex-end' }}>
+                                                                    <Text style={[S.asgnScore, { color: ac }]}>{s % 1 === 0 ? s : s.toFixed(1)}/{t % 1 === 0 ? t : t.toFixed(1)}</Text>
+                                                                    <Text style={[S.asgnPct, { color: ac }]}>{Math.round(pct)}%</Text>
+                                                                </View>
+                                                            ) : (
+                                                                <Text style={[S.asgnScore, { color: theme.colors.ink4 }]}>—</Text>
+                                                            )}
+                                                            {cls.isManual && (
+                                                                <TouchableOpacity onPress={() => deleteAssignment(a.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                                                    <Trash2 size={13} color={theme.colors.red} />
+                                                                </TouchableOpacity>
+                                                            )}
+                                                        </View>
+                                                    </View>
+                                                );
+                                            })}
                                         </View>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-                    </ScrollView>
-                )}
+                                    );
+                                });
+                            })()}
+                        </ScrollView>
+                    )}
 
-            </View>
-            {/* Period picker modal */}
-            {renderPeriodPicker()}
+                    {/* WHAT-IF TAB */}
+                    {viewMode === 'whatif' && (
+                        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 0, paddingBottom: 80 }} showsVerticalScrollIndicator={false}>
+                            {/* Current breakdown */}
+                            {(() => {
+                                const cats = { Summative: { e: 0, p: 0 }, Formative: { e: 0, p: 0 }, Final: { e: 0, p: 0 } };
+                                (cls.assignments || []).forEach(a => {
+                                    const s = parseFloat(a.score), t = parseFloat(a.total);
+                                    if (isNaN(s) || isNaN(t) || t <= 0) return;
+                                    const k = cats[a.category] ? a.category : 'Formative';
+                                    cats[k].e += s; cats[k].p += t;
+                                });
+                                return (
+                                    <View style={S.wiBreakdown}>
+                                        <Text style={S.wiBreakdownTitle}>Current Breakdown</Text>
+                                        {Object.entries(cats).map(([cat, { e, p }]) => {
+                                            const pct = p > 0 ? (e / p * 100) : null;
+                                            const weights = { Summative: '70%', Formative: '30%', Final: '20% of total' };
+                                            return (
+                                                <View key={cat} style={S.wiCatRow}>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={S.wiCatName}>{cat}</Text>
+                                                        <Text style={S.wiCatWeight}>{weights[cat]}</Text>
+                                                    </View>
+                                                    {pct !== null ? (
+                                                        <Text style={[S.wiCatPct, { color: gradeColor(pct, theme) }]}>{pct.toFixed(1)}%</Text>
+                                                    ) : (
+                                                        <Text style={[S.wiCatPct, { color: theme.colors.ink4 }]}>—</Text>
+                                                    )}
+                                                </View>
+                                            );
+                                        })}
+                                    </View>
+                                );
+                            })()}
+
+                            <Text style={S.inputLabel}>What if you get…</Text>
+                            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                                <TextInput style={[S.input, { flex: 1 }]} placeholder="Score" placeholderTextColor={theme.colors.ink3} keyboardType="numeric" value={wiScore} onChangeText={setWiScore} />
+                                <Text style={[S.input, { paddingHorizontal: 6, textAlignVertical: 'center', color: theme.colors.ink3 }]}>/</Text>
+                                <TextInput style={[S.input, { flex: 1 }]} placeholder="Total" placeholderTextColor={theme.colors.ink3} keyboardType="numeric" value={wiTotal} onChangeText={setWiTotal} />
+                            </View>
+                            <Text style={S.inputLabel}>Category</Text>
+                            <View style={S.segRow}>
+                                {['Summative', 'Formative', 'Final'].map(c => (
+                                    <TouchableOpacity key={c} style={[S.seg, wiCat === c && S.segActive]} onPress={() => setWiCat(c)}>
+                                        <Text style={[S.segTxt, wiCat === c && S.segTxtActive]}>{c}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                            <TouchableOpacity style={S.calcBtn} onPress={runWhatIf}>
+                                <Text style={S.calcBtnTxt}>Calculate</Text>
+                            </TouchableOpacity>
+                            {wiResult && (
+                                <View style={S.resultCard}>
+                                    <View style={S.resultRow}>
+                                        <View style={S.resultCol}>
+                                            <Text style={S.resultColLabel}>Current</Text>
+                                            <Text style={[S.resultColVal, { color: gradeColor(parseFloat(wiResult.base) || 0, theme) }]}>{wiResult.base}%</Text>
+                                        </View>
+                                        <View style={[S.resultDivider]} />
+                                        <View style={S.resultCol}>
+                                            <Text style={S.resultColLabel}>Projected</Text>
+                                            <Text style={[S.resultColVal, { color: gradeColor(parseFloat(wiResult.proj) || 0, theme) }]}>{wiResult.proj}%</Text>
+                                        </View>
+                                        <View style={[S.resultDivider]} />
+                                        <View style={S.resultCol}>
+                                            <Text style={S.resultColLabel}>Change</Text>
+                                            <Text style={[S.resultColVal, { color: parseFloat(wiResult.diff) >= 0 ? theme.colors.green : theme.colors.red }]}>{parseFloat(wiResult.diff) >= 0 ? '+' : ''}{wiResult.diff}%</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            )}
+                        </ScrollView>
+                    )}
+
+                    {/* TARGET TAB */}
+                    {viewMode === 'target' && (
+                        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 80 }} showsVerticalScrollIndicator={false}>
+                            <Text style={S.inputLabel}>I want to reach</Text>
+                            <TextInput style={S.input} placeholder="e.g. 90" placeholderTextColor={theme.colors.ink3} keyboardType="numeric" value={tGrade} onChangeText={setTGrade} />
+                            <Text style={S.inputLabel}>On an assignment worth</Text>
+                            <TextInput style={S.input} placeholder="e.g. 50 pts" placeholderTextColor={theme.colors.ink3} keyboardType="numeric" value={tPts} onChangeText={setTPts} />
+                            <Text style={S.inputLabel}>In this category</Text>
+                            <View style={S.segRow}>
+                                {['Summative', 'Formative', 'Final'].map(c => (
+                                    <TouchableOpacity key={c} style={[S.seg, tCat === c && S.segActive]} onPress={() => setTCat(c)}>
+                                        <Text style={[S.segTxt, tCat === c && S.segTxtActive]}>{c}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                            <TouchableOpacity style={S.calcBtn} onPress={runTarget}>
+                                <Text style={S.calcBtnTxt}>Calculate</Text>
+                            </TouchableOpacity>
+                            {tResult && (
+                                <View style={S.resultCard}>
+                                    <Text style={S.resultColLabel}>To get {tGrade}%, you need at least:</Text>
+                                    <Text style={[S.resultBig, { color: parseFloat(tResult.pct) > 100 ? theme.colors.red : theme.colors.green }]}>
+                                        {tResult.score} / {tPts}
+                                    </Text>
+                                    <Text style={S.resultColLabel}>{tResult.pct}% on this assignment</Text>
+                                    {parseFloat(tResult.pct) > 100 && (
+                                        <Text style={[S.resultColLabel, { color: theme.colors.red, marginTop: 6 }]}>⚠ Score exceeds possible points</Text>
+                                    )}
+                                </View>
+                            )}
+                        </ScrollView>
+                    )}
+
+                    {/* Delete manual class */}
+                    {cls.isManual && viewMode === 'assignments' && (
+                        <TouchableOpacity style={S.deleteClassBtn} onPress={() => Alert.alert('Delete class?', `Remove "${cls.name}"?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => deleteManualClass(cls.id) }])}>
+                            <Trash2 size={14} color={theme.colors.red} />
+                            <Text style={[S.deleteClassTxt]}>Delete Class</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+            )}
+
+            {/* FAB: Add class */}
+            {!cls && (
+                <TouchableOpacity style={S.fab} onPress={() => setShowAddClass(true)} activeOpacity={0.85}>
+                    <Plus size={22} color="#fff" />
+                </TouchableOpacity>
+            )}
+
+            {/* FAB: Add assignment */}
+            {cls?.isManual && viewMode === 'assignments' && (
+                <TouchableOpacity style={S.fab} onPress={() => setShowAddAsgn(true)} activeOpacity={0.85}>
+                    <Plus size={22} color="#fff" />
+                </TouchableOpacity>
+            )}
+
+            {/* ADD CLASS MODAL */}
+            <Modal visible={showAddClass} transparent animationType="slide" onRequestClose={() => setShowAddClass(false)}>
+                <Pressable style={S.modalOverlay} onPress={() => setShowAddClass(false)}>
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                        <Pressable style={S.modalSheet}>
+                            <View style={S.modalHandle} />
+                            <Text style={S.modalTitle}>Add Class</Text>
+                            <Text style={S.inputLabel}>Class Name</Text>
+                            <TextInput style={S.input} placeholder="e.g. AP Calculus BC" placeholderTextColor={theme.colors.ink3} value={newClassName} onChangeText={setNewClassName} autoFocus />
+                            <Text style={S.inputLabel}>Teacher (optional)</Text>
+                            <TextInput style={S.input} placeholder="e.g. Mr. Smith" placeholderTextColor={theme.colors.ink3} value={newClassTeacher} onChangeText={setNewClassTeacher} />
+                            <Text style={S.inputLabel}>Type</Text>
+                            <View style={S.segRow}>
+                                {['AP', 'HN', 'ST'].map(t => (
+                                    <TouchableOpacity key={t} style={[S.seg, newClassType === t && S.segActive]} onPress={() => setNewClassType(t)}>
+                                        <Text style={[S.segTxt, newClassType === t && S.segTxtActive]}>{t}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                            <TouchableOpacity style={[S.calcBtn, { marginTop: 18 }]} onPress={addManualClass}>
+                                <Text style={S.calcBtnTxt}>Add Class</Text>
+                            </TouchableOpacity>
+                        </Pressable>
+                    </KeyboardAvoidingView>
+                </Pressable>
+            </Modal>
+
+            {/* ADD ASSIGNMENT MODAL */}
+            <Modal visible={showAddAsgn} transparent animationType="slide" onRequestClose={() => setShowAddAsgn(false)}>
+                <Pressable style={S.modalOverlay} onPress={() => setShowAddAsgn(false)}>
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                        <Pressable style={S.modalSheet}>
+                            <View style={S.modalHandle} />
+                            <Text style={S.modalTitle}>Add Assignment</Text>
+                            <Text style={S.inputLabel}>Name</Text>
+                            <TextInput style={S.input} placeholder="e.g. Unit Test" placeholderTextColor={theme.colors.ink3} value={newAsgnName} onChangeText={setNewAsgnName} autoFocus />
+                            <Text style={S.inputLabel}>Score / Total</Text>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <TextInput style={[S.input, { flex: 1 }]} placeholder="Score" placeholderTextColor={theme.colors.ink3} keyboardType="numeric" value={newAsgnScore} onChangeText={setNewAsgnScore} />
+                                <TextInput style={[S.input, { flex: 1 }]} placeholder="Total" placeholderTextColor={theme.colors.ink3} keyboardType="numeric" value={newAsgnTotal} onChangeText={setNewAsgnTotal} />
+                            </View>
+                            <Text style={S.inputLabel}>Category</Text>
+                            <View style={S.segRow}>
+                                {['Summative', 'Formative', 'Final'].map(c => (
+                                    <TouchableOpacity key={c} style={[S.seg, newAsgnCat === c && S.segActive]} onPress={() => setNewAsgnCat(c)}>
+                                        <Text style={[S.segTxt, newAsgnCat === c && S.segTxtActive]}>{c}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                            <Text style={S.inputLabel}>Date (optional)</Text>
+                            <TextInput style={S.input} placeholder="e.g. Mar 5" placeholderTextColor={theme.colors.ink3} value={newAsgnDate} onChangeText={setNewAsgnDate} />
+                            <TouchableOpacity style={[S.calcBtn, { marginTop: 18 }]} onPress={addAssignment}>
+                                <Text style={S.calcBtnTxt}>Add Assignment</Text>
+                            </TouchableOpacity>
+                        </Pressable>
+                    </KeyboardAvoidingView>
+                </Pressable>
+            </Modal>
         </View>
     );
 }
 
+// ── Styles ────────────────────────────────────────────────────
 const getStyles = (theme) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg, alignItems: 'center' },
-    contentWrapper: { flex: 1, width: '100%', maxWidth: 1400, paddingHorizontal: 40, paddingTop: 60 },
+    root: { flex: 1, backgroundColor: theme.colors.bg },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
     // Header
-    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
-    header: { fontFamily: theme.fonts.d, fontSize: 42, fontWeight: '700', color: theme.colors.ink, letterSpacing: -1 },
-    headerSub: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 },
-    headerBackBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 52, paddingBottom: 12 },
+    title: { fontFamily: theme.fonts.d, fontSize: 36, fontWeight: '700', color: theme.colors.ink, letterSpacing: -1 },
+    titleSub: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2 },
+    backBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+    backTxt: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },
+    headerRight: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    syncBtn: { padding: 8, borderRadius: 8, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
 
-    // Quarter pills
-    quarterPill: {
-        flexDirection: 'row', alignItems: 'center', gap: 5,
-        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7,
-    },
-    quarterPillActive: {
-        backgroundColor: theme.colors.accent, borderColor: theme.colors.accent,
-    },
-    quarterPillText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink2, fontWeight: '600' },
-    quarterPillTextActive: { color: '#fff', fontWeight: '700' },
-    syncBtn: {
-        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: theme.radii.r, padding: 8, alignItems: 'center', justifyContent: 'center',
-    },
+    // Quarter tabs
+    tabsScroll: { paddingLeft: 24, marginBottom: 10, flexGrow: 0 },
+    tabsContent: { gap: 8, paddingRight: 24 },
+    qTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, flexDirection: 'row', alignItems: 'center' },
+    qTabActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
+    qTabTxt: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2, fontWeight: '600' },
+    qTabTxtActive: { color: '#fff', fontWeight: '700' },
 
-    // GPA Banner
-    gpaBanner: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: theme.radii.r, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 14,
-    },
-    gpaBannerLabel: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, letterSpacing: 2, textTransform: 'uppercase' },
-    gpaBannerValue: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '900', color: theme.colors.ink, letterSpacing: -1 },
+    // Class list
+    listContent: { paddingHorizontal: 20, paddingTop: 4 },
+    gpaBanner: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 16, padding: 18, marginBottom: 16 },
+    gpaBannerLabel: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 },
+    gpaBannerVal: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '900', color: theme.colors.ink, letterSpacing: -1 },
 
-    // Class card (old list item, kept for renderClassItem if still used elsewhere)
-    classCard: {
-        flexDirection: 'row', alignItems: 'center',
-        backgroundColor: theme.colors.surface, paddingVertical: 16, paddingRight: 16, paddingLeft: 14,
-        borderRadius: theme.radii.lg, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border,
-    },
-    classCardSelected: { borderColor: theme.colors.ink, backgroundColor: theme.colors.surface2 },
-    classCode: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, letterSpacing: 1 },
-    // Allow full course name to wrap to 2 lines
-    className: { fontFamily: theme.fonts.d, fontSize: 16, fontWeight: '600', color: theme.colors.ink, marginBottom: 3, lineHeight: 21, flexWrap: 'wrap' },
-    classTeacher: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginBottom: 4 },
-    gpRow: { flexDirection: 'row', alignItems: 'center' },
-    gpText: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3 },
+    // Class card
+    classCard: { backgroundColor: theme.colors.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 12, overflow: 'hidden', flexDirection: 'row' },
+    classCardAccent: { width: 5 },
+    classCardBody: { flex: 1, padding: 16, flexDirection: 'row', alignItems: 'center' },
+    classCardTags: { flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 6 },
+    className: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700', color: theme.colors.ink, lineHeight: 22 },
+    teacherTxt: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 3 },
+    periodTxt: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3 },
+    gradeBlock: { alignItems: 'flex-end', marginLeft: 12 },
+    gradeLetterBig: { fontFamily: theme.fonts.d, fontSize: 42, fontWeight: '900', letterSpacing: -1, lineHeight: 48 },
+    gradePctSmall: { fontFamily: theme.fonts.m, fontSize: 11, fontWeight: '600' },
 
-    // Grade block — large letter + percentage
-    gradeBlock: { alignItems: 'flex-end', minWidth: 64 },
-    gradeLetter: { fontFamily: theme.fonts.d, fontSize: 48, fontWeight: '900', letterSpacing: -1.5, lineHeight: 52 },
-    gradePct: { fontFamily: theme.fonts.m, fontSize: 11, fontWeight: '600', marginTop: -2 },
-
-    // Graph Details
-    graphDetailBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.surface2, borderRadius: theme.radii.r, padding: 12, marginTop: 12, borderWidth: 1, borderColor: theme.colors.border },
-    graphDetailName: { fontFamily: theme.fonts.d, fontSize: 14, fontWeight: '600', color: theme.colors.ink },
-    graphDetailDate: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase' },
-    graphDetailScore: { fontFamily: theme.fonts.d, fontSize: 16, fontWeight: '700', color: theme.colors.ink },
-    graphDetailPct: { fontFamily: theme.fonts.m, fontSize: 11, fontWeight: '800' },
-
-    // Grid Layout
-    gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, paddingBottom: 60, marginTop: 20 },
-    gridItem: { width: '31.5%', backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border, overflow: 'hidden' },
-    gridGradeBox: { padding: 24, paddingVertical: 36, borderLeftWidth: 6 },
-    gridGradeText: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '800', marginBottom: 6 },
-    gridInfo: { marginTop: 8 },
-    gridClassName: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700', color: theme.colors.ink },
-    gridTeacher: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 4 },
-
-    // Chart improvements
-    chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-    chartTitle: { fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink },
-    intervalPicker: { flexDirection: 'row', gap: 6 },
-    intervalBtn: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, backgroundColor: theme.colors.surface2 },
-    intervalBtnActive: { backgroundColor: theme.colors.accent },
-    intervalText: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink2 },
-    intervalTextActive: { color: '#fff', fontWeight: '700' },
-    chartWrapper: { alignItems: 'center' },
-
-    // Type tags
-    typeTag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 3, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
-    typeTagAP: { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink },
-    typeTagHN: { backgroundColor: theme.colors.ink2, borderColor: theme.colors.ink2 },
-    typeTagText: { fontFamily: theme.fonts.m, fontSize: 8, fontWeight: '600', color: theme.colors.ink2, letterSpacing: 0.5, textTransform: 'uppercase' },
+    // Tags
+    tag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
+    tagAP: { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink },
+    tagHN: { backgroundColor: theme.colors.ink2, borderColor: theme.colors.ink2 },
+    tagTxt: { fontFamily: theme.fonts.m, fontSize: 8, fontWeight: '700', color: theme.colors.ink2, letterSpacing: 0.5, textTransform: 'uppercase' },
 
     // Detail view
-    detailWrapper: { flex: 1 },
-    backRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
-    backText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 0.5 },
-    detailHeader: {
-        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: theme.radii.lg, padding: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'flex-start',
-    },
-    detailClassName: { fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink, marginBottom: 3 },
-    detailMeta: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginBottom: 8 },
+    detailHeader: { margin: 20, marginBottom: 12, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 16, padding: 18, flexDirection: 'row', alignItems: 'flex-start', borderLeftWidth: 5 },
+    detailName: { fontFamily: theme.fonts.d, fontSize: 20, fontWeight: '700', color: theme.colors.ink, marginBottom: 4, lineHeight: 26 },
+    detailMeta: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginBottom: 8 },
     detailTags: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-    detailLetter: { fontFamily: theme.fonts.d, fontSize: 52, fontWeight: '900', letterSpacing: -1.5, lineHeight: 56 },
-    detailPct: { fontFamily: theme.fonts.m, fontSize: 12, textAlign: 'right' },
+    detailTabRow: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 16, backgroundColor: theme.colors.surface2, borderRadius: 12, padding: 3, gap: 3 },
+    detailTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 10 },
+    detailTabActive: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
+    detailTabTxt: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 },
+    detailTabTxtActive: { color: theme.colors.ink, fontWeight: '700' },
 
-    // Tabs
-    tabRow: { flexDirection: 'row', backgroundColor: theme.colors.surface2, borderRadius: theme.radii.lg, padding: 3, marginBottom: 12, gap: 3 },
-    tabBtn: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: theme.radii.r },
-    tabBtnActive: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
-    tabText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 },
-    tabTextActive: { color: theme.colors.ink, fontWeight: '700' },
+    // Assignments
+    catHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: theme.colors.border, marginBottom: 6 },
+    catLabel: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, letterSpacing: 2 },
+    catAvg: { fontFamily: theme.fonts.m, fontSize: 10, fontWeight: '700' },
+    asgnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 16, marginHorizontal: 20, backgroundColor: theme.colors.surface, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 4, borderLeftWidth: 3 },
+    asgnName: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '500', color: theme.colors.ink, lineHeight: 18 },
+    asgnDate: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 2 },
+    asgnScore: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '700' },
+    asgnPct: { fontFamily: theme.fonts.m, fontSize: 10 },
 
-    // Category grouping
-    categoryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: theme.colors.border, marginBottom: 6 },
-    categoryLabel: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, letterSpacing: 2, textTransform: 'uppercase' },
-    categoryAvg: { fontFamily: theme.fonts.m, fontSize: 10, fontWeight: '600' },
+    // What-If
+    wiBreakdown: { marginHorizontal: 20, marginBottom: 16, backgroundColor: theme.colors.surface, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, padding: 16 },
+    wiBreakdownTitle: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '700', color: theme.colors.ink, marginBottom: 12 },
+    wiCatRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+    wiCatName: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink },
+    wiCatWeight: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3 },
+    wiCatPct: { fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '800' },
 
-    // Assignment row
-    assignmentRow: {
-        flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
-        paddingVertical: 10, paddingHorizontal: 12,
-        backgroundColor: theme.colors.surface, borderRadius: theme.radii.r,
-        borderWidth: 1, borderColor: theme.colors.border, marginBottom: 3,
-    },
-    assignmentName: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '500', color: theme.colors.ink, lineHeight: 18 },
-    assignmentNotes: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, marginTop: 2 },
-    assignmentDate: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, marginTop: 3 },
-    assignmentScore: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '600' },
-    assignmentPct: { fontFamily: theme.fonts.m, fontSize: 10 },
-    emptyAssignments: { alignItems: 'center', padding: 30 },
+    // Inputs
+    inputLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 6, marginTop: 14, paddingHorizontal: 20 },
+    input: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, padding: 13, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, marginHorizontal: 20, marginBottom: 0 },
+    segRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 4 },
+    seg: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
+    segActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
+    segTxt: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink2 },
+    segTxtActive: { color: '#fff', fontWeight: '700' },
+    calcBtn: { backgroundColor: theme.colors.accent, borderRadius: 12, padding: 15, alignItems: 'center', marginHorizontal: 20, marginTop: 12 },
+    calcBtnTxt: { fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '700', color: '#fff' },
 
-    // Chart
-    chartContainer: {
-        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: theme.radii.lg, padding: 12, marginBottom: 16, alignItems: 'center',
-    },
-    chartLabel: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8, alignSelf: 'flex-start' },
+    // Result card
+    resultCard: { marginHorizontal: 20, marginTop: 16, backgroundColor: theme.colors.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, padding: 20, alignItems: 'center' },
+    resultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', width: '100%' },
+    resultCol: { alignItems: 'center', flex: 1 },
+    resultColLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, textAlign: 'center' },
+    resultColVal: { fontFamily: theme.fonts.d, fontSize: 26, fontWeight: '900', letterSpacing: -1 },
+    resultDivider: { width: 1, height: 40, backgroundColor: theme.colors.border },
+    resultBig: { fontFamily: theme.fonts.d, fontSize: 40, fontWeight: '900', letterSpacing: -1, marginVertical: 10 },
 
-    // Calc
-    inputLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 5, marginTop: 14 },
-    input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink },
-    calcButton: { backgroundColor: theme.colors.accent, padding: 14, borderRadius: theme.radii.r, alignItems: 'center', marginTop: 10 },
-    calcButtonText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15, fontWeight: '700' },
-    googleBtn: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, padding: 14, borderRadius: theme.radii.r, alignItems: 'center' },
-    googleBtnText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 15, fontWeight: '600' },
+    // FAB
+    fab: { position: 'absolute', bottom: 32, right: 24, backgroundColor: theme.colors.accent, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: theme.colors.accent, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
 
-    actionBtn: {
-        backgroundColor: theme.colors.surface, paddingVertical: 14, paddingHorizontal: 24,
-        borderRadius: theme.radii.r, alignItems: 'center', justifyContent: 'center',
-        borderWidth: 1, borderColor: theme.colors.border,
-    },
-    actionBtnText: { color: theme.colors.ink, fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
+    // Modal
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+    modalSheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 0, paddingTop: 12, paddingBottom: 40 },
+    modalHandle: { width: 36, height: 4, backgroundColor: theme.colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+    modalTitle: { fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, paddingHorizontal: 20, marginBottom: 8 },
 
-    actionBtnLight: {
-        backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
-        paddingVertical: 14, paddingHorizontal: 24, borderRadius: theme.radii.r,
-        alignItems: 'center', justifyContent: 'center',
-    },
-    actionBtnLightText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 16, fontWeight: '700' },
-    resultBox: { marginTop: 16, padding: 20, backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
-    resultLabel: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, marginBottom: 6, textAlign: 'center' },
-    resultValue: { fontFamily: theme.fonts.d, fontSize: 48, fontWeight: '300', letterSpacing: -1.5 },
+    // Delete
+    deleteClassBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', marginTop: 8, padding: 10 },
+    deleteClassTxt: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.red },
 
-    // Period picker modal
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-    periodPickerContainer: {
-        backgroundColor: theme.colors.surface, borderRadius: 12, padding: 20,
-        width: '100%', maxWidth: 360, borderWidth: 1, borderColor: theme.colors.border,
-    },
-    periodPickerTitle: { fontFamily: theme.fonts.d, fontSize: 20, fontWeight: '700', color: theme.colors.ink, marginBottom: 14, letterSpacing: -0.3 },
-    periodPickerEmpty: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, textAlign: 'center', padding: 12 },
-    periodItem: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingVertical: 13, paddingHorizontal: 14, borderRadius: theme.radii.r,
-        borderWidth: 1, borderColor: theme.colors.border, marginBottom: 6,
-    },
-    periodItemSelected: { backgroundColor: theme.colors.surface2, borderColor: theme.colors.ink },
-    periodItemText: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '500', color: theme.colors.ink },
-    periodItemTextSelected: { fontWeight: '700' },
-
-    // States
-    centeredState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-    placeholderText: { fontFamily: theme.fonts.s, color: theme.colors.ink3, fontSize: 14, textAlign: 'center' },
-    placeholderSub: { fontFamily: theme.fonts.m, color: theme.colors.ink4, fontSize: 12, textAlign: 'center', marginTop: 6, lineHeight: 18 },
-    emptyDetail: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    emptyDetailIcon: { fontSize: 36, marginBottom: 12 },
-
-    // Hypothetical Toggle / What-If
-    hypoToggle: {
-        flexDirection: 'row', alignItems: 'center', gap: 6,
-        paddingVertical: 7, paddingHorizontal: 12,
-        borderRadius: 20, borderWidth: 1,
-        borderColor: theme.colors.border, backgroundColor: theme.colors.surface,
-    },
-    hypoToggleActive: {
-        backgroundColor: theme.colors.accent, borderColor: theme.colors.accent,
-    },
-    hypoToggleText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, fontWeight: '600', letterSpacing: 0.2 },
-
-    // What-If active banner
-    whatIfBanner: {
-        flexDirection: 'row', alignItems: 'center', gap: 10,
-        backgroundColor: theme.colors.accent, borderRadius: theme.radii.r,
-        padding: 12, marginBottom: 10,
-    },
-    whatIfBannerTitle: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '700', color: '#fff' },
-    whatIfBannerSub: { fontFamily: theme.fonts.m, fontSize: 10, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
-    whatIfBannerClose: { backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 20 },
-    whatIfBannerCloseText: { fontFamily: theme.fonts.m, fontSize: 11, color: '#fff', fontWeight: '700' },
-
-    // Category Selector (What If)
-    catSelector: { flexDirection: 'row', gap: 6, marginBottom: 15 },
-    catBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: theme.radii.r, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
-    catBtnActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
-    catBtnText: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink2 },
-    catBtnTextActive: { color: '#fff', fontWeight: '700' },
-    resultDiff: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },
-    resultPct: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 4 },
+    // Empty
+    emptyState: { alignItems: 'center', paddingVertical: 60 },
+    emptyIcon: { fontSize: 42, marginBottom: 12 },
+    emptyTitle: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700', color: theme.colors.ink, marginBottom: 6 },
+    emptySub: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, textAlign: 'center', lineHeight: 18, paddingHorizontal: 32 },
 });
