@@ -40,10 +40,10 @@ export const colors = {
 export const getTheme = (isDark) => ({
     colors: isDark ? colors.dark : colors.light,
     fonts: {
-        d: 'SourGummy', // Thick, vintage serif
-        m: 'SourGummy',
-        s: 'SourGummy', // Clean, technical sans
-        b: 'SourGummy', // Button font
+        d: 'CormorantGaramond-Bold', // Thick, vintage serif
+        m: 'CormorantGaramond-Regular',
+        s: 'CormorantGaramond-SemiBold', // Elegant body
+        b: 'CormorantGaramond-Bold', // Button font
     },
     radii: {
         r: 10,

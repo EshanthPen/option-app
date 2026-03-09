@@ -23,6 +23,12 @@ import {
   InstrumentSans_700Bold,
 } from '@expo-google-fonts/instrument-sans';
 import { Chewy_400Regular } from '@expo-google-fonts/chewy';
+import {
+  CormorantGaramond_400Regular,
+  CormorantGaramond_500Medium,
+  CormorantGaramond_600SemiBold,
+  CormorantGaramond_700Bold,
+} from '@expo-google-fonts/cormorant-garamond';
 import { ThemeProvider } from './src/context/ThemeContext';
 
 export default function App() {
@@ -45,6 +51,10 @@ export default function App() {
     'InstrumentSans-Bold': InstrumentSans_700Bold,
     'Chewy': Chewy_400Regular,
     'SourGummy': require('./assets/fonts/SourGummy.ttf'),
+    'CormorantGaramond-Regular': CormorantGaramond_400Regular,
+    'CormorantGaramond-Medium': CormorantGaramond_500Medium,
+    'CormorantGaramond-SemiBold': CormorantGaramond_600SemiBold,
+    'CormorantGaramond-Bold': CormorantGaramond_700Bold,
   });
 
   if (!fontsLoaded) {
