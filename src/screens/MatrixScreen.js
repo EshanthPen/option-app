@@ -297,6 +297,11 @@ export default function MatrixScreen() {
                     if (worktimeTask.parent_task_id && !originalIdsToUpdate.includes(worktimeTask.parent_task_id)) {
                         originalIdsToUpdate.push(worktimeTask.parent_task_id);
                     }
+                } else {
+                    if (Platform.OS === 'web') window.alert("Failed to sync to Google Calendar. Your session may have expired. Please go to Settings and sign in with Google again.");
+                    else Alert.alert("Sync Error", "Failed to sync to Google Calendar. Your session may have expired. Please go to Settings and sign in with Google again.");
+                    setSaving(false);
+                    return; // Abort because Google sync is critical
                 }
             }
 

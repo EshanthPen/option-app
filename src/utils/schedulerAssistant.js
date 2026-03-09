@@ -14,8 +14,17 @@
  * @returns {Array} List of tasks with newly assigned `scheduled_start` and `scheduled_end` (ISO strings)
  */
 export const performSmartScheduling = (tasks, busyPeriods, workingHours) => {
+    console.log("SMART SCHEDULER: Received", tasks.length, "total tasks");
     // 1. Filter out tasks that are already scheduled or completed
-    const unscheduledTasks = tasks.filter(t => !t.is_planned && !t.completed && (t.type === 'assignment' || !t.type));
+    const unscheduledTasks = tasks.filter(t => {
+        const isAssignment = t.type === 'assignment' || !t.type;
+        const valid = !t.is_planned && !t.completed && isAssignment;
+        if (!valid) {
+            console.log("Filtered Out Task:", t.title, "| Planned:", t.is_planned, "| Completed:", t.completed, "| Type:", t.type);
+        }
+        return valid;
+    });
+    console.log("SMART SCHEDULER: Unscheduled valid tasks to process:", unscheduledTasks.length);
 
     // 2. Sort by Eisenhower Matrix Priority
     // Quadrant 1 (Urgent & Important) > Quadrant 2 (Important, Not Urgent) > Quadrant 3 > Quadrant 4
