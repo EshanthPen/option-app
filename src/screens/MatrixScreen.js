@@ -82,6 +82,8 @@ export default function MatrixScreen() {
             duration: parseInt(duration) || 60,
             due_date: taskDate,
             source: 'manual',
+            type: 'assignment',
+            is_planned: false,
             user_id: deviceId
         };
         try {
@@ -154,6 +156,8 @@ export default function MatrixScreen() {
                     duration: 60,
                     due_date: dueDate.toISOString().split('T')[0],
                     source: 'schoology_import',
+                    type: 'assignment',
+                    is_planned: false,
                     user_id: deviceId
                 };
             }).filter(t => t !== null);
@@ -243,27 +247,37 @@ export default function MatrixScreen() {
                 return;
             }
 
-            // 5. Update state and dispatch to Supabase and Google sequentially
             let successCount = 0;
-            for (const task of optimizedTasks) {
+            const originalIdsToUpdate = [];
+
+            for (const worktimeTask of optimizedTasks) {
                 // Save to Google Calendar
                 const event = {
-                    summary: `Option: ${task.title} 🤖`,
-                    description: `Priority: ${task.urgency}U/${task.importance}I\n\nAutomatically scheduled by Option Smart AI.`,
-                    start: { dateTime: task.scheduled_start, timeZone: 'America/New_York' },
-                    end: { dateTime: task.scheduled_end, timeZone: 'America/New_York' }
+                    summary: `${worktimeTask.title} 🤖`,
+                    description: `Priority: ${worktimeTask.urgency}U/${worktimeTask.importance}I\n\nAutomatically scheduled by Option Smart AI.`,
+                    start: { dateTime: worktimeTask.scheduled_start, timeZone: 'America/New_York' },
+                    end: { dateTime: worktimeTask.scheduled_end, timeZone: 'America/New_York' }
                 };
 
                 const calSuccess = await createGoogleCalendarEvent(token, event);
 
                 if (calSuccess) {
-                    // Save to Supabase
-                    const { error } = await supabase.from('tasks')
-                        .update({ scheduled_start: task.scheduled_start, scheduled_end: task.scheduled_end })
-                        .eq('id', task.id);
-
-                    if (!error) successCount++;
+                    // Save the new worktime task to Supabase
+                    const { data: insertedData, error: insertError } = await supabase.from('tasks').insert([worktimeTask]).select();
+                    if (!insertError) {
+                        successCount++;
+                        if (worktimeTask.parent_task_id && !originalIdsToUpdate.includes(worktimeTask.parent_task_id)) {
+                            originalIdsToUpdate.push(worktimeTask.parent_task_id);
+                        }
+                    } else {
+                        console.error('Failed to insert worktime task:', insertError);
+                    }
                 }
+            }
+
+            // Mark the parent assignments as planned so they aren't scheduled again
+            if (originalIdsToUpdate.length > 0) {
+                await supabase.from('tasks').update({ is_planned: true }).in('id', originalIdsToUpdate);
             }
 
             // Reload visual state completely so users see the times
@@ -335,7 +349,10 @@ export default function MatrixScreen() {
         ? new Date(taskDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         : 'Select a date';
 
-    const selectedDayTasks = tasks.filter(t => t.due_date?.startsWith(selectedDate) || t.date?.startsWith(selectedDate));
+    const selectedDayTasks = tasks.filter(t => {
+        if (t.type === 'worktime') return t.date?.startsWith(selectedDate);
+        return t.due_date?.startsWith(selectedDate) || t.date?.startsWith(selectedDate);
+    });
 
     return (
         <View style={styles.container}>
@@ -405,7 +422,10 @@ export default function MatrixScreen() {
                         <View style={styles.grid}>
                             {cells.map((d, i) => {
                                 const dateStr = d ? `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}` : null;
-                                const dayTasks = d ? tasks.filter(t => t.due_date?.startsWith(dateStr) || t.date?.startsWith(dateStr)) : [];
+                                const dayTasks = d ? tasks.filter(t => {
+                                    if (t.type === 'worktime') return t.date?.startsWith(dateStr);
+                                    return t.due_date?.startsWith(dateStr) || t.date?.startsWith(dateStr);
+                                }) : [];
                                 const isToday = d && d === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
 
                                 return (
@@ -440,7 +460,9 @@ export default function MatrixScreen() {
                                                         { color: c.text },
                                                         isHigh && { fontSize: 11, fontWeight: '900' },
                                                         isMed && { fontWeight: '700' }
-                                                    ]} numberOfLines={1}>{t.title}</Text>
+                                                    ]} numberOfLines={1}>
+                                                        {t.type === 'worktime' ? '🎯 ' : ''}{t.title}
+                                                    </Text>
                                                 </View>
                                             );
                                         })}
@@ -486,9 +508,14 @@ export default function MatrixScreen() {
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.sidebarTaskTitle} numberOfLines={1}>{t.title}</Text>
 
-                                        {t.scheduled_start && (
+                                        {t.scheduled_start && t.type === 'worktime' && (
                                             <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2, marginBottom: 4 }}>
-                                                🕒 {new Date(t.scheduled_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(t.scheduled_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                🕒 Block: {new Date(t.scheduled_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(t.scheduled_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </Text>
+                                        )}
+                                        {t.type !== 'worktime' && (
+                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.red, marginTop: 2, marginBottom: 4 }}>
+                                                🚨 Deadline
                                             </Text>
                                         )}
 

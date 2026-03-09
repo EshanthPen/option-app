@@ -15,7 +15,7 @@
  */
 export const performSmartScheduling = (tasks, busyPeriods, workingHours) => {
     // 1. Filter out tasks that are already scheduled or completed
-    const unscheduledTasks = tasks.filter(t => !t.scheduled_start && !t.completed);
+    const unscheduledTasks = tasks.filter(t => !t.is_planned && !t.completed && (t.type === 'assignment' || !t.type));
 
     // 2. Sort by Eisenhower Matrix Priority
     // Quadrant 1 (Urgent & Important) > Quadrant 2 (Important, Not Urgent) > Quadrant 3 > Quadrant 4
@@ -109,11 +109,18 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours) => {
                 // We found a gap big enough!
                 const taskEnd = new Date(currentMarker.getTime() + requiredMs);
 
-                // Copy task and assign properties
+                // Generate a new "worktime" task instead of mutating the assignment
                 scheduledTasks.push({
-                    ...task,
+                    title: `Prep: ${task.title}`,
+                    type: 'worktime',
+                    parent_task_id: task.id,
+                    urgency: task.urgency,
+                    importance: task.importance,
+                    duration: task.duration,
+                    user_id: task.user_id,
                     scheduled_start: currentMarker.toISOString(),
-                    scheduled_end: taskEnd.toISOString()
+                    scheduled_end: taskEnd.toISOString(),
+                    date: currentMarker.toISOString().split('T')[0] // For local rendering
                 });
 
                 // Move marker forward and inject this task's time as a new busy block natively
