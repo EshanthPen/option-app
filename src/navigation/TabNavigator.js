@@ -87,7 +87,7 @@ const getStyles = (theme) => StyleSheet.create({
     sidebarContainer: {
         position: 'absolute', top: 0, left: 0, bottom: 0,
         backgroundColor: theme.colors.surface,
-        borderRightWidth: 1, borderRightColor: theme.colors.border,
+        borderRightWidth: 2, borderRightColor: theme.colors.border,
         paddingTop: 40, alignItems: 'center', paddingHorizontal: 12,
         zIndex: 100,
     },

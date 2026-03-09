@@ -251,15 +251,15 @@ const getStyles = (theme) => StyleSheet.create({
 
     // Hero Section
     heroSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 48 },
-    greetingText: { fontFamily: theme.fonts.m, fontSize: 16, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 3 },
-    userNameText: { fontFamily: theme.fonts.d, fontSize: 64, fontWeight: '700', color: theme.colors.ink, letterSpacing: -2, marginTop: -4 },
+    greetingText: { fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, textTransform: 'uppercase', letterSpacing: 3 },
+    userNameText: { fontFamily: theme.fonts.d, fontSize: 64, fontWeight: '900', color: theme.colors.ink, letterSpacing: -2, marginTop: -4 },
 
     focusWidget: {
         flexDirection: 'row', alignItems: 'center', gap: 14,
         padding: 12, paddingRight: 20,
-        backgroundColor: theme.colors.surface, borderRadius: 20,
-        borderWidth: 1, borderColor: theme.colors.border,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3
+        backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
+        borderWidth: 2, borderColor: theme.colors.border,
+        shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
     },
     focusRing: {
         width: 48, height: 48, borderRadius: 24,
@@ -280,7 +280,8 @@ const getStyles = (theme) => StyleSheet.create({
     statCard: {
         flex: 1, padding: 16,
         backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        borderWidth: 1, borderColor: theme.colors.border,
+        borderWidth: 2, borderColor: theme.colors.border,
+        shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
     },
     statLabel: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 },
     statValue: { fontFamily: theme.fonts.d, fontSize: 36, fontWeight: '700', color: theme.colors.ink },
@@ -299,7 +300,8 @@ const getStyles = (theme) => StyleSheet.create({
     assignmentCard: {
         flexDirection: 'row', backgroundColor: theme.colors.surface,
         borderRadius: theme.radii.lg, marginBottom: 12, overflow: 'hidden',
-        borderWidth: 1, borderColor: theme.colors.border,
+        borderWidth: 2, borderColor: theme.colors.border,
+        shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
     },
     asgnColorBar: { width: 4 },
     asgnContent: { flex: 1, padding: 20, flexDirection: 'row', alignItems: 'center', gap: 16 },
@@ -311,7 +313,8 @@ const getStyles = (theme) => StyleSheet.create({
     // At Risk
     atRiskCard: {
         backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        padding: 16, marginBottom: 12, borderWidth: 1, borderColor: theme.colors.border,
+        padding: 16, marginBottom: 12, borderWidth: 2, borderColor: theme.colors.border,
+        shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
     },
     atRiskHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     atRiskName: { fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink },
@@ -322,14 +325,16 @@ const getStyles = (theme) => StyleSheet.create({
     successCard: {
         padding: 24, alignItems: 'center', gap: 12,
         backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        borderWidth: 1, borderColor: theme.colors.border, borderStyle: 'dashed'
+        borderWidth: 2, borderColor: theme.colors.border,
+        shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
     },
     successText: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink3, textAlign: 'center' },
 
     // Overview
     overviewContainer: {
         backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        padding: 20, borderWidth: 1, borderColor: theme.colors.border
+        padding: 20, borderWidth: 2, borderColor: theme.colors.border,
+        shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
     },
     overviewRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
     overviewLabel: { flex: 1, fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink2 },
@@ -337,6 +342,6 @@ const getStyles = (theme) => StyleSheet.create({
     progressBarFill: { height: '100%', borderRadius: 3 },
     overviewValue: { width: 32, fontFamily: theme.fonts.m, fontSize: 10, fontWeight: '700', textAlign: 'right', color: theme.colors.ink },
 
-    emptyCard: { padding: 32, alignItems: 'center', backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, borderStyle: 'dashed', borderWidth: 1, borderColor: theme.colors.border },
+    emptyCard: { padding: 32, alignItems: 'center', backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
     emptyText: { fontFamily: theme.fonts.s, fontSize: 14, color: theme.colors.ink3 }
 });

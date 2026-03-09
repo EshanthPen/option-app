@@ -832,7 +832,7 @@ const getStyles = (theme) => StyleSheet.create({
 
     section: { marginBottom: 30 },
     sectionTitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 15 },
-    settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.colors.surface, padding: 16, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border },
+    settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.colors.surface, padding: 16, borderRadius: theme.radii.lg, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
     iconBox: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
     settingLabel: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink },
     settingSub: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink3, marginTop: 2 },
@@ -840,8 +840,8 @@ const getStyles = (theme) => StyleSheet.create({
     toggleCircle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
 
     card: {
-        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: theme.radii.lg, padding: 24, marginBottom: 20
+        backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border,
+        borderRadius: theme.radii.lg, padding: 24, marginBottom: 20, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
     },
     cardTitle: { fontFamily: theme.fonts.d, fontSize: 20, fontWeight: '600', color: theme.colors.ink, marginBottom: 10 },
     instructions: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, lineHeight: 20, marginBottom: 15 },
@@ -856,51 +856,51 @@ const getStyles = (theme) => StyleSheet.create({
 
     label: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
     input: {
-        backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface2, borderWidth: 2, borderColor: theme.colors.border,
         borderRadius: theme.radii.r, padding: 14, fontFamily: theme.fonts.m, fontSize: 13,
-        color: theme.colors.ink, marginBottom: 12
+        color: theme.colors.ink, marginBottom: 12, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3
     },
 
     saveBtn: {
         backgroundColor: '#FFFFFF', padding: 16, borderRadius: theme.radii.r,
-        alignItems: 'center', marginTop: 20, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4,
-        borderWidth: 1, borderColor: '#000000',
+        alignItems: 'center', marginTop: 20, shadowColor: '#000000', shadowOpacity: 1, shadowOffset: { width: 4, height: 4 }, shadowRadius: 0, elevation: 4,
+        borderWidth: 2, borderColor: '#000000',
     },
-    saveBtnText: { color: '#000000', fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
+    saveBtnText: { color: '#000000', fontFamily: theme.fonts.b, fontSize: 20, letterSpacing: 1 },
 
     syncBtn: {
         backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
         padding: 14, borderRadius: theme.radii.r, alignItems: 'center', marginTop: 12,
     },
-    syncBtnText: { color: theme.colors.ink, fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600' },
+    syncBtnText: { color: theme.colors.ink, fontFamily: theme.fonts.b, fontSize: 18, letterSpacing: 1 },
 
     googleBtn: {
         backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
         padding: 14, borderRadius: theme.radii.r, alignItems: 'center', marginTop: 12,
         flexDirection: 'row', justifyContent: 'center', gap: 10,
     },
-    googleBtnText: { color: theme.colors.ink, fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600' },
+    googleBtnText: { color: theme.colors.ink, fontFamily: theme.fonts.b, fontSize: 18, letterSpacing: 1 },
 
     logoutBtn: {
         backgroundColor: theme.colors.red + '15', padding: 16, borderRadius: theme.radii.r,
         alignItems: 'center', marginTop: 40, borderWidth: 1, borderColor: theme.colors.red + '30',
     },
-    logoutBtnText: { color: theme.colors.red, fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
+    logoutBtnText: { color: theme.colors.red, fontFamily: theme.fonts.b, fontSize: 20, letterSpacing: 1 },
 
     actionBtn: {
         backgroundColor: '#FFFFFF', paddingVertical: 14, paddingHorizontal: 24,
         borderRadius: theme.radii.r, alignItems: 'center', justifyContent: 'center',
-        flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: '#000000',
-        shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5,
+        flexDirection: 'row', gap: 10, borderWidth: 2, borderColor: '#000000',
+        shadowColor: '#000000', shadowOpacity: 1, shadowOffset: { width: 4, height: 4 }, shadowRadius: 0, elevation: 4,
     },
-    actionBtnText: { color: '#000000', fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
+    actionBtnText: { color: '#000000', fontFamily: theme.fonts.b, fontSize: 18, letterSpacing: 1 },
 
     actionBtnLight: {
-        backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface2, borderWidth: 2, borderColor: theme.colors.border,
         paddingVertical: 14, paddingHorizontal: 24, borderRadius: theme.radii.r,
-        alignItems: 'center', justifyContent: 'center',
+        alignItems: 'center', justifyContent: 'center', shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
     },
-    actionBtnLightText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 16, fontWeight: '700' },
+    actionBtnLightText: { fontFamily: theme.fonts.b, color: theme.colors.ink, fontSize: 18, letterSpacing: 1 },
 
     progressBarTrack: { height: 4, backgroundColor: theme.colors.border, borderRadius: 2, marginTop: 12, overflow: 'hidden' },
     progressBarFill: { height: 4, width: '60%', backgroundColor: theme.colors.ink, borderRadius: 2 },

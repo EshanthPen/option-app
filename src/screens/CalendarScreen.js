@@ -14,6 +14,6 @@ export default function CalendarScreen() {
 
 const getStyles = (theme) => StyleSheet.create({
     container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.bg },
-    title: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: 'bold', marginBottom: 10, color: theme.colors.ink },
-    subtitle: { fontFamily: theme.fonts.s, fontSize: 16, color: theme.colors.ink3 }
+    title: { fontFamily: theme.fonts.d, fontSize: 36, fontWeight: '700', marginBottom: 10, color: theme.colors.ink, letterSpacing: -1 },
+    subtitle: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, letterSpacing: 1.5, textTransform: 'uppercase' }
 });

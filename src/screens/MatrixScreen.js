@@ -689,28 +689,28 @@ const getStyles = (theme) => StyleSheet.create({
     title: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
     subtitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 },
     btnRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-    btnDark: { backgroundColor: theme.colors.accent, flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: theme.radii.r, gap: 8 },
-    btnDarkText: { color: '#fff', fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '700' },
-    saveButton: { backgroundColor: theme.colors.accent, padding: 16, borderRadius: theme.radii.lg, alignItems: 'center', marginTop: 20 },
-    saveButtonText: { color: '#fff', fontFamily: theme.fonts.s, fontWeight: '700' },
-    btnOut: { borderWidth: 1, borderColor: theme.colors.border2, padding: 10, borderRadius: theme.radii.r, alignItems: 'center', backgroundColor: theme.colors.surface },
-    btnOutText: { color: theme.colors.ink, fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600' },
+    btnDark: { backgroundColor: theme.colors.accent, flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: theme.radii.r, gap: 8, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
+    btnDarkText: { color: '#fff', fontFamily: theme.fonts.b, fontSize: 18, letterSpacing: 1 },
+    saveButton: { backgroundColor: theme.colors.accent, padding: 16, borderRadius: theme.radii.lg, alignItems: 'center', marginTop: 20, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
+    saveButtonText: { color: '#fff', fontFamily: theme.fonts.b, fontSize: 20, letterSpacing: 1 },
+    btnOut: { borderWidth: 2, borderColor: theme.colors.border, padding: 10, borderRadius: theme.radii.r, alignItems: 'center', backgroundColor: theme.colors.surface, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3 },
+    btnOutText: { color: theme.colors.ink, fontFamily: theme.fonts.b, fontSize: 18, letterSpacing: 1 },
 
-    legend: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 16, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 20, marginBottom: 18 },
+    legend: { backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 16, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 20, marginBottom: 18, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
     legendTitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 2, textTransform: 'uppercase', marginRight: 4 },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     swatch: { width: 14, height: 14, borderRadius: 3, borderWidth: 1.5 },
     legendText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink2, fontWeight: '500' },
 
     controlsRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 12 },
-    ctrlBtn: { borderWidth: 1, borderColor: theme.colors.border2, padding: 5, borderRadius: theme.radii.r },
+    ctrlBtn: { borderWidth: 2, borderColor: theme.colors.border, padding: 5, borderRadius: theme.radii.r, shadowColor: theme.colors.border, shadowOffset: { width: 2, height: 2 }, shadowOpacity: 1, shadowRadius: 0, elevation: 2 },
     monthText: { fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink },
 
     daysRow: { flexDirection: 'row', marginBottom: 4 },
     dayText: { width: CELL_W, textAlign: 'center', fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.8 },
 
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
-    cell: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 5, padding: 4, overflow: 'hidden' },
+    cell: { backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border, borderRadius: 5, padding: 4, overflow: 'hidden' },
     cellEmpty: { backgroundColor: theme.colors.surface2, opacity: 0.4 },
     cellToday: { borderColor: theme.colors.ink, borderWidth: 2 },
     cellNum: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '700', color: theme.colors.ink2, marginBottom: 4 },
@@ -722,14 +722,14 @@ const getStyles = (theme) => StyleSheet.create({
 
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-    modalView: { width: '100%', maxWidth: 400, backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, padding: 24, borderWidth: 1, borderColor: theme.colors.border },
+    modalView: { width: '100%', maxWidth: 400, backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, padding: 24, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 6, height: 6 }, shadowOpacity: 1, shadowRadius: 0, elevation: 6 },
     modalTitle: { fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, marginBottom: 12, letterSpacing: -0.5 },
     instructions: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, lineHeight: 20, marginBottom: 15 },
     label: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 5 },
-    input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, paddingVertical: 10, paddingHorizontal: 12, fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink, marginBottom: 14 },
+    input: { backgroundColor: theme.colors.surface2, borderWidth: 2, borderColor: theme.colors.border, borderRadius: theme.radii.r, paddingVertical: 10, paddingHorizontal: 12, fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink, marginBottom: 14, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3 },
 
     // Mini calendar
-    miniCalWrap: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, marginBottom: 14, marginTop: -8 },
+    miniCalWrap: { backgroundColor: theme.colors.surface2, borderWidth: 2, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, marginBottom: 14, marginTop: -8, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
     miniCalNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
     miniCalMonth: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '700', color: theme.colors.ink },
     miniDaysRow: { flexDirection: 'row', marginBottom: 4 },
@@ -741,13 +741,13 @@ const getStyles = (theme) => StyleSheet.create({
     miniCellNumSelected: { color: '#fff', fontWeight: '700' },
 
     // Sidebar
-    sidebar: { backgroundColor: theme.colors.surface, borderLeftWidth: 1, borderTopWidth: 1, borderColor: theme.colors.border },
+    sidebar: { backgroundColor: theme.colors.surface, borderLeftWidth: 2, borderTopWidth: 2, borderColor: theme.colors.border },
     sidebarWide: { width: SIDEBAR_W, borderTopWidth: 0 },
     sidebarMobile: { height: 280, borderLeftWidth: 0 },
     sidebarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
     sidebarTitle: { fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink },
     removeBtn: { backgroundColor: theme.colors.red + '15', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6 },
-    removeBtnText: { fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '600', color: theme.colors.red },
+    removeBtnText: { fontFamily: theme.fonts.b, fontSize: 16, color: theme.colors.red, letterSpacing: 1 },
 
     emptySidebar: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
     emptySidebarText: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 },
@@ -761,5 +761,5 @@ const getStyles = (theme) => StyleSheet.create({
     sidebarTaskMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
     miniSwatch: { width: 8, height: 8, borderRadius: 4 },
     sidebarTaskPrio: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.5 },
-    sidebarBlockBtn: { padding: 10, borderRadius: 8, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
+    sidebarBlockBtn: { padding: 10, borderRadius: 8, backgroundColor: theme.colors.surface2, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3 },
 });

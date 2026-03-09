@@ -22,6 +22,7 @@ import {
   InstrumentSans_600SemiBold,
   InstrumentSans_700Bold,
 } from '@expo-google-fonts/instrument-sans';
+import { Chewy_400Regular } from '@expo-google-fonts/chewy';
 import { ThemeProvider } from './src/context/ThemeContext';
 
 export default function App() {
@@ -42,6 +43,7 @@ export default function App() {
     'InstrumentSans-Medium': InstrumentSans_500Medium,
     'InstrumentSans-SemiBold': InstrumentSans_600SemiBold,
     'InstrumentSans-Bold': InstrumentSans_700Bold,
+    'Chewy': Chewy_400Regular,
   });
 
   if (!fontsLoaded) {
