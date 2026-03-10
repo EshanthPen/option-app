@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import TabNavigator from './src/navigation/TabNavigator';
 import { useFonts } from 'expo-font';
@@ -30,8 +30,25 @@ import {
   CormorantGaramond_700Bold,
 } from '@expo-google-fonts/cormorant-garamond';
 import { ThemeProvider } from './src/context/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function App() {
+  React.useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleBeforeUnload = () => {
+        // Clear sensitive data on tab close for privacy
+        // We use synchronous localStorage for reliability during unload if possible,
+        // but AsyncStorage is the standard here.
+        const keysToClear = ['svUsername', 'svPassword', 'svDistrictUrl', 'studentVueGrades'];
+        keysToClear.forEach(key => {
+          localStorage.removeItem(key);
+        });
+      };
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
+  }, []);
+
   const [fontsLoaded] = useFonts({
     'Playfair Display': PlayfairDisplay_400Regular,
     'PlayfairDisplay': PlayfairDisplay_400Regular,

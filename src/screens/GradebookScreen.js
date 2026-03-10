@@ -134,20 +134,28 @@ export default function GradebookScreen() {
             if (isDemo && (!svUser || !svPass)) {
                 setIsSyncing(true);
                 await new Promise(r => setTimeout(r, 500));
+                
+                // For demo mode, we might want to load specific Q data if it exists
                 const raw = await AsyncStorage.getItem(`studentVueGradesQ${periodIndex}`);
                 const perRaw = await AsyncStorage.getItem('studentVuePeriods');
                 const ps = JSON.parse(perRaw || '[]');
                 const pName = ps.find(p => p.index === periodIndex)?.name || `Quarter ${periodIndex + 1}`;
+                
                 if (raw) {
                     const g = JSON.parse(raw);
                     setSvClasses(g);
                     await AsyncStorage.setItem('studentVueGrades', raw);
-                    setCurPeriodName(pName);
-                    setCurPeriodIdx(periodIndex);
-                    await AsyncStorage.setItem('studentVuePeriodName', pName);
-                    await AsyncStorage.setItem('studentVuePeriodIndex', String(periodIndex));
-                    setSelectedClass(null);
+                } else if (periodIndex === 0) {
+                    // Fallback to whatever is in studentVueGrades if Q0 is requested and no Q0 specific data
+                    const currentGrades = await AsyncStorage.getItem('studentVueGrades');
+                    if (currentGrades) setSvClasses(JSON.parse(currentGrades));
                 }
+
+                setCurPeriodName(pName);
+                setCurPeriodIdx(periodIndex);
+                await AsyncStorage.setItem('studentVuePeriodName', pName);
+                await AsyncStorage.setItem('studentVuePeriodIndex', String(periodIndex));
+                setSelectedClass(null);
                 setIsSyncing(false);
                 return;
             }
@@ -168,6 +176,8 @@ export default function GradebookScreen() {
             if (parsed?.length > 0) {
                 setSvClasses(parsed);
                 await AsyncStorage.setItem('studentVueGrades', JSON.stringify(parsed));
+                await AsyncStorage.setItem('isDemoData', 'false'); // Ensure demo mode is off if we get real data
+                
                 let ps = JSON.parse(await AsyncStorage.getItem('studentVuePeriods') || '[]');
                 if (ps.length === 0 && fetchedPeriods?.length > 0) {
                     await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(fetchedPeriods));

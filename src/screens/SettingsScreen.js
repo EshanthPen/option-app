@@ -379,10 +379,10 @@ export default function SettingsScreen() {
                     await AsyncStorage.setItem('isDemoData', 'false');
                     if (periods && periods.length > 0) {
                         await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(periods));
-                        // Set current period to the last one by default if it's the first sync
-                        const lastPeriod = periods[periods.length - 1];
-                        await AsyncStorage.setItem('studentVuePeriodName', lastPeriod.name);
-                        await AsyncStorage.setItem('studentVuePeriodIndex', String(lastPeriod.index));
+                        // Set current period to index 0 (matching the fetch above)
+                        const firstPeriod = periods.find(p => p.index === 0) || periods[0];
+                        await AsyncStorage.setItem('studentVuePeriodName', firstPeriod.name);
+                        await AsyncStorage.setItem('studentVuePeriodIndex', "0");
                     }
 
                     const totalAssignments = formattedClasses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
@@ -479,6 +479,49 @@ export default function SettingsScreen() {
         }
     };
 
+    const handleLogout = async () => {
+        if (Platform.OS === 'web') {
+            const confirmed = window.confirm('Are you sure you want to log out? This will clear all your StudentVUE and Schoology data from this device.');
+            if (!confirmed) return;
+            await logoutAction();
+        } else {
+            Alert.alert(
+                'Logout',
+                'Are you sure you want to log out? This will clear all your StudentVUE and Schoology data from this device.',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Logout', style: 'destructive', onPress: logoutAction }
+                ]
+            );
+        }
+    };
+
+    const logoutAction = async () => {
+        try {
+            const keysToClear = [
+                'svUsername', 'svPassword', 'svDistrictUrl',
+                'studentVueGrades', 'studentVuePeriods',
+                'studentVuePeriodName', 'studentVuePeriodIndex',
+                'isDemoData', 'schoologyUrl', 'userName'
+            ];
+            for (let i = 0; i < 10; i++) keysToClear.push(`studentVueGradesQ${i}`);
+            
+            await AsyncStorage.multiRemove(keysToClear);
+            
+            setSvUser('');
+            setSvPass('');
+            setSchoologyUrl('');
+            setUserName('');
+            setSelectedDistrict(null);
+            setSyncResult(null);
+            
+            if (Platform.OS === 'web') window.alert('Logged out successfully.');
+            else Alert.alert('Logged Out', 'Your data has been cleared.');
+        } catch (e) {
+            console.error('Logout error:', e);
+        }
+    };
+
     return (
         <ScrollView style={styles.container}>
             <View style={styles.headerContainer}>
@@ -516,6 +559,22 @@ export default function SettingsScreen() {
                     </View>
                     <View style={[styles.toggleContainer, isDarkMode && { backgroundColor: theme.colors.accent }]}>
                         <View style={[styles.toggleCircle, isDarkMode && { transform: [{ translateX: 20 }] }]} />
+                    </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.settingRow, { marginTop: 12 }]}
+                    onPress={handleLogout}
+                    activeOpacity={0.7}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={[styles.iconBox, { backgroundColor: theme.colors.red + '15' }]}>
+                            <RefreshCw size={20} color={theme.colors.red} />
+                        </View>
+                        <View>
+                            <Text style={[styles.settingLabel, { color: theme.colors.red }]}>Logout</Text>
+                            <Text style={styles.settingSub}>Clear all student data</Text>
+                        </View>
                     </View>
                 </TouchableOpacity>
             </View>
