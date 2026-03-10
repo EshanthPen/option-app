@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
-import { Mail, Lock, User, ArrowRight, BookOpen, GraduationCap } from 'lucide-react-native';
+import { useTheme } from '../context/ThemeContext';
+import { Mail, Lock, User, ArrowRight, BookOpen, GraduationCap, X } from 'lucide-react-native';
 
-const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
+const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
+    const { theme } = useTheme();
     const [isLogin, setIsLogin] = useState(true);
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
@@ -31,7 +33,7 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
 
         setLoading(true);
         setStatus({ message: '', type: '' });
-        if (isLogin && onAuthStart) onAuthStart();
+        
         try {
             if (isLogin) {
                 const { error } = await supabase.auth.signInWithPassword({
@@ -40,6 +42,10 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
                 });
                 if (error) throw error;
                 
+                // CRITICAL: Only trigger the global "authenticating" loader ON SUCCESS
+                // This prevents the infinite spinner if the credentials are wrong.
+                if (onAuthStart) onAuthStart();
+
                 // Small delay to ensure session is recognized if needed, then close modal
                 setTimeout(() => {
                     if (onAuthSuccess) onAuthSuccess();
@@ -62,7 +68,7 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
                 }
 
                 setStatus({ 
-                    message: 'Account created! Please check your email to confirm, then you can log in.', 
+                    message: 'Account created! Please check your email to confirm, then you can login.', 
                     type: 'success' 
                 });
                 setIsLogin(true); // Switch to login after signup
@@ -70,6 +76,7 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
             }
         } catch (error) {
             setStatus({ message: error.message, type: 'error' });
+            if (onAuthReset) onAuthReset(); // Ensure global state is reset if we hit an error
         } finally {
             setLoading(false);
         }
@@ -78,27 +85,28 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.container}
+            style={getStyles(theme).container}
         >
-            <View style={styles.card}>
-                <Text style={styles.title}>{isLogin ? 'Welcome Back' : 'Create Account'}</Text>
-                <Text style={styles.subtitle}>
+            <View style={getStyles(theme).card}>
+                <Text style={getStyles(theme).title}>{isLogin ? 'Welcome Back' : 'Create Account'}</Text>
+                <Text style={getStyles(theme).subtitle}>
                     {isLogin ? 'Sign in to access your dashboard' : 'Join Option to sync your data'}
                 </Text>
 
                 {status.message ? (
-                    <View style={[styles.statusBanner, status.type === 'error' ? styles.errorBanner : styles.successBanner]}>
-                        <Text style={styles.statusText}>{status.message}</Text>
+                    <View style={[getStyles(theme).statusBanner, status.type === 'error' ? getStyles(theme).errorBanner : getStyles(theme).successBanner]}>
+                        <Text style={getStyles(theme).statusText}>{status.message}</Text>
                     </View>
                 ) : null}
 
-                <View style={styles.form}>
+                <View style={getStyles(theme).form}>
                     {!isLogin && (
-                        <View style={styles.inputContainer}>
-                            <User size={20} color="#666" style={styles.icon} />
+                        <View style={getStyles(theme).inputContainer}>
+                            <User size={18} color={theme.colors.ink3} />
                             <TextInput
-                                style={styles.input}
+                                style={getStyles(theme).input}
                                 placeholder="Full Name"
+                                placeholderTextColor={theme.colors.ink3}
                                 value={fullName}
                                 onChangeText={setFullName}
                                 autoCapitalize="words"
@@ -106,11 +114,12 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
                         </View>
                     )}
 
-                    <View style={styles.inputContainer}>
-                        <Mail size={20} color="#666" style={styles.icon} />
+                    <View style={getStyles(theme).inputContainer}>
+                        <Mail size={18} color={theme.colors.ink3} />
                         <TextInput
-                            style={styles.input}
+                            style={getStyles(theme).input}
                             placeholder="Email Address"
+                            placeholderTextColor={theme.colors.ink3}
                             value={email}
                             onChangeText={setEmail}
                             autoCapitalize="none"
@@ -118,11 +127,12 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
                         />
                     </View>
 
-                    <View style={styles.inputContainer}>
-                        <Lock size={20} color="#666" style={styles.icon} />
+                    <View style={getStyles(theme).inputContainer}>
+                        <Lock size={18} color={theme.colors.ink3} />
                         <TextInput
-                            style={styles.input}
+                            style={getStyles(theme).input}
                             placeholder="Password"
+                            placeholderTextColor={theme.colors.ink3}
                             value={password}
                             onChangeText={setPassword}
                             secureTextEntry
@@ -130,11 +140,12 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
                     </View>
 
                     {!isLogin && (
-                        <View style={styles.inputContainer}>
-                            <BookOpen size={20} color="#666" style={styles.icon} />
+                        <View style={getStyles(theme).inputContainer}>
+                            <BookOpen size={18} color={theme.colors.ink3} />
                             <TextInput
-                                style={styles.input}
-                                placeholder="Schoology Calendar Link (Optional)"
+                                style={getStyles(theme).input}
+                                placeholder="Schoology Link (Optional)"
+                                placeholderTextColor={theme.colors.ink3}
                                 value={schoologyUrl}
                                 onChangeText={setSchoologyUrl}
                                 autoCapitalize="none"
@@ -143,7 +154,7 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
                     )}
 
                     <TouchableOpacity
-                        style={styles.button}
+                        style={[getStyles(theme).button, loading && { opacity: 0.7 }]}
                         onPress={handleAuth}
                         disabled={loading}
                     >
@@ -151,8 +162,8 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
                             <ActivityIndicator color="#fff" />
                         ) : (
                             <>
-                                <Text style={styles.buttonText}>
-                                    {isLogin ? 'Login' : 'Sign Up'}
+                                <Text style={getStyles(theme).buttonText}>
+                                    {isLogin ? 'Let\'s Go' : 'Create My Account'}
                                 </Text>
                                 <ArrowRight size={20} color="#fff" />
                             </>
@@ -161,10 +172,10 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
 
                     <TouchableOpacity
                         onPress={() => setIsLogin(!isLogin)}
-                        style={styles.switchButton}
+                        style={getStyles(theme).switchButton}
                     >
-                        <Text style={styles.switchText}>
-                            {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Login"}
+                        <Text style={getStyles(theme).switchText}>
+                            {isLogin ? "Need an account? Join now" : "Already a member? Login here"}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -173,97 +184,119 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8F9FA',
+        backgroundColor: 'transparent',
         justifyContent: 'center',
         padding: 20,
     },
     card: {
-        backgroundColor: '#fff',
-        borderRadius: 24,
+        backgroundColor: theme.colors.surface,
+        borderRadius: 20,
         padding: 32,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-        elevation: 8,
+        borderWidth: 2,
+        borderColor: theme.colors.border,
+        // Neo-Brutalism Shadow
+        shadowColor: theme.colors.border,
+        shadowOffset: { width: 4, height: 4 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
+        elevation: 4,
+    },
+    title: {
+        fontFamily: theme.fonts.d,
+        fontSize: 32,
+        fontWeight: '700',
+        color: theme.colors.ink,
+        marginBottom: 8,
+        letterSpacing: -0.5,
+    },
+    subtitle: {
+        fontFamily: theme.fonts.s,
+        fontSize: 15,
+        color: theme.colors.ink2,
+        marginBottom: 24,
+        lineHeight: 22,
     },
     statusBanner: {
-        padding: 12,
+        padding: 14,
         borderRadius: 12,
-        marginBottom: 20,
+        marginBottom: 24,
+        borderWidth: 2,
     },
     errorBanner: {
         backgroundColor: '#FFF0F0',
-        borderWidth: 1,
-        borderColor: '#FFC1C1',
+        borderColor: theme.colors.red,
     },
     successBanner: {
         backgroundColor: '#F0FFF4',
-        borderWidth: 1,
-        borderColor: '#C1FFD7',
+        borderColor: theme.colors.green,
     },
     statusText: {
-        fontSize: 14,
+        fontFamily: theme.fonts.m,
+        fontSize: 13,
         textAlign: 'center',
-        fontWeight: '500',
-        color: '#333',
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#1A1A1A',
-        marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#666',
-        marginBottom: 32,
+        fontWeight: '600',
+        color: theme.colors.ink,
+        lineHeight: 18,
     },
     form: {
-        gap: 16,
+        gap: 14,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F1F3F5',
+        backgroundColor: theme.colors.surface2,
         borderRadius: 12,
         paddingHorizontal: 16,
         height: 56,
-    },
-    icon: {
-        marginRight: 12,
+        borderWidth: 2,
+        borderColor: theme.colors.border2,
+        gap: 12,
     },
     input: {
         flex: 1,
+        fontFamily: theme.fonts.s,
         fontSize: 16,
-        color: '#1A1A1A',
+        color: theme.colors.ink,
     },
     button: {
-        backgroundColor: '#007AFF',
-        borderRadius: 12,
-        height: 56,
+        backgroundColor: theme.colors.accent,
+        borderRadius: 14,
+        height: 60,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
-        marginTop: 16,
+        gap: 10,
+        marginTop: 12,
+        borderWidth: 2,
+        borderColor: theme.colors.border,
+        // Shadow for button
+        shadowColor: theme.colors.border,
+        shadowOffset: { width: 3, height: 3 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
+        elevation: 4,
     },
     buttonText: {
         color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
+        fontFamily: theme.fonts.b,
+        fontSize: 19,
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     switchButton: {
-        marginTop: 16,
+        marginTop: 12,
         alignItems: 'center',
+        paddingVertical: 10,
     },
     switchText: {
-        color: '#007AFF',
-        fontSize: 14,
+        fontFamily: theme.fonts.m,
+        color: theme.colors.ink2,
+        fontSize: 13,
         fontWeight: '600',
+        textDecorationLine: 'underline',
     },
 });
 

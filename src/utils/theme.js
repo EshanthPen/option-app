@@ -19,21 +19,21 @@ export const colors = {
         accent: '#232E52', // Navy
     },
     dark: {
-        bg: '#232E52', // Navy bg
-        surface: '#1E284A', // Darker Navy surface
-        surface2: '#2F3C64', // Lighter Navy secondary
+        bg: '#0A0A0B', // Deep Ink-Black
+        surface: '#121214', // Charcoal surface
+        surface2: '#1C1C1E', // Lighter charcoal for cards/secondary
         border: '#F5F3E9', // Cream border
         border2: '#F5F3E9',
         ink: '#F5F3E9', // Cream text
         ink2: '#DADBCC',
-        ink3: '#BABEA8',
-        ink4: '#7F8471',
-        red: '#F5F3E9', // Cream
-        orange: '#F5F3E9', // Cream
-        green: '#F5F3E9', // Cream
-        blue: '#F5F3E9', // Cream
-        purple: '#F5F3E9', // Cream
-        accent: '#F5F3E9', // Cream
+        ink3: '#9EA18D', // Slightly more muted for contrast on dark
+        ink4: '#646857',
+        red: '#F5F3E9',
+        orange: '#F5F3E9',
+        green: '#F5F3E9',
+        blue: '#F5F3E9',
+        purple: '#F5F3E9',
+        accent: '#F5F3E9',
     }
 };
 

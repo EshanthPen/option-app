@@ -15,8 +15,13 @@ import { ArrowRight, Sparkles } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
 
-const WelcomeScreen = ({ onAuthStart }) => {
+const WelcomeScreen = ({ onAuthStart, onAuthReset }) => {
     const [authModalVisible, setAuthModalVisible] = useState(false);
+
+    const handleCloseModal = () => {
+        setAuthModalVisible(false);
+        if (onAuthReset) onAuthReset();
+    };
 
     return (
         <View style={styles.container}>
@@ -55,7 +60,7 @@ const WelcomeScreen = ({ onAuthStart }) => {
                 animationType="slide"
                 transparent={true}
                 visible={authModalVisible}
-                onRequestClose={() => setAuthModalVisible(false)}
+                onRequestClose={handleCloseModal}
             >
                 <View style={styles.modalOverlay}>
                     {Platform.OS === 'ios' ? (
@@ -68,12 +73,13 @@ const WelcomeScreen = ({ onAuthStart }) => {
                         <View style={styles.modalHeader}>
                             <TouchableOpacity 
                                 style={styles.closeBar} 
-                                onPress={() => setAuthModalVisible(false)}
+                                onPress={handleCloseModal}
                             />
                         </View>
                         <AuthScreen 
                             onAuthSuccess={() => setAuthModalVisible(false)} 
                             onAuthStart={onAuthStart}
+                            onAuthReset={onAuthReset}
                         />
                     </View>
                 </View>

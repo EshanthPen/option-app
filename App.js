@@ -62,6 +62,18 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Safeguard: Reset authentication state after 10s if it gets stuck
+  React.useEffect(() => {
+    let timeout;
+    if (isAuthenticating && !session) {
+      timeout = setTimeout(() => {
+        console.log("Authentication timed out or failed to trigger session update.");
+        setIsAuthenticating(false);
+      }, 10000); // 10s timeout
+    }
+    return () => clearTimeout(timeout);
+  }, [isAuthenticating, session]);
+
   React.useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const handleBeforeUnload = () => {
@@ -129,7 +141,10 @@ export default function App() {
         {session ? (
           <TabNavigator />
         ) : (
-          <WelcomeScreen onAuthStart={() => setIsAuthenticating(true)} />
+          <WelcomeScreen 
+            onAuthStart={() => setIsAuthenticating(true)} 
+            onAuthReset={() => setIsAuthenticating(false)}
+          />
         )}
       </NavigationContainer>
     </ThemeProvider>
