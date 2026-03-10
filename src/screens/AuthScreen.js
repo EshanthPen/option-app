@@ -10,23 +10,28 @@ import {
     ActivityIndicator,
     Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
-import { Mail, Lock, User, ArrowRight } from 'lucide-react-native';
+import { Mail, Lock, User, ArrowRight, BookOpen, GraduationCap } from 'lucide-react-native';
 
-const AuthScreen = () => {
+const AuthScreen = ({ onAuthSuccess, onAuthStart }) => {
     const [isLogin, setIsLogin] = useState(true);
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [fullName, setFullName] = useState('');
+    const [schoologyUrl, setSchoologyUrl] = useState('');
+    const [status, setStatus] = useState({ message: '', type: '' }); // { message: string, type: 'error' | 'success' }
 
     const handleAuth = async () => {
         if (!email || !password) {
-            Alert.alert('Error', 'Please fill in all fields');
+            setStatus({ message: 'Please fill in all fields', type: 'error' });
             return;
         }
 
         setLoading(true);
+        setStatus({ message: '', type: '' });
+        if (isLogin && onAuthStart) onAuthStart();
         try {
             if (isLogin) {
                 const { error } = await supabase.auth.signInWithPassword({
@@ -34,6 +39,11 @@ const AuthScreen = () => {
                     password,
                 });
                 if (error) throw error;
+                
+                // Small delay to ensure session is recognized if needed, then close modal
+                setTimeout(() => {
+                    if (onAuthSuccess) onAuthSuccess();
+                }, 500);
             } else {
                 const { error } = await supabase.auth.signUp({
                     email,
@@ -41,14 +51,25 @@ const AuthScreen = () => {
                     options: {
                         data: {
                             full_name: fullName,
+                            schoology_url: schoologyUrl,
                         }
                     }
                 });
                 if (error) throw error;
-                Alert.alert('Success', 'Check your email for the confirmation link!');
+                
+                if (schoologyUrl) {
+                    await AsyncStorage.setItem('schoologyUrl', schoologyUrl);
+                }
+
+                setStatus({ 
+                    message: 'Account created! Please check your email to confirm, then you can log in.', 
+                    type: 'success' 
+                });
+                setIsLogin(true); // Switch to login after signup
+                setPassword(''); // Clear password for login
             }
         } catch (error) {
-            Alert.alert('Auth Error', error.message);
+            setStatus({ message: error.message, type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -64,6 +85,12 @@ const AuthScreen = () => {
                 <Text style={styles.subtitle}>
                     {isLogin ? 'Sign in to access your dashboard' : 'Join Option to sync your data'}
                 </Text>
+
+                {status.message ? (
+                    <View style={[styles.statusBanner, status.type === 'error' ? styles.errorBanner : styles.successBanner]}>
+                        <Text style={styles.statusText}>{status.message}</Text>
+                    </View>
+                ) : null}
 
                 <View style={styles.form}>
                     {!isLogin && (
@@ -101,6 +128,19 @@ const AuthScreen = () => {
                             secureTextEntry
                         />
                     </View>
+
+                    {!isLogin && (
+                        <View style={styles.inputContainer}>
+                            <BookOpen size={20} color="#666" style={styles.icon} />
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Schoology Calendar Link (Optional)"
+                                value={schoologyUrl}
+                                onChangeText={setSchoologyUrl}
+                                autoCapitalize="none"
+                            />
+                        </View>
+                    )}
 
                     <TouchableOpacity
                         style={styles.button}
@@ -149,6 +189,27 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 12,
         elevation: 8,
+    },
+    statusBanner: {
+        padding: 12,
+        borderRadius: 12,
+        marginBottom: 20,
+    },
+    errorBanner: {
+        backgroundColor: '#FFF0F0',
+        borderWidth: 1,
+        borderColor: '#FFC1C1',
+    },
+    successBanner: {
+        backgroundColor: '#F0FFF4',
+        borderWidth: 1,
+        borderColor: '#C1FFD7',
+    },
+    statusText: {
+        fontSize: 14,
+        textAlign: 'center',
+        fontWeight: '500',
+        color: '#333',
     },
     title: {
         fontSize: 32,
@@ -202,6 +263,7 @@ const styles = StyleSheet.create({
     switchText: {
         color: '#007AFF',
         fontSize: 14,
+        fontWeight: '600',
     },
 });
 

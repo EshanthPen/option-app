@@ -32,11 +32,12 @@ import {
 import { ThemeProvider } from './src/context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './src/supabaseClient';
-import AuthScreen from './src/screens/AuthScreen';
+import WelcomeScreen from './src/screens/WelcomeScreen';
 
 export default function App() {
   const [session, setSession] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
+  const [isAuthenticating, setIsAuthenticating] = React.useState(false);
 
   React.useEffect(() => {
     // Initial session check
@@ -46,8 +47,16 @@ export default function App() {
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
+      if (session) setIsAuthenticating(false); // End transition when session is locked in
+      
+      if (_event === 'SIGNED_IN' && session?.user?.user_metadata?.schoology_url) {
+          // Auto-save Schoology URL to AsyncStorage if it came from metadata
+          const sUrl = session.user.user_metadata.schoology_url;
+          await AsyncStorage.setItem('schoologyUrl', sUrl);
+          console.log("Auto-stored Schoology URL from account metadata:", sUrl);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -94,7 +103,7 @@ export default function App() {
     'CormorantGaramond-Bold': CormorantGaramond_700Bold,
   });
 
-  if (!fontsLoaded || loading) {
+  if (!fontsLoaded || loading || (isAuthenticating && !session)) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f4f1' }}>
         <ActivityIndicator size="large" color="#0d0c0a" />
@@ -117,7 +126,11 @@ export default function App() {
   return (
     <ThemeProvider>
       <NavigationContainer linking={linking}>
-        {session ? <TabNavigator /> : <AuthScreen />}
+        {session ? (
+          <TabNavigator />
+        ) : (
+          <WelcomeScreen onAuthStart={() => setIsAuthenticating(true)} />
+        )}
       </NavigationContainer>
     </ThemeProvider>
   );
