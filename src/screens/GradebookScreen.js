@@ -123,7 +123,15 @@ export default function GradebookScreen() {
     const syncPeriod = async (periodIndex) => {
         try {
             const isDemo = await AsyncStorage.getItem('isDemoData') === 'true';
-            if (isDemo) {
+
+            // Check if we have credentials; if so, we should probably be in real mode
+            const [svUser, svPass, svUrl] = await Promise.all([
+                AsyncStorage.getItem('svUsername'),
+                AsyncStorage.getItem('svPassword'),
+                AsyncStorage.getItem('svDistrictUrl'),
+            ]);
+
+            if (isDemo && (!svUser || !svPass)) {
                 setIsSyncing(true);
                 await new Promise(r => setTimeout(r, 500));
                 const raw = await AsyncStorage.getItem(`studentVueGradesQ${periodIndex}`);
@@ -143,11 +151,7 @@ export default function GradebookScreen() {
                 setIsSyncing(false);
                 return;
             }
-            const [svUser, svPass, svUrl] = await Promise.all([
-                AsyncStorage.getItem('svUsername'),
-                AsyncStorage.getItem('svPassword'),
-                AsyncStorage.getItem('svDistrictUrl'),
-            ]);
+
             if (!svUser || !svPass || !svUrl) {
                 Alert.alert('Not configured', 'Enter credentials in Settings first.');
                 return;

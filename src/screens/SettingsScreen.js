@@ -376,6 +376,7 @@ export default function SettingsScreen() {
                 const { classes: formattedClasses, periods } = parseStudentVueGradebook(xmlText);
                 if (formattedClasses && formattedClasses.length > 0) {
                     await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
+                    await AsyncStorage.setItem('isDemoData', 'false');
                     if (periods && periods.length > 0) {
                         await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(periods));
                         // Set current period to the last one by default if it's the first sync
