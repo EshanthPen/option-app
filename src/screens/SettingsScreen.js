@@ -9,13 +9,13 @@ import { syncStudentVueGrades } from '../utils/studentVueAPI';
 import { theme as staticTheme } from '../utils/theme';
 import DistrictPickerModal, { KNOWN_DISTRICTS } from '../components/DistrictPickerModal';
 import { syncAssignmentsToCalendar } from '../utils/googleCalendarAPI';
-import { ChevronDown, RefreshCw, Moon, Sun } from 'lucide-react-native';
+import { ChevronDown, RefreshCw, Moon, Sun, User } from 'lucide-react-native';
 import { loadMockGradebookData } from '../utils/mockStudentData';
 import ICAL from 'ical.js';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { parseStudentVueGradebook, parseStudentVuePeriods } from '../utils/studentVueParser';
-import { getDeviceId } from '../utils/auth';
+import { getUserId } from '../utils/auth';
 import WorkingHoursGraph from '../components/WorkingHoursGraph';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -53,7 +53,7 @@ export default function SettingsScreen() {
 
     // Auth State
     const [accessToken, setAccessToken] = useState(null);
-    const [deviceId, setDeviceId] = useState(null);
+    const [userId, setUserId] = useState(null);
 
     const isWeb = typeof window !== 'undefined' && window.location;
 
@@ -75,6 +75,9 @@ export default function SettingsScreen() {
 
     useEffect(() => {
         const loadSettings = async () => {
+            const uid = await getUserId();
+            setUserId(uid);
+            
             let storedToken = await AsyncStorage.getItem('googleAccessToken');
             if (!storedToken && typeof window !== 'undefined') {
                 storedToken = window.localStorage.getItem('googleAccessToken');
@@ -292,7 +295,7 @@ export default function SettingsScreen() {
                     duration: 60,
                     due_date: dueDate.toISOString().split('T')[0],
                     source: 'schoology_import',
-                    user_id: deviceId
+                    user_id: userId
                 };
             }).filter(t => t !== null);
 
@@ -498,6 +501,8 @@ export default function SettingsScreen() {
 
     const logoutAction = async () => {
         try {
+            await supabase.auth.signOut();
+            
             const keysToClear = [
                 'svUsername', 'svPassword', 'svDistrictUrl',
                 'studentVueGrades', 'studentVuePeriods',
@@ -507,13 +512,6 @@ export default function SettingsScreen() {
             for (let i = 0; i < 10; i++) keysToClear.push(`studentVueGradesQ${i}`);
             
             await AsyncStorage.multiRemove(keysToClear);
-            
-            setSvUser('');
-            setSvPass('');
-            setSchoologyUrl('');
-            setUserName('');
-            setSelectedDistrict(null);
-            setSyncResult(null);
             
             if (Platform.OS === 'web') window.alert('Logged out successfully.');
             else Alert.alert('Logged Out', 'Your data has been cleared.');
@@ -527,6 +525,27 @@ export default function SettingsScreen() {
             <View style={styles.headerContainer}>
                 <Text style={styles.header}>Integrations</Text>
                 <Text style={styles.subtitle}>Connect outside apps to build your schedule.</Text>
+            </View>
+
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Account</Text>
+                <View style={styles.profileCard}>
+                    <View style={styles.profileInfo}>
+                        <View style={styles.avatar}>
+                            <User color="#fff" size={24} />
+                        </View>
+                        <View>
+                            <Text style={styles.profileEmail}>
+                                {supabase.auth.getUser()?.email || 'Logged In'}
+                            </Text>
+                            <Text style={styles.profileStatus}>Personal Account</Text>
+                        </View>
+                    </View>
+                    <TouchableOpacity style={styles.logoutBtn} onPress={logoutAction}>
+                        <RefreshCw size={16} color={theme.colors.red} />
+                        <Text style={styles.logoutText}>Sign Out</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <View style={styles.section}>
@@ -562,21 +581,6 @@ export default function SettingsScreen() {
                     </View>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                    style={[styles.settingRow, { marginTop: 12 }]}
-                    onPress={handleLogout}
-                    activeOpacity={0.7}
-                >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <View style={[styles.iconBox, { backgroundColor: theme.colors.red + '15' }]}>
-                            <RefreshCw size={20} color={theme.colors.red} />
-                        </View>
-                        <View>
-                            <Text style={[styles.settingLabel, { color: theme.colors.red }]}>Logout</Text>
-                            <Text style={styles.settingSub}>Clear all student data</Text>
-                        </View>
-                    </View>
-                </TouchableOpacity>
             </View>
 
             <View style={[styles.card, { borderLeftColor: theme.colors.blue, borderLeftWidth: 4 }]}>
@@ -899,6 +903,62 @@ const getStyles = (theme) => StyleSheet.create({
     toggleContainer: { width: 44, height: 24, borderRadius: 12, backgroundColor: theme.colors.surface2, padding: 2, justifyContent: 'center' },
     toggleCircle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
 
+    profileCard: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.radii.lg,
+        padding: 20,
+        borderWidth: 2,
+        borderColor: theme.colors.border,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        shadowColor: theme.colors.border,
+        shadowOffset: { width: 4, height: 4 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
+        elevation: 4,
+        marginBottom: 10,
+    },
+    profileInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    avatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: theme.colors.accent,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    profileEmail: {
+        fontFamily: theme.fonts.s,
+        fontSize: 16,
+        fontWeight: '700',
+        color: theme.colors.ink,
+    },
+    profileStatus: {
+        fontFamily: theme.fonts.m,
+        fontSize: 12,
+        color: theme.colors.ink3,
+        textTransform: 'uppercase',
+    },
+    logoutBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        backgroundColor: theme.colors.red + '15',
+    },
+    logoutText: {
+        fontFamily: theme.fonts.b,
+        fontSize: 14,
+        color: theme.colors.red,
+        fontWeight: '700',
+    },
     card: {
         backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border,
         borderRadius: theme.radii.lg, padding: 24, marginBottom: 20, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4

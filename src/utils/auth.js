@@ -1,17 +1,25 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
+import { supabase } from '../supabaseClient';
 
 const DEVICE_ID_KEY = '@OptionApp_AnonymousDeviceID';
 
 /**
- * Retrieves the persistent anonymous Device ID for this installation.
- * If one does not exist, it securely generates a UUID variant, saves it, and returns it.
- * This ensures multi-tenant database queries remain isolated (e.g. your friend cannot see your homework).
- *
- * @returns {Promise<string>} The unique device ID string for this user.
+ * Retrieves the most relevant unique identifier for the user.
+ * 1. Checks for an active Supabase session/user.
+ * 2. If no user, falls back to a persistent anonymous Device ID.
+ * 
+ * @returns {Promise<string>} The unique ID (Supabase UUID or Device ID).
  */
-export const getDeviceId = async () => {
+export const getUserId = async () => {
     try {
+        // 1. Check Supabase active session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
+            return session.user.id;
+        }
+
+        // 2. Fallback to Device ID
         let deviceId = await AsyncStorage.getItem(DEVICE_ID_KEY);
 
         if (!deviceId) {
@@ -22,8 +30,12 @@ export const getDeviceId = async () => {
 
         return deviceId;
     } catch (error) {
-        console.error("Error fetching or generating Device ID:", error);
-        // Fallback for extreme cases where Async Storage is blocked (e.g. corrupted web localstorage)
+        console.error("Error fetching or generating ID:", error);
         return `user_fallback_${Math.floor(Math.random() * 1000000)}`;
     }
 };
+
+/**
+ * Linked alias for backwards compatibility
+ */
+export const getDeviceId = getUserId;

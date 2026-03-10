@@ -31,8 +31,28 @@ import {
 } from '@expo-google-fonts/cormorant-garamond';
 import { ThemeProvider } from './src/context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './src/supabaseClient';
+import AuthScreen from './src/screens/AuthScreen';
 
 export default function App() {
+  const [session, setSession] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   React.useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const handleBeforeUnload = () => {
@@ -74,7 +94,7 @@ export default function App() {
     'CormorantGaramond-Bold': CormorantGaramond_700Bold,
   });
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f4f1' }}>
         <ActivityIndicator size="large" color="#0d0c0a" />
@@ -97,7 +117,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <NavigationContainer linking={linking}>
-        <TabNavigator />
+        {session ? <TabNavigator /> : <AuthScreen />}
       </NavigationContainer>
     </ThemeProvider>
   );
