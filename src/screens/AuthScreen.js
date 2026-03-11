@@ -13,7 +13,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
 import { useTheme } from '../context/ThemeContext';
-import { Mail, Lock, User, ArrowRight, BookOpen, GraduationCap, X } from 'lucide-react-native';
+import { Mail, Lock, User, ArrowRight, BookOpen, GraduationCap, X, Eye, EyeOff } from 'lucide-react-native';
 
 const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
     const { theme } = useTheme();
@@ -23,10 +23,14 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
     const [password, setPassword] = useState('');
     const [fullName, setFullName] = useState('');
     const [schoologyUrl, setSchoologyUrl] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [status, setStatus] = useState({ message: '', type: '' }); // { message: string, type: 'error' | 'success' }
 
     const handleAuth = async () => {
-        if (!email || !password) {
+        const trimmedEmail = email.trim();
+        const trimmedPassword = password.trim();
+
+        if (!trimmedEmail || !trimmedPassword) {
             setStatus({ message: 'Please fill in all fields', type: 'error' });
             return;
         }
@@ -37,8 +41,8 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
         try {
             if (isLogin) {
                 const { error } = await supabase.auth.signInWithPassword({
-                    email,
-                    password,
+                    email: trimmedEmail,
+                    password: trimmedPassword,
                 });
                 if (error) throw error;
                 
@@ -52,12 +56,12 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                 }, 500);
             } else {
                 const { error } = await supabase.auth.signUp({
-                    email,
-                    password,
+                    email: trimmedEmail,
+                    password: trimmedPassword,
                     options: {
                         data: {
-                            full_name: fullName,
-                            schoology_url: schoologyUrl,
+                            full_name: fullName.trim(),
+                            schoology_url: schoologyUrl.trim(),
                         }
                     }
                 });
@@ -75,7 +79,11 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                 setPassword(''); // Clear password for login
             }
         } catch (error) {
-            setStatus({ message: error.message, type: 'error' });
+            let message = error.message;
+            if (message.includes('rate limit')) {
+                message = "Too many attempts. Please wait a minute before trying again.";
+            }
+            setStatus({ message, type: 'error' });
             if (onAuthReset) onAuthReset(); // Ensure global state is reset if we hit an error
         } finally {
             setLoading(false);
@@ -135,8 +143,18 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                             placeholderTextColor={theme.colors.ink3}
                             value={password}
                             onChangeText={setPassword}
-                            secureTextEntry
+                            secureTextEntry={!showPassword}
                         />
+                        <TouchableOpacity 
+                            onPress={() => setShowPassword(!showPassword)}
+                            style={getStyles(theme).eyeIcon}
+                        >
+                            {showPassword ? (
+                                <EyeOff size={18} color={theme.colors.ink3} />
+                            ) : (
+                                <Eye size={18} color={theme.colors.ink3} />
+                            )}
+                        </TouchableOpacity>
                     </View>
 
                     {!isLogin && (
@@ -260,6 +278,10 @@ const getStyles = (theme) => StyleSheet.create({
         fontFamily: theme.fonts.s,
         fontSize: 16,
         color: theme.colors.ink,
+        height: '100%',
+    },
+    eyeIcon: {
+        padding: 4,
     },
     button: {
         backgroundColor: theme.colors.accent,
