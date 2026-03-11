@@ -26,7 +26,7 @@ const WelcomeScreen = ({ onAuthStart, onAuthReset }) => {
     return (
         <View style={styles.container}>
             {/* Premium Background Gradient/Image Placeholder */}
-            <View style={[styles.background, { backgroundColor: '#0d0c0a' }]}>
+            <View style={[styles.background, { backgroundColor: '#121212' }]}>
                 <View style={styles.content}>
                     <View style={styles.heroSection}>
                         <View style={styles.logoBadge}>
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     modalContent: {
-        backgroundColor: '#fff',
+        backgroundColor: '#121212', // Match dark theme
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
         height: height * 0.85,

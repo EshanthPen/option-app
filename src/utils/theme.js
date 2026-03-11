@@ -19,9 +19,9 @@ export const colors = {
         accent: '#232E52', // Navy
     },
     dark: {
-        bg: '#0A0A0B', // Deep Ink-Black
-        surface: '#121214', // Charcoal surface
-        surface2: '#1C1C1E', // Lighter charcoal for cards/secondary
+        bg: '#121212', // Softer Eerie-Black
+        surface: '#1E1E1E', // Dark Charcoal surface
+        surface2: '#282828', // Muted charcoal for cards
         border: '#F5F3E9', // Cream border
         border2: '#F5F3E9',
         ink: '#F5F3E9', // Cream text

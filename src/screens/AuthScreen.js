@@ -13,7 +13,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
 import { useTheme } from '../context/ThemeContext';
-import { Mail, Lock, User, ArrowRight, BookOpen, GraduationCap, X, Eye, EyeOff } from 'lucide-react-native';
+import { Mail, Lock, User, ArrowRight, BookOpen, GraduationCap, X, Eye, EyeOff, CheckCircle2 } from 'lucide-react-native';
+import { Modal } from 'react-native';
 
 const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
     const { theme } = useTheme();
@@ -24,6 +25,7 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
     const [fullName, setFullName] = useState('');
     const [schoologyUrl, setSchoologyUrl] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [showVerifyModal, setShowVerifyModal] = useState(false);
     const [status, setStatus] = useState({ message: '', type: '' }); // { message: string, type: 'error' | 'success' }
 
     const handleAuth = async () => {
@@ -62,6 +64,9 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                         data: {
                             full_name: fullName.trim(),
                             schoology_url: schoologyUrl.trim(),
+                            app_name: 'Option Dashboard',
+                            signup_source: Platform.OS,
+                            signup_date: new Date().toISOString(),
                         }
                     }
                 });
@@ -70,11 +75,11 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                 if (schoologyUrl) {
                     await AsyncStorage.setItem('schoologyUrl', schoologyUrl);
                 }
+                if (fullName) {
+                    await AsyncStorage.setItem('userName', fullName);
+                }
 
-                setStatus({ 
-                    message: 'Account created! Please check your email to confirm, then you can login.', 
-                    type: 'success' 
-                });
+                setShowVerifyModal(true);
                 setIsLogin(true); // Switch to login after signup
                 setPassword(''); // Clear password for login
             }
@@ -198,6 +203,31 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                     </TouchableOpacity>
                 </View>
             </View>
+
+            {/* Verification Required Modal */}
+            <Modal
+                visible={showVerifyModal}
+                transparent
+                animationType="fade"
+            >
+                <View style={getStyles(theme).modalOverlay}>
+                    <View style={getStyles(theme).verifyPopup}>
+                        <View style={getStyles(theme).checkIconBox}>
+                            <CheckCircle2 size={48} color={theme.colors.green} />
+                        </View>
+                        <Text style={getStyles(theme).verifyTitle}>Check Your Inbox</Text>
+                        <Text style={getStyles(theme).verifyText}>
+                            We've sent a verification link to <Text style={{fontWeight: '700'}}>{email}</Text>. Please click it to activate your account!
+                        </Text>
+                        <TouchableOpacity 
+                            style={getStyles(theme).verifyBtn}
+                            onPress={() => setShowVerifyModal(false)}
+                        >
+                            <Text style={getStyles(theme).verifyBtnText}>Got it!</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </KeyboardAvoidingView>
     );
 };
@@ -302,7 +332,7 @@ const getStyles = (theme) => StyleSheet.create({
         elevation: 4,
     },
     buttonText: {
-        color: '#fff',
+        color: theme.colors.bg, // Soften the contrast
         fontFamily: theme.fonts.b,
         fontSize: 19,
         fontWeight: '700',
@@ -319,6 +349,71 @@ const getStyles = (theme) => StyleSheet.create({
         fontSize: 13,
         fontWeight: '600',
         textDecorationLine: 'underline',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    verifyPopup: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: 24,
+        padding: 32,
+        alignItems: 'center',
+        borderWidth: 3,
+        borderColor: theme.colors.border,
+        width: '100%',
+        maxWidth: 400,
+        shadowColor: theme.colors.border,
+        shadowOffset: { width: 8, height: 8 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
+    },
+    checkIconBox: {
+        marginBottom: 20,
+        backgroundColor: theme.colors.surface2,
+        padding: 16,
+        borderRadius: 20,
+        borderWidth: 2,
+        borderColor: theme.colors.green,
+    },
+    verifyTitle: {
+        fontFamily: theme.fonts.d,
+        fontSize: 28,
+        color: theme.colors.ink,
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    verifyText: {
+        fontFamily: theme.fonts.s,
+        fontSize: 16,
+        color: theme.colors.ink2,
+        textAlign: 'center',
+        lineHeight: 24,
+        marginBottom: 28,
+    },
+    verifyBtn: {
+        backgroundColor: theme.colors.green,
+        paddingVertical: 16,
+        paddingHorizontal: 32,
+        borderRadius: 12,
+        width: '100%',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: theme.colors.border,
+        // Shadow
+        shadowColor: theme.colors.border,
+        shadowOffset: { width: 4, height: 4 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
+    },
+    verifyBtnText: {
+        fontFamily: theme.fonts.b,
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '700',
     },
 });
 

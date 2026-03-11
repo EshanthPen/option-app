@@ -982,9 +982,9 @@ const getStyles = (theme) => StyleSheet.create({
     },
 
     saveBtn: {
-        backgroundColor: '#FFFFFF', padding: 16, borderRadius: theme.radii.r,
-        alignItems: 'center', marginTop: 20, shadowColor: '#000000', shadowOpacity: 1, shadowOffset: { width: 4, height: 4 }, shadowRadius: 0, elevation: 4,
-        borderWidth: 2, borderColor: '#000000',
+        backgroundColor: theme.colors.accent, padding: 16, borderRadius: theme.radii.r,
+        alignItems: 'center', marginTop: 20, shadowColor: theme.colors.border, shadowOpacity: 1, shadowOffset: { width: 4, height: 4 }, shadowRadius: 0, elevation: 4,
+        borderWidth: 2, borderColor: theme.colors.border,
     },
     saveBtnText: { color: '#000000', fontFamily: theme.fonts.b, fontSize: 20, letterSpacing: 1 },
 
@@ -1008,12 +1008,12 @@ const getStyles = (theme) => StyleSheet.create({
     logoutBtnText: { color: theme.colors.red, fontFamily: theme.fonts.b, fontSize: 20, letterSpacing: 1 },
 
     actionBtn: {
-        backgroundColor: '#FFFFFF', paddingVertical: 14, paddingHorizontal: 24,
+        backgroundColor: theme.colors.ink, paddingVertical: 14, paddingHorizontal: 24,
         borderRadius: theme.radii.r, alignItems: 'center', justifyContent: 'center',
-        flexDirection: 'row', gap: 10, borderWidth: 2, borderColor: '#000000',
-        shadowColor: '#000000', shadowOpacity: 1, shadowOffset: { width: 4, height: 4 }, shadowRadius: 0, elevation: 4,
+        flexDirection: 'row', gap: 10, borderWidth: 2, borderColor: theme.colors.border,
+        shadowColor: theme.colors.border, shadowOpacity: 1, shadowOffset: { width: 4, height: 4 }, shadowRadius: 0, elevation: 4,
     },
-    actionBtnText: { color: '#000000', fontFamily: theme.fonts.b, fontSize: 18, letterSpacing: 1 },
+    actionBtnText: { color: theme.colors.bg, fontFamily: theme.fonts.b, fontSize: 18, letterSpacing: 1 },
 
     actionBtnLight: {
         backgroundColor: theme.colors.surface2, borderWidth: 2, borderColor: theme.colors.border,

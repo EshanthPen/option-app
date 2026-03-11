@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ActivityIndicator, Platform } from 'react-native';
+import { View, ActivityIndicator, Platform, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import TabNavigator from './src/navigation/TabNavigator';
 import { useFonts } from 'expo-font';
@@ -38,6 +38,7 @@ export default function App() {
   const [session, setSession] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [isAuthenticating, setIsAuthenticating] = React.useState(false);
+  const [showVerifiedModal, setShowVerifiedModal] = React.useState(false);
 
   React.useEffect(() => {
     // Initial session check
@@ -49,13 +50,22 @@ export default function App() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
-      if (session) setIsAuthenticating(false); // End transition when session is locked in
+      if (session) setIsAuthenticating(false); 
       
-      if (_event === 'SIGNED_IN' && session?.user?.user_metadata?.schoology_url) {
-          // Auto-save Schoology URL to AsyncStorage if it came from metadata
-          const sUrl = session.user.user_metadata.schoology_url;
-          await AsyncStorage.setItem('schoologyUrl', sUrl);
-          console.log("Auto-stored Schoology URL from account metadata:", sUrl);
+      if (session?.user?.user_metadata) {
+          const { full_name, schoology_url } = session.user.user_metadata;
+          
+          if (full_name) {
+              await AsyncStorage.setItem('userName', full_name);
+          }
+          if (schoology_url) {
+              await AsyncStorage.setItem('schoologyUrl', schoology_url);
+          }
+      }
+
+      // Detect if this is a fresh verification
+      if (_event === 'USER_UPDATED' && session?.user?.email_confirmed_at) {
+          setShowVerifiedModal(true);
       }
     });
 
@@ -117,8 +127,8 @@ export default function App() {
 
   if (!fontsLoaded || loading || (isAuthenticating && !session)) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f4f1' }}>
-        <ActivityIndicator size="large" color="#0d0c0a" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }}>
+        <ActivityIndicator size="large" color="#F5F3E9" />
       </View>
     );
   }
@@ -147,6 +157,81 @@ export default function App() {
           />
         )}
       </NavigationContainer>
+
+      {/* Email Verified Global Success Modal */}
+      <Modal
+          visible={showVerifiedModal}
+          transparent
+          animationType="slide"
+      >
+          <View style={styles.modalOverlay}>
+              <View style={styles.successPopup}>
+                  <Text style={styles.successTitle}>Email Verified! 🎉</Text>
+                  <Text style={styles.successText}>
+                      Your account is now fully active. Your profile information has been automatically synced.
+                  </Text>
+                  <TouchableOpacity 
+                      style={styles.successBtn}
+                      onPress={() => setShowVerifiedModal(false)}
+                  >
+                      <Text style={styles.successBtnText}>Amazing</Text>
+                  </TouchableOpacity>
+              </View>
+          </View>
+      </Modal>
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    successPopup: {
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        padding: 32,
+        alignItems: 'center',
+        borderWidth: 3,
+        borderColor: '#0d0c0a',
+        width: '100%',
+        maxWidth: 400,
+        // Neo-Brutalism Shadow
+        shadowColor: '#000',
+        shadowOffset: { width: 8, height: 8 },
+        shadowOpacity: 1,
+        shadowRadius: 0,
+        elevation: 10,
+    },
+    successTitle: {
+        fontSize: 28,
+        fontWeight: '900',
+        color: '#0d0c0a',
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    successText: {
+        fontSize: 16,
+        color: '#444',
+        textAlign: 'center',
+        lineHeight: 24,
+        marginBottom: 28,
+    },
+    successBtn: {
+        backgroundColor: '#0d0c0a',
+        paddingVertical: 16,
+        paddingHorizontal: 32,
+        borderRadius: 12,
+        width: '100%',
+        alignItems: 'center',
+    },
+    successBtnText: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '700',
+    },
+});
