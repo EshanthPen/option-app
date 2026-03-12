@@ -52,6 +52,8 @@ export default function MatrixScreen() {
     const [urgency, setUrgency] = useState('5');
     const [importance, setImportance] = useState('5');
     const [duration, setDuration] = useState('60');
+    const [difficulty, setDifficulty] = useState('3');
+    const [taskType, setTaskType] = useState('homework');
 
     // Mini calendar picker state inside the modal
     const [pickerOpen, setPickerOpen] = useState(false);
@@ -100,6 +102,8 @@ export default function MatrixScreen() {
             urgency: parseInt(urgency) || 5,
             importance: parseInt(importance) || 5,
             duration: parseInt(duration) || 60,
+            difficulty: parseInt(difficulty) || 3,
+            task_type: taskType || 'homework',
             due_date: taskDate,
             source: 'manual',
             user_id: userId
@@ -109,14 +113,14 @@ export default function MatrixScreen() {
             if (error) throw error;
             if (data?.length > 0) setTasks(prev => [data[0], ...prev]);
             setModalVisible(false);
-            setTitle('');
+            setTitle(''); setDifficulty('3'); setTaskType('homework');
         } catch (error) {
             console.error('Supabase Error:', error);
             // Local fallback for demo purposes
             const mockData = { ...newTask, id: Date.now() };
             setTasks(prev => [mockData, ...prev]);
             setModalVisible(false);
-            setTitle('');
+            setTitle(''); setDifficulty('3'); setTaskType('homework');
         } finally {
             setSaving(false);
         }
@@ -289,10 +293,10 @@ export default function MatrixScreen() {
                 };
             }
 
-            // 3. Fetch Google Calendar constraints for the next 7 days
+            // 3. Fetch Google Calendar constraints for the next 14 days
             const now = new Date();
-            const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-            const busyPeriods = await fetchFreeBusy(token, now, nextWeek);
+            const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+            const busyPeriods = await fetchFreeBusy(token, now, twoWeeksOut);
 
             // 4. Run AI Scheduler Algorithm against 'unscheduled' tasks
             const optimizedTasks = performSmartScheduling(tasks, busyPeriods, workingHours);
@@ -625,6 +629,30 @@ export default function MatrixScreen() {
                                 <Text style={styles.label}>Importance (1–10)</Text>
                                 <TextInput style={styles.input} keyboardType="numeric" value={importance} onChangeText={setImportance} placeholderTextColor={theme.colors.ink3} />
                             </View>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.label}>Difficulty (1–5)</Text>
+                                <TextInput style={styles.input} keyboardType="numeric" value={difficulty} onChangeText={setDifficulty} placeholderTextColor={theme.colors.ink3} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.label}>Duration (min)</Text>
+                                <TextInput style={styles.input} keyboardType="numeric" value={duration} onChangeText={setDuration} placeholderTextColor={theme.colors.ink3} />
+                            </View>
+                        </View>
+
+                        <Text style={styles.label}>Type</Text>
+                        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                            {['homework', 'exam study', 'project', 'meeting', 'habit'].map(t => (
+                                <TouchableOpacity
+                                    key={t}
+                                    style={[styles.ctrlBtn, taskType === t && { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}
+                                    onPress={() => setTaskType(t)}
+                                >
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: taskType === t ? '#fff' : theme.colors.ink2, textTransform: 'capitalize' }}>{t}</Text>
+                                </TouchableOpacity>
+                            ))}
                         </View>
 
                         {/* Mini calendar date picker */}

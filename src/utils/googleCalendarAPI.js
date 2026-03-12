@@ -2,7 +2,9 @@ import { Alert } from 'react-native';
 
 /**
  * Fetches the user's busy periods from their primary Google Calendar.
- * 
+ * Automatically chunks requests into 7-day windows to handle the
+ * FreeBusy API's limitations, then merges all results.
+ *
  * @param {string} accessToken Complete OAuth access token
  * @param {Date} timeMin Start of the search window
  * @param {Date} timeMax End of the search window
@@ -11,31 +13,46 @@ import { Alert } from 'react-native';
 export const fetchFreeBusy = async (accessToken, timeMin, timeMax) => {
     if (!accessToken) return [];
 
-    try {
-        const response = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                timeMin: timeMin.toISOString(),
-                timeMax: timeMax.toISOString(),
-                items: [{ id: 'primary' }]
-            }),
-        });
+    const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+    const allBusy = [];
 
-        if (!response.ok) {
-            console.error("FreeBusy API Error:", await response.text());
-            return [];
+    try {
+        // Chunk into 7-day windows to stay within API limits
+        let windowStart = new Date(timeMin);
+        while (windowStart < timeMax) {
+            const windowEnd = new Date(Math.min(windowStart.getTime() + MS_PER_WEEK, timeMax.getTime()));
+
+            const response = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    timeMin: windowStart.toISOString(),
+                    timeMax: windowEnd.toISOString(),
+                    items: [{ id: 'primary' }]
+                }),
+            });
+
+            if (!response.ok) {
+                console.error("FreeBusy API Error:", await response.text());
+                // Continue with next chunk rather than failing entirely
+                windowStart = windowEnd;
+                continue;
+            }
+
+            const data = await response.json();
+            const busy = data.calendars?.primary?.busy || [];
+            allBusy.push(...busy);
+
+            windowStart = windowEnd;
         }
 
-        const data = await response.json();
-        // data.calendars.primary.busy is an array of { start, end } objects
-        return data.calendars?.primary?.busy || [];
+        return allBusy;
     } catch (error) {
         console.error("Network Error fetching FreeBusy:", error);
-        return [];
+        return allBusy; // Return whatever we collected so far
     }
 };
 
