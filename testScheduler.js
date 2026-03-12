@@ -1,8 +1,7 @@
 import { performSmartScheduling } from './src/utils/schedulerAssistant.js';
 
 const tasks = [
-    { title: "Task 1", urgency: 5, importance: 5, duration: 60, is_planned: false, completed: false, type: 'assignment' },
-    { title: "Task 2", urgency: 5, importance: 5, duration: 60, is_planned: false, completed: false, type: 'assignment' },
+    { title: "Long Project", urgency: 7, importance: 9, duration: 240, is_planned: false, completed: false, type: 'assignment' },
 ];
 
 const workingHours = {
@@ -18,7 +17,7 @@ const workingHours = {
 const busyPeriods = [];
 
 const result = performSmartScheduling(tasks, busyPeriods, workingHours);
-console.log("SCHEDULED TASKS:", result.length);
+console.log("SCHEDULED BLOCKS:", result.length);
 if (result.length > 0) {
-    console.log(result);
+    console.log(result.map(x => ({ title: x.title, dt: x.date, start: x.scheduled_start.split('T')[1] })));
 }

@@ -2,57 +2,73 @@
  * schedulerAssistant.js
  * 
  * Contains logic for determining the optimal times to schedule tasks 
- * based on Google Calendar busy periods, user working hours, and Eisenhower Priority.
+ * based on Eisenhower Priority, block-splitting, spacing constraints, and calendar availability.
  */
 
-/**
- * Main Auto-Scheduling Algorithm
- * 
- * @param {Array} tasks - Array of task objects from Supabase (needs .urgency, .importance, .duration)
- * @param {Array} busyPeriods - Array of { start: Date, end: Date } from Google Calendar FreeBusy
- * @param {Object} workingHours - e.g. { 0: { start: 15, end: 22 }, ... 6: { start: 10, end: 23 } } (0=Mon...6=Sun)
- * @returns {Array} List of tasks with newly assigned `scheduled_start` and `scheduled_end` (ISO strings)
- */
-export const performSmartScheduling = (tasks, busyPeriods, workingHours) => {
-    console.log("SMART SCHEDULER: Received", tasks.length, "total tasks");
-    // 1. Filter out tasks that are already scheduled or completed
-    const unscheduledTasks = tasks.filter(t => {
-        const isAssignment = t.type === 'assignment' || !t.type;
-        const valid = !t.is_planned && !t.completed && isAssignment;
-        if (!valid) {
-            console.log("Filtered Out Task:", t.title, "| Planned:", t.is_planned, "| Completed:", t.completed, "| Type:", t.type);
+// Helper: Compute Advanced Priority Score
+const computePriorityScore = (task, now, horizonMs) => {
+    // Normalize our 1-10 inputs to standard 0-1
+    const impNode = (task.importance || 5) / 10;
+    const urgNode = (task.urgency || 5) / 10;
+
+    // Deadline pressure
+    let duePress = 0;
+    if (task.due_date) {
+        // Assume due dates are midnight local time if no time provided, but for safety parse it straight
+        const due = new Date(task.due_date).getTime();
+        const timeUntil = due - now.getTime();
+        // If overriding past due date or massive horizon, clamp it
+        duePress = Math.max(0, Math.min(1, 1 - (timeUntil / horizonMs)));
+    }
+
+    // Quadrant Boost
+    // Q1 (Urgent & Important): U>=7, I>=7
+    // Q2 (Important, Not Urgent): U<7, I>=7
+    // Q3 (Urgent, Not Important): U>=7, I<7
+    // Q4 (Not Urgent, Not Important): U<7, I<7
+    let quadBoost = 0.1;
+    if (task.urgency >= 7 && task.importance >= 7) quadBoost = 1.0;
+    else if (task.urgency < 7 && task.importance >= 7) quadBoost = 0.8;
+    else if (task.urgency >= 7 && task.importance < 7) quadBoost = 0.45;
+
+    // Effort Weighting (favor breaking apart larger tasks slightly)
+    const effort = Math.min(1, (task.duration || 60) / 300);
+
+    return (0.35 * impNode) + (0.25 * urgNode) + (0.20 * duePress) + (0.10 * effort) + (0.10 * quadBoost);
+};
+
+// Helper: Split Tasks into Blocks
+const splitIntoBlocks = (durationMinutes, importance) => {
+    let total = durationMinutes || 60;
+    const blocks = [];
+
+    if (total <= 45) return [total];
+
+    const target = importance >= 7 ? 60 : 45;
+
+    while (total > 0) {
+        let block = Math.min(target, total);
+        if (block < 25 && blocks.length > 0) {
+            // Append tiny remainders to the last block rather than making a standalone 10-minute session
+            blocks[blocks.length - 1] += block;
+            break;
         }
-        return valid;
-    });
-    console.log("SMART SCHEDULER: Unscheduled valid tasks to process:", unscheduledTasks.length);
+        blocks.push(block);
+        total -= block;
+    }
+    return blocks;
+};
 
-    // 2. Sort by Eisenhower Matrix Priority
-    // Quadrant 1 (Urgent & Important) > Quadrant 2 (Important, Not Urgent) > Quadrant 3 > Quadrant 4
-    unscheduledTasks.sort((a, b) => {
-        const scoreA = (a.importance * 2) + a.urgency;
-        const scoreB = (b.importance * 2) + b.urgency;
-        return scoreB - scoreA; // Descending order (Highest score first)
-    });
-
-    // 3. Define the scheduling window (Next 7 Days)
-    const now = new Date();
-    // Start scheduling from the next available block, at least 30 mins from now.
-    const scheduleWindowStart = new Date(Math.ceil((now.getTime() + 30 * 60000) / 1800000) * 1800000);
-    const scheduleWindowEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
-
-    // Prepare combined blocked timeline
-    // We treat hours outside `workingHours` as implicit "busy" blocks for every single day.
+// Helper: Generate pure free capacity slots from busy blocks
+const generateFreeSlots = (scheduleWindowStart, scheduleWindowEnd, busyPeriods, workingHours) => {
     const allBlocks = [...busyPeriods.map(bp => ({ start: new Date(bp.start), end: new Date(bp.end) }))];
 
     for (let d = new Date(scheduleWindowStart); d < scheduleWindowEnd; d.setDate(d.getDate() + 1)) {
-        // Convert JS getDay (0=Sun, 1=Mon) to our UI day index (0=Mon...6=Sun)
         const jsDay = d.getDay();
         const uiDayIndex = jsDay === 0 ? 6 : jsDay - 1;
-
-        // Fallback safely if workingHours structure is malformed
         const dayConfig = workingHours[uiDayIndex] || { start: 15, end: 22 };
 
-        // Block 1: Midnight to startHour (e.g., Sleep/School)
+        // Sleep period 1: Midnight to startHour
         const midnight = new Date(d);
         midnight.setHours(0, 0, 0, 0);
 
@@ -63,7 +79,7 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours) => {
             allBlocks.push({ start: midnight, end: morningEnd });
         }
 
-        // Block 2: endHour to Midnight (e.g., Sleep)
+        // Sleep period 2: endHour to next Midnight
         const eveningStart = new Date(d);
         eveningStart.setHours(dayConfig.end, 0, 0, 0);
 
@@ -76,7 +92,7 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours) => {
         }
     }
 
-    // Sort blocks chronologically and merge overlapping ones
+    // Merge overlapping blocks securely
     allBlocks.sort((a, b) => a.start - b.start);
     const mergedBlocks = [];
     if (allBlocks.length > 0) {
@@ -84,7 +100,6 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours) => {
         for (let i = 1; i < allBlocks.length; i++) {
             const nextBlock = allBlocks[i];
             if (nextBlock.start <= currentBlock.end) {
-                // Overlapping or adjacent, merge them
                 currentBlock.end = new Date(Math.max(currentBlock.end, nextBlock.end));
             } else {
                 mergedBlocks.push(currentBlock);
@@ -94,54 +109,152 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours) => {
         mergedBlocks.push(currentBlock);
     }
 
-    // 4. Find gaps and assign times to tasks
-    const scheduledTasks = [];
+    // Now invert merged busy blocks to create `freeSlots` array
+    const freeSlots = [];
     let currentMarker = new Date(scheduleWindowStart);
 
-    for (const task of unscheduledTasks) {
-        const requiredMs = (task.duration || 60) * 60 * 1000;
-        let placed = false;
+    for (const bBlock of mergedBlocks) {
+        if (bBlock.start > currentMarker) {
+            freeSlots.push({ start: currentMarker, end: new Date(bBlock.start) });
+        }
+        currentMarker = new Date(Math.max(currentMarker.getTime(), bBlock.end.getTime()));
+    }
 
-        // Advance marker if it falls inside a merged busy block
-        while (!placed && currentMarker < scheduleWindowEnd) {
-            let conflict = mergedBlocks.find(b => currentMarker >= b.start && currentMarker < b.end);
-            if (conflict) {
-                currentMarker = new Date(conflict.end); // Jump to end of conflict
-                continue;
+    if (currentMarker < scheduleWindowEnd) {
+        freeSlots.push({ start: currentMarker, end: new Date(scheduleWindowEnd) });
+    }
+
+    return freeSlots;
+};
+
+// Helper: Score a candidate free slot for a specific block
+const scoreSlot = (slot, requiredMs, task, lastBlockEnd, now) => {
+    const slotDurationMs = slot.end.getTime() - slot.start.getTime();
+    if (slotDurationMs < requiredMs) return -1; // Block doesn't fit
+
+    let dueFit = 1;
+    if (task.due_date) {
+        // Force the check against midnight of the due date in local bounds
+        const rawDate = new Date(task.due_date);
+        const taskDue = new Date(rawDate.getTime() + Math.abs(rawDate.getTimezoneOffset() * 60000));
+        taskDue.setHours(23, 59, 59, 999); // Due by end of that day
+
+        if (slot.end.getTime() > taskDue.getTime()) return -1; // Slot happens after deadline!
+
+        const timeFromNow = slot.start.getTime() - now.getTime();
+        const totalTime = taskDue.getTime() - now.getTime();
+        dueFit = Math.max(0, 1 - (timeFromNow / totalTime));
+    }
+
+    let spacingFit = 1;
+    if (lastBlockEnd) {
+        const hoursSinceLast = (slot.start.getTime() - lastBlockEnd.getTime()) / 3600000;
+
+        if (task.importance >= 7) {
+            // For Q2/Important, spacing by a day is highly valued, penalty for back-to-back
+            if (hoursSinceLast < 12) spacingFit = 0.2;
+            else if (hoursSinceLast >= 12 && hoursSinceLast < 48) spacingFit = 1.0;
+            else spacingFit = 0.6; // Maybe spaced *too* far apart but acceptable
+        } else {
+            // Lower importance or urgent tasks can be stacked with a tiny break
+            if (hoursSinceLast < 0.5) spacingFit = 0.4; // Still want 30 min breaks
+            else spacingFit = 1.0;
+        }
+    }
+
+    // Continuity Penalty
+    const leftoverMin = (slotDurationMs - requiredMs) / 60000;
+    let continuityFit = 1;
+    if (leftoverMin > 0 && leftoverMin < 25) continuityFit = 0.2; // Leaves useless stranded fragments of <25 mins
+
+    return (0.35 * task.priorityScore) + (0.30 * spacingFit) + (0.20 * dueFit) + (0.15 * continuityFit);
+};
+
+/**
+ * Main Auto-Scheduling Algorithm with Advanced Blocks & Prioritization
+ */
+export const performSmartScheduling = (tasks, busyPeriods, workingHours) => {
+    console.log("SMART SCHEDULER: Initiating Advanced Algorithm with", tasks.length, "tasks");
+
+    const unscheduledTasks = tasks.filter(t => !t.is_planned && !t.completed && (t.type === 'assignment' || !t.type));
+
+    // Define the scheduling window (14 Days horizon to allow generous spacing)
+    const now = new Date();
+    const horizonMs = 14 * 24 * 60 * 60 * 1000;
+    const scheduleWindowStart = new Date(Math.ceil((now.getTime() + 30 * 60000) / 1800000) * 1800000);
+    const scheduleWindowEnd = new Date(now.getTime() + horizonMs);
+
+    // Compute priority and generate blocks
+    unscheduledTasks.forEach(task => {
+        task.priorityScore = computePriorityScore(task, now, horizonMs);
+        task.blocks = splitIntoBlocks(task.duration, task.importance);
+    });
+
+    // Sort heavily by priority DESC
+    unscheduledTasks.sort((a, b) => b.priorityScore - a.priorityScore);
+
+    // Generate valid free slots timeline
+    let freeSlots = generateFreeSlots(scheduleWindowStart, scheduleWindowEnd, busyPeriods, workingHours);
+
+    const scheduledBlockEvents = [];
+
+    // Map each block into the optimal slot
+    for (const task of unscheduledTasks) {
+        let lastBlockEnd = null;
+        let blockIndex = 1;
+
+        for (const blockDuration of task.blocks) {
+            const requiredMs = blockDuration * 60000;
+
+            let bestSlotIndex = -1;
+            let bestScore = -1;
+
+            for (let i = 0; i < freeSlots.length; i++) {
+                const score = scoreSlot(freeSlots[i], requiredMs, task, lastBlockEnd, now);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestSlotIndex = i;
+                }
             }
 
-            // Check if the gap from currentMarker to the NEXT busy block is large enough
-            const nextBlock = mergedBlocks.find(b => b.start > currentMarker);
-            const gapEnd = nextBlock ? new Date(nextBlock.start) : scheduleWindowEnd;
+            if (bestSlotIndex !== -1) {
+                const slot = freeSlots[bestSlotIndex];
+                const blockStart = new Date(slot.start);
+                const blockEnd = new Date(blockStart.getTime() + requiredMs);
 
-            if (gapEnd.getTime() - currentMarker.getTime() >= requiredMs) {
-                // We found a gap big enough!
-                const taskEnd = new Date(currentMarker.getTime() + requiredMs);
+                // Create the newly carved out event block
+                // Appending part 1/2 if multiple blocks exist
+                const suffix = task.blocks.length > 1 ? ` (Part ${blockIndex}/${task.blocks.length})` : '';
 
-                // Generate a new "worktime" task instead of mutating the assignment
-                scheduledTasks.push({
-                    title: `Prep: ${task.title}`,
+                scheduledBlockEvents.push({
+                    title: `Prep: ${task.title}${suffix}`,
                     type: 'worktime',
                     parent_task_id: task.id,
                     urgency: task.urgency,
                     importance: task.importance,
-                    duration: task.duration,
+                    duration: blockDuration,
                     user_id: task.user_id,
-                    scheduled_start: currentMarker.toISOString(),
-                    scheduled_end: taskEnd.toISOString(),
-                    date: currentMarker.toISOString().split('T')[0] // For local rendering
+                    scheduled_start: blockStart.toISOString(),
+                    scheduled_end: blockEnd.toISOString(),
+                    date: blockStart.toISOString().split('T')[0]
                 });
 
-                // Move marker forward and inject this task's time as a new busy block natively
-                // Note: we could just advance `currentMarker = taskEnd`, but doing this handles edge cases safely
-                currentMarker = taskEnd;
-                placed = true;
+                lastBlockEnd = blockEnd;
+                blockIndex++;
+
+                // Shrink/split the free slot array
+                if (blockEnd.getTime() < slot.end.getTime()) {
+                    // Update slot in place to represent the remaining capacity
+                    freeSlots[bestSlotIndex] = { start: blockEnd, end: slot.end };
+                } else {
+                    // The block completely consumed the slot perfectly
+                    freeSlots.splice(bestSlotIndex, 1);
+                }
             } else {
-                // Gap too small, jump to the end of the blocking block to search again
-                currentMarker = new Date(gapEnd);
+                console.log(`Failed to find slot for block of task: ${task.title} (${blockDuration}m)`);
             }
         }
     }
 
-    return scheduledTasks;
+    return scheduledBlockEvents;
 };

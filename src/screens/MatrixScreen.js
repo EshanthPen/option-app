@@ -39,6 +39,8 @@ export default function MatrixScreen() {
     const [importModalVisible, setImportModalVisible] = useState(false);
     const [schoologyUrl, setSchoologyUrl] = useState('');
     const [saving, setSaving] = useState(false);
+    const [pendingImports, setPendingImports] = useState([]);
+    const [reviewModalVisible, setReviewModalVisible] = useState(false);
     const [month, setMonth] = useState(new Date().getMonth());
     const [year, setYear] = useState(new Date().getFullYear());
     const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
@@ -177,14 +179,16 @@ export default function MatrixScreen() {
             }).filter(t => t !== null);
 
             if (imported.length > 0) {
-                const { data, error } = await supabase.from('tasks').insert(imported).select();
-                if (error) throw error;
-                if (data) setTasks(prev => [...data, ...prev]);
+                setPendingImports(imported);
+                setImportModalVisible(false);
+                setReviewModalVisible(true);
+                setSchoologyUrl('');
+            } else {
+                setImportModalVisible(false);
+                setSchoologyUrl('');
+                if (Platform.OS === 'web') window.alert('No assignments found to import.');
+                else Alert.alert('Notice', 'No assignments found to import.');
             }
-            setImportModalVisible(false);
-            setSchoologyUrl('');
-            if (Platform.OS === 'web') window.alert(`Success: Imported ${imported.length} assignments!`);
-            else Alert.alert('Success', `Imported ${imported.length} assignments!`);
         } catch (err) {
             console.error(err);
             const errMsg = err.message || 'Failed to fetch calendar.';
@@ -194,6 +198,33 @@ export default function MatrixScreen() {
             setSaving(false);
         }
     };
+    const updatePendingImport = (index, field, value) => {
+        const newImports = [...pendingImports];
+        newImports[index][field] = value;
+        setPendingImports(newImports);
+    };
+
+    const saveReviewedImports = async () => {
+        setSaving(true);
+        try {
+            const { data, error } = await supabase.from('tasks').insert(pendingImports).select();
+            if (error) throw error;
+            if (data) setTasks(prev => [...data, ...prev]);
+
+            setReviewModalVisible(false);
+            setPendingImports([]);
+            if (Platform.OS === 'web') window.alert(`Success: Saved ${pendingImports.length} assignments!`);
+            else Alert.alert('Success', `Saved ${pendingImports.length} assignments!`);
+        } catch (err) {
+            console.error('Save imports error:', err);
+            const errMsg = err.message || 'Failed to save imported tasks.';
+            if (Platform.OS === 'web') window.alert(`Error: ${errMsg}`);
+            else Alert.alert('Error', errMsg);
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleRemoveSelected = async () => {
         if (selectedTaskIds.length === 0) return;
         setSaving(true);
@@ -677,6 +708,81 @@ export default function MatrixScreen() {
                             <TouchableOpacity disabled={saving || !schoologyUrl} style={[styles.btnDark, { flex: 1, justifyContent: 'center', paddingVertical: 12 }]} onPress={importICSFromUrl}>
                                 {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Import</Text>}
                             </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Review Imports Modal */}
+            <Modal visible={reviewModalVisible} animationType="fade" transparent>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalView, { width: '95%', maxWidth: 600, maxHeight: '80%', padding: 0, overflow: 'hidden' }]}>
+                        <View style={{ padding: 24, paddingBottom: 16 }}>
+                            <Text style={styles.modalTitle}>Review Imports ({pendingImports.length})</Text>
+                            <Text style={styles.instructions}>Adjust the time needed, urgency, and importance for each assignment before saving.</Text>
+                        </View>
+
+                        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ gap: 16 }}>
+                            {pendingImports.map((item, idx) => (
+                                <View key={idx} style={{ backgroundColor: theme.colors.surface2, padding: 16, borderRadius: theme.radii.lg, borderWidth: 2, borderColor: theme.colors.border }}>
+                                    <Text style={[styles.eventText, { fontSize: 15, color: theme.colors.ink, marginBottom: 4 }]} numberOfLines={2}>{item.title}</Text>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginBottom: 12 }}>Due: {item.due_date}</Text>
+
+                                    <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.label}>Duration (min)</Text>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                {[30, 60, 120].map(v => (
+                                                    <TouchableOpacity key={v} style={[styles.ctrlBtn, item.duration === v && { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]} onPress={() => updatePendingImport(idx, 'duration', v)}>
+                                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: item.duration === v ? '#fff' : theme.colors.ink2 }}>{v}m</Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                                <TextInput
+                                                    style={[styles.input, { flex: 1, marginBottom: 0, paddingVertical: 8 }]}
+                                                    keyboardType="numeric"
+                                                    value={String(item.duration)}
+                                                    onChangeText={v => updatePendingImport(idx, 'duration', parseInt(v) || 0)}
+                                                />
+                                            </View>
+                                        </View>
+                                    </View>
+
+                                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.label}>Urgency (1-10)</Text>
+                                            <TextInput style={[styles.input, { marginBottom: 0 }]} keyboardType="numeric" value={String(item.urgency)} onChangeText={v => updatePendingImport(idx, 'urgency', parseInt(v) || 1)} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.label}>Importance (1-10)</Text>
+                                            <TextInput style={[styles.input, { marginBottom: 0 }]} keyboardType="numeric" value={String(item.importance)} onChangeText={v => updatePendingImport(idx, 'importance', parseInt(v) || 1)} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.label}>Action</Text>
+                                            <TouchableOpacity
+                                                style={[styles.btnOut, { paddingVertical: 10, borderColor: theme.colors.red }]}
+                                                onPress={() => {
+                                                    const filtered = pendingImports.filter((_, i) => i !== idx);
+                                                    setPendingImports(filtered);
+                                                    if (filtered.length === 0) setReviewModalVisible(false);
+                                                }}
+                                            >
+                                                <Text style={[styles.btnOutText, { fontSize: 12, color: theme.colors.red }]}>Remove</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                </View>
+                            ))}
+                        </ScrollView>
+
+                        <View style={{ padding: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+                            <View style={styles.btnRow}>
+                                <TouchableOpacity disabled={saving} style={[styles.btnOut, { flex: 1, justifyContent: 'center', paddingVertical: 12 }]} onPress={() => { setReviewModalVisible(false); setPendingImports([]); }}>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontWeight: '500', color: theme.colors.ink2 }}>Discard</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity disabled={saving || pendingImports.length === 0} style={[styles.btnDark, { flex: 2, justifyContent: 'center', paddingVertical: 12 }]} onPress={saveReviewedImports}>
+                                    {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Save {pendingImports.length} Tasks</Text>}
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
                 </View>
