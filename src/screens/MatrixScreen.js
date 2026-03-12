@@ -77,18 +77,23 @@ export default function MatrixScreen() {
         // Local state augmentation for columns missing in Supabase schema
         let worktimes = [];
         let plannedIds = [];
+        let taskExtras = {};
         try {
             const wtStr = await AsyncStorage.getItem('@option_app_worktimes');
             const plStr = await AsyncStorage.getItem('@option_app_planned_assignments');
+            const exStr = await AsyncStorage.getItem('@option_app_task_extras');
             if (wtStr) worktimes = JSON.parse(wtStr);
             if (plStr) plannedIds = JSON.parse(plStr);
+            if (exStr) taskExtras = JSON.parse(exStr);
         } catch (e) { console.error('Error loading local data', e); }
 
         if (data) {
             const augmentedData = data.map(t => ({
                 ...t,
                 type: 'assignment',
-                is_planned: plannedIds.includes(t.id)
+                is_planned: plannedIds.includes(t.id),
+                // Merge in locally-stored extra fields (difficulty, task_type)
+                ...(taskExtras[t.id] || {}),
             }));
             setTasks([...worktimes, ...augmentedData]);
         }
@@ -97,33 +102,66 @@ export default function MatrixScreen() {
     const handleAddTask = async () => {
         if (!title.trim()) return;
         setSaving(true);
-        const newTask = {
+
+        // Fields that exist in the Supabase tasks schema
+        const supabaseTask = {
             title,
             urgency: parseInt(urgency) || 5,
             importance: parseInt(importance) || 5,
             duration: parseInt(duration) || 60,
-            difficulty: parseInt(difficulty) || 3,
-            task_type: taskType || 'homework',
             due_date: taskDate,
             source: 'manual',
             user_id: userId
         };
+
+        // Extra scheduling fields stored locally alongside the task
+        const extraFields = {
+            difficulty: parseInt(difficulty) || 3,
+            task_type: taskType || 'homework',
+        };
+
         try {
-            const { data, error } = await supabase.from('tasks').insert([newTask]).select();
+            const { data, error } = await supabase.from('tasks').insert([supabaseTask]).select();
             if (error) throw error;
-            if (data?.length > 0) setTasks(prev => [data[0], ...prev]);
+            if (data?.length > 0) {
+                const fullTask = { ...data[0], ...extraFields };
+                setTasks(prev => [fullTask, ...prev]);
+                // Persist extra fields keyed by task ID
+                await saveTaskExtras(data[0].id, extraFields);
+            }
             setModalVisible(false);
             setTitle(''); setDifficulty('3'); setTaskType('homework');
         } catch (error) {
             console.error('Supabase Error:', error);
             // Local fallback for demo purposes
-            const mockData = { ...newTask, id: Date.now() };
+            const mockData = { ...supabaseTask, ...extraFields, id: Date.now() };
             setTasks(prev => [mockData, ...prev]);
+            await saveTaskExtras(mockData.id, extraFields);
             setModalVisible(false);
             setTitle(''); setDifficulty('3'); setTaskType('homework');
         } finally {
             setSaving(false);
         }
+    };
+
+    // Helpers to persist/load extra task fields (difficulty, task_type) that
+    // don't exist in the Supabase schema yet.
+    const EXTRAS_KEY = '@option_app_task_extras';
+
+    const saveTaskExtras = async (taskId, extras) => {
+        try {
+            const raw = await AsyncStorage.getItem(EXTRAS_KEY);
+            const all = raw ? JSON.parse(raw) : {};
+            all[taskId] = extras;
+            await AsyncStorage.setItem(EXTRAS_KEY, JSON.stringify(all));
+        } catch (e) { console.error('Error saving task extras', e); }
+    };
+
+    const loadTaskExtras = async () => {
+        try {
+            const raw = await AsyncStorage.getItem(EXTRAS_KEY);
+            return raw ? JSON.parse(raw) : {};
+        } catch (e) { console.error('Error loading task extras', e); return {}; }
     };
 
     const importICSFromUrl = async () => {

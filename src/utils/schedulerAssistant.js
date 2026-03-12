@@ -189,72 +189,102 @@ const recommendedStartDaysBeforeDue = (task) => {
 // ─── Free Slot Generation ────────────────────────────────────────────────────
 
 /**
- * Generates free time slots from busy periods and working hours.
- * Merges all busy blocks, inverts them within the scheduling window,
- * and clips to working hours.
+ * Generates free time slots strictly within the user's working hours,
+ * then subtracts busy periods from Google Calendar.
+ *
+ * Uses a positive approach: first build all working-hour windows,
+ * then remove busy periods. This guarantees no event is ever placed
+ * outside the user's specified availability.
  */
 const generateFreeSlots = (windowStart, windowEnd, busyPeriods, workingHours) => {
-    // Build all busy blocks: existing calendar events + non-working hours
-    const allBlocks = busyPeriods.map(bp => ({
-        start: new Date(bp.start),
-        end: new Date(bp.end),
-    }));
+    // Step 1: Build all working-hour windows for each day in the range
+    const workingWindows = [];
 
-    // Add non-working-hour blocks for each day in the window
-    for (let d = new Date(windowStart); d < windowEnd; d.setDate(d.getDate() + 1)) {
+    // Start iteration from midnight of the windowStart day
+    const startDay = new Date(windowStart);
+    startDay.setHours(0, 0, 0, 0);
+
+    for (let d = new Date(startDay); d < windowEnd; d = new Date(d.getTime() + MS_PER_DAY)) {
         const jsDay = d.getDay(); // 0=Sun, 1=Mon, ...
         // Convert to UI index: 0=Mon, ..., 6=Sun
         const uiDayIndex = jsDay === 0 ? 6 : jsDay - 1;
         const dayConfig = workingHours[uiDayIndex] || { start: 15, end: 22 };
 
-        // Block: midnight to working-start
-        const midnight = new Date(d);
-        midnight.setHours(0, 0, 0, 0);
-        const morningEnd = new Date(d);
-        morningEnd.setHours(dayConfig.start, 0, 0, 0);
-        if (morningEnd > midnight) {
-            allBlocks.push({ start: new Date(midnight), end: new Date(morningEnd) });
-        }
+        // Skip days where start >= end (user marked as unavailable)
+        if (dayConfig.start >= dayConfig.end) continue;
 
-        // Block: working-end to next-midnight
-        const eveningStart = new Date(d);
-        eveningStart.setHours(dayConfig.end, 0, 0, 0);
-        const nextMidnight = new Date(d);
-        nextMidnight.setDate(nextMidnight.getDate() + 1);
-        nextMidnight.setHours(0, 0, 0, 0);
-        if (nextMidnight > eveningStart) {
-            allBlocks.push({ start: new Date(eveningStart), end: new Date(nextMidnight) });
+        const dayStart = new Date(d);
+        dayStart.setHours(dayConfig.start, 0, 0, 0);
+
+        const dayEnd = new Date(d);
+        dayEnd.setHours(dayConfig.end, 0, 0, 0);
+
+        // Clip to the scheduling window
+        const clippedStart = new Date(Math.max(dayStart.getTime(), windowStart.getTime()));
+        const clippedEnd = new Date(Math.min(dayEnd.getTime(), windowEnd.getTime()));
+
+        if (clippedStart < clippedEnd) {
+            workingWindows.push({ start: clippedStart, end: clippedEnd });
         }
     }
 
-    // Merge overlapping busy blocks
-    allBlocks.sort((a, b) => a.start - b.start);
-    const merged = [];
-    if (allBlocks.length > 0) {
-        let current = { start: allBlocks[0].start, end: allBlocks[0].end };
-        for (let i = 1; i < allBlocks.length; i++) {
-            const next = allBlocks[i];
+    if (workingWindows.length === 0) return [];
+
+    // Step 2: Sort and merge busy periods
+    const sortedBusy = busyPeriods
+        .map(bp => ({ start: new Date(bp.start), end: new Date(bp.end) }))
+        .sort((a, b) => a.start - b.start);
+
+    const mergedBusy = [];
+    if (sortedBusy.length > 0) {
+        let current = { start: sortedBusy[0].start, end: sortedBusy[0].end };
+        for (let i = 1; i < sortedBusy.length; i++) {
+            const next = sortedBusy[i];
             if (next.start <= current.end) {
                 current.end = new Date(Math.max(current.end.getTime(), next.end.getTime()));
             } else {
-                merged.push(current);
+                mergedBusy.push(current);
                 current = { start: next.start, end: next.end };
             }
         }
-        merged.push(current);
+        mergedBusy.push(current);
     }
 
-    // Invert to free slots
+    // Step 3: Subtract busy periods from working windows to get free slots
     const freeSlots = [];
-    let marker = new Date(windowStart);
-    for (const block of merged) {
-        if (block.start > marker) {
-            freeSlots.push({ start: new Date(marker), end: new Date(block.start) });
+
+    for (const window of workingWindows) {
+        let segments = [{ start: new Date(window.start), end: new Date(window.end) }];
+
+        for (const busy of mergedBusy) {
+            // Skip busy periods entirely outside this window
+            if (busy.end <= window.start || busy.start >= window.end) continue;
+
+            const newSegments = [];
+            for (const seg of segments) {
+                if (busy.end <= seg.start || busy.start >= seg.end) {
+                    // No overlap with this segment
+                    newSegments.push(seg);
+                } else {
+                    // Busy overlaps this segment — split into before and after
+                    if (busy.start > seg.start) {
+                        newSegments.push({ start: seg.start, end: new Date(busy.start) });
+                    }
+                    if (busy.end < seg.end) {
+                        newSegments.push({ start: new Date(busy.end), end: seg.end });
+                    }
+                }
+            }
+            segments = newSegments;
         }
-        marker = new Date(Math.max(marker.getTime(), block.end.getTime()));
-    }
-    if (marker < windowEnd) {
-        freeSlots.push({ start: new Date(marker), end: new Date(windowEnd) });
+
+        // Add remaining segments that are long enough to be useful
+        for (const seg of segments) {
+            const durationMin = (seg.end.getTime() - seg.start.getTime()) / MS_PER_MINUTE;
+            if (durationMin >= MIN_BLOCK_MINUTES) {
+                freeSlots.push(seg);
+            }
+        }
     }
 
     return freeSlots;
