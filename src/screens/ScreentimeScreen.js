@@ -3,9 +3,11 @@ import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated
 } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
 import { Play, Pause, RotateCcw, Coffee, BookOpen } from 'lucide-react-native';
+import BlacklistManager from '../components/BlacklistManager';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -24,6 +26,50 @@ export default function ScreentimeScreen() {
     const [isActive, setIsActive] = useState(false);
     const [mode, setMode] = useState('Work');
     const [sessionsCompleted, setSessionsCompleted] = useState(0);
+    const [blacklist, setBlacklist] = useState([]);
+    
+    // Load Blacklist
+    useEffect(() => {
+        const loadBlacklist = async () => {
+            try {
+                const stored = await AsyncStorage.getItem('@focus_blacklist');
+                if (stored) setBlacklist(JSON.parse(stored));
+            } catch (e) { console.error('Error loading blacklist', e); }
+        };
+        loadBlacklist();
+        // Ensure unblocked on mount
+        unblockWebsites();
+        
+        return () => { unblockWebsites(); }; // cleanup
+    }, []);
+
+    const saveBlacklist = async (newList) => {
+        try {
+            setBlacklist(newList);
+            await AsyncStorage.setItem('@focus_blacklist', JSON.stringify(newList));
+        } catch (e) { console.error('Error saving blacklist', e); }
+    };
+
+    const handleAddDomain = (domain) => saveBlacklist([...blacklist, domain]);
+    const handleRemoveDomain = (domain) => saveBlacklist(blacklist.filter(d => d !== domain));
+
+    const blockWebsites = async () => {
+        if (blacklist.length === 0) return;
+        try {
+            await fetch('http://localhost:3000/block', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domains: blacklist })
+            });
+        } catch (e) { console.error('Failed to trigger blocker api:', e); }
+    };
+
+    const unblockWebsites = async () => {
+        try {
+            await fetch('http://localhost:3000/unblock', { method: 'POST' });
+        } catch (e) { console.error('Failed to trigger unblocker api:', e); }
+    };
+
     const score = (() => {
         const total = WEEKLY_HOURS.reduce((a, b) => a + b, 0);
         const weeklyTarget = 25;
@@ -58,13 +104,24 @@ export default function ScreentimeScreen() {
         return () => clearInterval(interval);
     }, [isActive, timeLeft, mode]);
 
-    const toggleTimer = () => setIsActive(a => !a);
+    const toggleTimer = () => {
+        if (!isActive && mode === 'Work') {
+            blockWebsites();
+        } else if (isActive) {
+            unblockWebsites();
+        }
+        setIsActive(a => !a);
+    };
+
     const resetTimer = () => {
         setIsActive(false);
+        unblockWebsites();
         setTimeLeft(mode === 'Work' ? 25 * 60 : 5 * 60);
     };
+
     const switchMode = () => {
         setIsActive(false);
+        unblockWebsites();
         const next = mode === 'Work' ? 'Break' : 'Work';
         setMode(next);
         setTimeLeft(next === 'Work' ? 25 * 60 : 5 * 60);
@@ -155,6 +212,13 @@ export default function ScreentimeScreen() {
                     </TouchableOpacity>
                 </View>
             </View>
+
+            {/* Website Blocker Manager */}
+            <BlacklistManager 
+                blacklist={blacklist} 
+                onAdd={handleAddDomain} 
+                onRemove={handleRemoveDomain} 
+            />
 
             {/* Weekly chart */}
             <View style={styles.card}>
