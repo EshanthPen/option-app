@@ -101,6 +101,30 @@ const splitIntoBlocks = (task) => {
     const difficulty = task.difficulty || 3;
     const quadrant = task.quadrant || 'Q2';
 
+    // If user provided a sessionLength, use it directly
+    if (task.sessionLength && task.sessionLength > 0) {
+        const sessionLen = task.sessionLength;
+        if (total <= sessionLen) return [total];
+
+        const blocks = [];
+        let remaining = total;
+        while (remaining > 0) {
+            const blockSize = Math.min(sessionLen, remaining);
+            // Merge tiny remainders into previous block
+            if (blockSize < MIN_BLOCK_MINUTES && blocks.length > 0) {
+                if (blocks[blocks.length - 1] + blockSize <= sessionLen + 15) {
+                    blocks[blocks.length - 1] += blockSize;
+                } else {
+                    blocks.push(blockSize);
+                }
+                break;
+            }
+            blocks.push(blockSize);
+            remaining -= blockSize;
+        }
+        return blocks;
+    }
+
     if (total <= 45) return [total];
 
     // Determine target block size based on difficulty and quadrant
@@ -157,6 +181,17 @@ const splitIntoBlocks = (task) => {
 const computeTargetGapMs = (task, now) => {
     const importance = task.importance || 5;
     const duration = task.duration || 60;
+    const numBlocks = task.blocks ? task.blocks.length : 1;
+
+    // If there's a due date and multiple blocks, spread them evenly
+    if (task.due_date && numBlocks > 1) {
+        const due = new Date(task.due_date);
+        if (!task.due_date.includes('T')) due.setHours(23, 59, 59, 999);
+        const daysUntilDue = Math.max(1, (due.getTime() - now.getTime()) / MS_PER_DAY);
+        // Spread blocks evenly across available days, with at most 1 block per day
+        const spreadGapDays = Math.max(0.8, daysUntilDue / numBlocks);
+        return spreadGapDays * MS_PER_DAY;
+    }
 
     let baseGap = 1; // 1 day base
     const importanceFactor = importance >= 7 ? 1 : 0;
@@ -552,10 +587,14 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours, userPre
         dailyTracker.addLoad(bpStart, bpDuration);
     }
 
+    // Track how many blocks of each task are placed on each day
+    const taskDayBlockCount = {}; // { taskId: { 'YYYY-MM-DD': count } }
+
     for (const task of unscheduledTasks) {
         let lastBlockEnd = null;
         let blockIndex = 1;
         const totalBlocks = task.blocks.length;
+        taskDayBlockCount[task.id] = {};
 
         // For important/long tasks, check if we should start earlier
         const startDaysBefore = recommendedStartDaysBeforeDue(task);
@@ -566,6 +605,9 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours, userPre
             const idealStart = due.getTime() - (startDaysBefore * MS_PER_DAY);
             earliestStartMs = Math.max(now.getTime(), Math.min(idealStart, now.getTime()));
         }
+
+        // Max 1 block per task per day to spread work out
+        const MAX_BLOCKS_PER_TASK_PER_DAY = 1;
 
         for (const blockDuration of task.blocks) {
             const requiredMs = blockDuration * MS_PER_MINUTE;
@@ -578,6 +620,11 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours, userPre
 
                 // Skip slots before earliest start time
                 if (slot.end.getTime() < earliestStartMs) continue;
+
+                // Enforce max blocks per task per day
+                const slotDay = slot.start.toISOString().split('T')[0];
+                const dayCount = taskDayBlockCount[task.id][slotDay] || 0;
+                if (dayCount >= MAX_BLOCKS_PER_TASK_PER_DAY) continue;
 
                 const score = scoreSlot(
                     slot, requiredMs, task, lastBlockEnd, now, dailyTracker, userPrefs
@@ -617,6 +664,10 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours, userPre
                 dailyTracker.addLoad(blockStart, blockDuration);
                 lastBlockEnd = blockEnd;
                 blockIndex++;
+
+                // Track per-task-per-day block count
+                const placedDay = blockStart.toISOString().split('T')[0];
+                taskDayBlockCount[task.id][placedDay] = (taskDayBlockCount[task.id][placedDay] || 0) + 1;
 
                 // Update free slots: shrink or remove the used slot
                 if (blockEnd.getTime() < slot.end.getTime()) {
