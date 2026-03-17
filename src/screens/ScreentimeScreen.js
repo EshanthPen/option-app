@@ -71,11 +71,6 @@ export default function ScreentimeScreen() {
         } catch (e) { console.error('Failed to trigger unblocker api:', e); }
     };
 
-    const score = (() => {
-        const total = WEEKLY_HOURS.reduce((a, b) => a + b, 0);
-        const weeklyTarget = 25;
-        return Math.min(100, Math.round((total / weeklyTarget) * 100));
-    })();
     const ringAnim = useRef(new Animated.Value(0)).current;
 
     // Load real pomodoro data on screen focus
