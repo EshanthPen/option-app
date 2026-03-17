@@ -1,23 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
 import { Play, Pause, RotateCcw, Coffee, BookOpen } from 'lucide-react-native';
+import { recordPomodoroSession, getWeeklyPomodoroData, computeFocusScore, getScoreLabel } from '../utils/focusScoreEngine';
 import BlacklistManager from '../components/BlacklistManager';
 
 const screenWidth = Dimensions.get('window').width;
 
-// Weekly mock productivity data (hours studied per day)
-const WEEKLY_HOURS = [1.5, 3.5, 1, 4, 5, 2, 0];
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const TODAY_IDX = (new Date().getDay() + 6) % 7; // 0=Mon
 
 const scoreColor = (s, theme) => s >= 80 ? theme.colors.green : s >= 60 ? theme.colors.blue : s >= 40 ? theme.colors.orange : theme.colors.red;
-const scoreLabel = (s) => s >= 80 ? 'Excellent' : s >= 60 ? 'Good' : s >= 40 ? 'Needs Work' : 'Low Focus';
 
 export default function ScreentimeScreen() {
     const { theme, isDarkMode } = useTheme();
@@ -26,6 +24,9 @@ export default function ScreentimeScreen() {
     const [isActive, setIsActive] = useState(false);
     const [mode, setMode] = useState('Work');
     const [sessionsCompleted, setSessionsCompleted] = useState(0);
+    const [weeklyHours, setWeeklyHours] = useState([0, 0, 0, 0, 0, 0, 0]);
+    const [score, setScore] = useState(0);
+    const [scoreText, setScoreText] = useState('');
     const [blacklist, setBlacklist] = useState([]);
     
     // Load Blacklist
@@ -77,6 +78,25 @@ export default function ScreentimeScreen() {
     })();
     const ringAnim = useRef(new Animated.Value(0)).current;
 
+    // Load real pomodoro data on screen focus
+    useFocusEffect(
+        useCallback(() => {
+            const loadData = async () => {
+                try {
+                    const pomData = await getWeeklyPomodoroData();
+                    setWeeklyHours(pomData.dailyHours);
+
+                    const { score: focusScore } = await computeFocusScore();
+                    setScore(focusScore);
+                    setScoreText(getScoreLabel(focusScore));
+                } catch (err) {
+                    console.error('ScreentimeScreen load error:', err);
+                }
+            };
+            loadData();
+        }, [])
+    );
+
     useEffect(() => {
         Animated.timing(ringAnim, {
             toValue: score / 100,
@@ -93,6 +113,14 @@ export default function ScreentimeScreen() {
             clearInterval(interval);
             if (mode === 'Work') {
                 setSessionsCompleted(s => s + 1);
+                // Persist completed pomodoro session
+                recordPomodoroSession(25).then(async () => {
+                    const pomData = await getWeeklyPomodoroData();
+                    setWeeklyHours(pomData.dailyHours);
+                    const { score: newScore } = await computeFocusScore(true);
+                    setScore(newScore);
+                    setScoreText(getScoreLabel(newScore));
+                }).catch(err => console.error('Failed to record session:', err));
                 setMode('Break');
                 setTimeLeft(5 * 60);
             } else {
@@ -132,7 +160,7 @@ export default function ScreentimeScreen() {
 
     const chartData = {
         labels: DAY_LABELS,
-        datasets: [{ data: WEEKLY_HOURS }],
+        datasets: [{ data: weeklyHours.some(h => h > 0) ? weeklyHours : [0, 0, 0, 0, 0, 0, 0.1] }],
     };
 
     return (
@@ -149,7 +177,7 @@ export default function ScreentimeScreen() {
                         {score}
                     </Text>
                     <Text style={[styles.scoreLabel, { color: scoreColor(score, theme) }]}>
-                        {scoreLabel(score)}
+                        {scoreText || getScoreLabel(score)}
                     </Text>
                     <Text style={styles.scoreDesc}>Focus Score this week</Text>
                 </View>
@@ -224,8 +252,8 @@ export default function ScreentimeScreen() {
             <View style={styles.card}>
                 <Text style={styles.cardTitle}>Study Hours This Week</Text>
                 <Text style={styles.cardSub}>
-                    {WEEKLY_HOURS.reduce((a, b) => a + b, 0).toFixed(1)} hrs total ·{' '}
-                    {(WEEKLY_HOURS.reduce((a, b) => a + b, 0) / 5).toFixed(1)} avg / day
+                    {weeklyHours.reduce((a, b) => a + b, 0).toFixed(1)} hrs total ·{' '}
+                    {(weeklyHours.reduce((a, b) => a + b, 0) / 7).toFixed(1)} avg / day
                 </Text>
                 <LineChart
                     data={chartData}

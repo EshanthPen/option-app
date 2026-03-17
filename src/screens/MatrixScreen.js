@@ -55,6 +55,12 @@ export default function MatrixScreen() {
     const [difficulty, setDifficulty] = useState('3');
     const [taskType, setTaskType] = useState('homework');
 
+    // Pre-schedule review state
+    const [scheduleReviewVisible, setScheduleReviewVisible] = useState(false);
+    const [scheduleReviewTasks, setScheduleReviewTasks] = useState([]);
+    const [scheduleWorkingHours, setScheduleWorkingHours] = useState(null);
+    const [scheduleBusyPeriods, setScheduleBusyPeriods] = useState([]);
+
     // Mini calendar picker state inside the modal
     const [pickerOpen, setPickerOpen] = useState(false);
     const [pickerMonth, setPickerMonth] = useState(new Date().getMonth());
@@ -259,6 +265,7 @@ export default function MatrixScreen() {
         }
     };
 
+    // Step 1: Clicking Auto-Schedule gathers data and opens the review modal
     const handleSmartSchedule = async () => {
         setSaving(true);
         try {
@@ -271,39 +278,95 @@ export default function MatrixScreen() {
                 return;
             }
 
-            // 2. Load Working Hours (7 days. 0=Mon, ..., 6=Sun visually)
+            // 2. Load Working Hours
             const savedHours = await AsyncStorage.getItem('smartScheduleHours');
             let workingHours;
             if (savedHours) {
-                try {
-                    workingHours = JSON.parse(savedHours);
-                } catch (e) { console.error("Error parsing smart hours", e); }
+                try { workingHours = JSON.parse(savedHours); } catch (e) { console.error("Error parsing smart hours", e); }
             }
-
             if (!workingHours) {
-                // Fallback to old format
                 const startStr = await AsyncStorage.getItem('workingStartHour');
                 const endStr = await AsyncStorage.getItem('workingEndHour');
                 const s = startStr ? parseInt(startStr) : 15;
                 const e = endStr ? parseInt(endStr) : 22;
-                workingHours = {
-                    0: { start: s, end: e }, 1: { start: s, end: e }, 2: { start: s, end: e },
-                    3: { start: s, end: e }, 4: { start: s, end: e }, 5: { start: s, end: e },
-                    6: { start: s, end: e }
-                };
+                workingHours = { 0: { start: s, end: e }, 1: { start: s, end: e }, 2: { start: s, end: e }, 3: { start: s, end: e }, 4: { start: s, end: e }, 5: { start: s, end: e }, 6: { start: s, end: e } };
             }
 
-            // 3. Fetch Google Calendar constraints for the next 14 days
+            // 3. Fetch busy periods
             const now = new Date();
             const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
             const busyPeriods = await fetchFreeBusy(token, now, twoWeeksOut);
 
-            // 4. Run AI Scheduler Algorithm against 'unscheduled' tasks
-            const optimizedTasks = performSmartScheduling(tasks, busyPeriods, workingHours);
+            // 4. Find unscheduled tasks to present for review (only today or future)
+            const plannedStr = await AsyncStorage.getItem('@option_app_planned_assignments');
+            const plannedIds = plannedStr ? JSON.parse(plannedStr) : [];
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const unscheduled = tasks.filter(
+                t => !plannedIds.includes(t.id) && !t.completed && (t.type === 'assignment' || !t.type) && !t.isFixedTime && !String(t.id).startsWith('wt_')
+                     && (!t.due_date || t.due_date >= todayStr)
+            );
 
-            if (optimizedTasks.length === 0) {
+            if (unscheduled.length === 0) {
                 if (Platform.OS === 'web') window.alert('No tasks need scheduling! Everything is already planned or completed.');
                 else Alert.alert('All Caught Up', 'No tasks need scheduling! Everything is already planned or completed.');
+                setSaving(false);
+                return;
+            }
+
+            // Prepare review list with editable totalTime and sessionLength
+            const reviewTasks = unscheduled.map(t => ({
+                ...t,
+                totalTime: String(t.duration || 60),
+                sessionLength: String(Math.min(t.duration || 60, 50)),
+            }));
+
+            setScheduleWorkingHours(workingHours);
+            setScheduleBusyPeriods(busyPeriods);
+            setScheduleReviewTasks(reviewTasks);
+            setScheduleReviewVisible(true);
+        } catch (error) {
+            console.error("Smart Schedule Error:", error);
+            if (Platform.OS === 'web') window.alert("Failed to prepare scheduling. Check console.");
+            else Alert.alert("Error", "Failed to prepare scheduling.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const updateScheduleReviewTask = (index, field, value) => {
+        const updated = [...scheduleReviewTasks];
+        updated[index] = { ...updated[index], [field]: value };
+        setScheduleReviewTasks(updated);
+    };
+
+    // Step 2: After user sets times and confirms, actually run the scheduler
+    const confirmSmartSchedule = async () => {
+        setSaving(true);
+        try {
+            const token = await AsyncStorage.getItem('googleAccessToken');
+            if (!token) {
+                if (Platform.OS === 'web') window.alert("Session expired. Please sign in again.");
+                else Alert.alert("Error", "Session expired. Please sign in again.");
+                setSaving(false);
+                return;
+            }
+
+            // Apply user-specified totalTime and sessionLength to each task
+            const tasksForScheduler = scheduleReviewTasks.map(t => ({
+                ...t,
+                duration: parseInt(t.totalTime) || 60,
+                sessionLength: parseInt(t.sessionLength) || 50,
+                is_planned: false, // ensure they get picked up
+            }));
+
+            // Run the scheduling algorithm
+            const optimizedTasks = performSmartScheduling(
+                tasksForScheduler, scheduleBusyPeriods, scheduleWorkingHours
+            );
+
+            if (optimizedTasks.length === 0) {
+                if (Platform.OS === 'web') window.alert('Could not place any blocks. Try adjusting session lengths or due dates.');
+                else Alert.alert('No Slots', 'Could not place any blocks. Try adjusting session lengths or due dates.');
                 setSaving(false);
                 return;
             }
@@ -313,9 +376,8 @@ export default function MatrixScreen() {
             const newWorktimes = [];
 
             for (const worktimeTask of optimizedTasks) {
-                // Save to Google Calendar
                 const event = {
-                    summary: `${worktimeTask.title} 🤖`,
+                    summary: `${worktimeTask.title} \u{1F916}`,
                     description: `Priority: ${worktimeTask.urgency}U/${worktimeTask.importance}I\n\nAutomatically scheduled by Option Smart AI.`,
                     start: { dateTime: worktimeTask.scheduled_start, timeZone: 'America/New_York' },
                     end: { dateTime: worktimeTask.scheduled_end, timeZone: 'America/New_York' }
@@ -324,7 +386,6 @@ export default function MatrixScreen() {
                 const calSuccess = await createGoogleCalendarEvent(token, event);
 
                 if (calSuccess) {
-                    // Save locally instead of Supabase to avoid schema conflicts
                     worktimeTask.id = 'wt_' + Date.now() + Math.random().toString(36).substr(2, 9);
                     newWorktimes.push(worktimeTask);
                     successCount++;
@@ -333,10 +394,10 @@ export default function MatrixScreen() {
                         originalIdsToUpdate.push(worktimeTask.parent_task_id);
                     }
                 } else {
-                    if (Platform.OS === 'web') window.alert("Failed to sync to Google Calendar. Your session may have expired. Please go to Settings and sign in with Google again.");
-                    else Alert.alert("Sync Error", "Failed to sync to Google Calendar. Your session may have expired. Please go to Settings and sign in with Google again.");
+                    if (Platform.OS === 'web') window.alert("Failed to sync to Google Calendar. Your session may have expired.");
+                    else Alert.alert("Sync Error", "Failed to sync to Google Calendar. Your session may have expired.");
                     setSaving(false);
-                    return; // Abort because Google sync is critical
+                    return;
                 }
             }
 
@@ -348,7 +409,6 @@ export default function MatrixScreen() {
                 } catch (e) { console.error('Local save error', e); }
             }
 
-            // Mark the parent assignments as planned via local store
             if (originalIdsToUpdate.length > 0) {
                 try {
                     const plStr = await AsyncStorage.getItem('@option_app_planned_assignments');
@@ -357,11 +417,12 @@ export default function MatrixScreen() {
                 } catch (e) { console.error('Local save error', e); }
             }
 
-            // Reload visual state completely so users see the times
             await fetchTasks();
+            setScheduleReviewVisible(false);
+            setScheduleReviewTasks([]);
 
-            if (Platform.OS === 'web') window.alert(`Smart Scheduling Complete: AI placed ${successCount} tasks on your calendar!`);
-            else Alert.alert('Smart Scheduling Complete', `AI placed ${successCount} tasks on your calendar!`);
+            if (Platform.OS === 'web') window.alert(`Smart Scheduling Complete: AI placed ${successCount} blocks on your calendar!`);
+            else Alert.alert('Smart Scheduling Complete', `AI placed ${successCount} blocks on your calendar!`);
 
         } catch (error) {
             console.error("Smart Schedule Error:", error);
@@ -809,6 +870,87 @@ export default function MatrixScreen() {
                                 </TouchableOpacity>
                                 <TouchableOpacity disabled={saving || pendingImports.length === 0} style={[styles.btnDark, { flex: 2, justifyContent: 'center', paddingVertical: 12 }]} onPress={saveReviewedImports}>
                                     {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Save {pendingImports.length} Tasks</Text>}
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Schedule Review Modal */}
+            <Modal visible={scheduleReviewVisible} animationType="fade" transparent>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalView, { width: '95%', maxWidth: 600, maxHeight: '85%', padding: 0, overflow: 'hidden' }]}>
+                        <View style={{ padding: 24, paddingBottom: 16 }}>
+                            <Text style={styles.modalTitle}>Review Before Scheduling</Text>
+                            <Text style={styles.instructions}>Set how long each task takes total and how long each study session should be. Blocks will be spread out evenly until the due date.</Text>
+                        </View>
+
+                        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ gap: 16, paddingBottom: 16 }}>
+                            {scheduleReviewTasks.map((item, idx) => {
+                                const totalMin = parseInt(item.totalTime) || 0;
+                                const sessionMin = parseInt(item.sessionLength) || 50;
+                                const numSessions = sessionMin > 0 ? Math.ceil(totalMin / sessionMin) : 0;
+                                return (
+                                    <View key={item.id || idx} style={{ backgroundColor: theme.colors.surface2, padding: 16, borderRadius: theme.radii.lg, borderWidth: 2, borderColor: theme.colors.border }}>
+                                        <Text style={[styles.eventText, { fontSize: 15, color: theme.colors.ink, marginBottom: 4 }]} numberOfLines={2}>{item.title}</Text>
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginBottom: 12 }}>
+                                            Due: {item.due_date || 'No due date'}
+                                        </Text>
+
+                                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.label}>Total time needed (min)</Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                    {[30, 60, 120, 180].map(v => (
+                                                        <TouchableOpacity key={v} style={[styles.ctrlBtn, parseInt(item.totalTime) === v && { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]} onPress={() => updateScheduleReviewTask(idx, 'totalTime', String(v))}>
+                                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: parseInt(item.totalTime) === v ? '#fff' : theme.colors.ink2 }}>{v >= 60 ? `${v / 60}h` : `${v}m`}</Text>
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                    <TextInput
+                                                        style={[styles.input, { flex: 1, marginBottom: 0, paddingVertical: 8 }]}
+                                                        keyboardType="numeric"
+                                                        value={item.totalTime}
+                                                        onChangeText={v => updateScheduleReviewTask(idx, 'totalTime', v)}
+                                                    />
+                                                </View>
+                                            </View>
+                                        </View>
+
+                                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.label}>Session length (min)</Text>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                    {[25, 45, 60, 90].map(v => (
+                                                        <TouchableOpacity key={v} style={[styles.ctrlBtn, parseInt(item.sessionLength) === v && { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]} onPress={() => updateScheduleReviewTask(idx, 'sessionLength', String(v))}>
+                                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: parseInt(item.sessionLength) === v ? '#fff' : theme.colors.ink2 }}>{v}m</Text>
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                    <TextInput
+                                                        style={[styles.input, { flex: 1, marginBottom: 0, paddingVertical: 8 }]}
+                                                        keyboardType="numeric"
+                                                        value={item.sessionLength}
+                                                        onChangeText={v => updateScheduleReviewTask(idx, 'sessionLength', v)}
+                                                    />
+                                                </View>
+                                            </View>
+                                        </View>
+
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 10 }}>
+                                            {numSessions} session{numSessions !== 1 ? 's' : ''} of {sessionMin}min = {totalMin}min total
+                                        </Text>
+                                    </View>
+                                );
+                            })}
+                        </ScrollView>
+
+                        <View style={{ padding: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+                            <View style={styles.btnRow}>
+                                <TouchableOpacity disabled={saving} style={[styles.btnOut, { flex: 1, justifyContent: 'center', paddingVertical: 12 }]} onPress={() => { setScheduleReviewVisible(false); setScheduleReviewTasks([]); }}>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontWeight: '500', color: theme.colors.ink2 }}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity disabled={saving || scheduleReviewTasks.length === 0} style={[styles.btnDark, { flex: 2, justifyContent: 'center', paddingVertical: 12 }]} onPress={confirmSmartSchedule}>
+                                    {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Schedule {scheduleReviewTasks.length} Tasks</Text>}
                                 </TouchableOpacity>
                             </View>
                         </View>
