@@ -140,6 +140,7 @@ export default function App() {
         Calendar: 'calendar',
         Gradebook: 'gradebook',
         Focus: 'focus',
+        Leaderboard: 'leaderboard',
         Settings: 'settings',
       },
     },

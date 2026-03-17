@@ -297,11 +297,13 @@ export default function MatrixScreen() {
             const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
             const busyPeriods = await fetchFreeBusy(token, now, twoWeeksOut);
 
-            // 4. Find unscheduled tasks to present for review
+            // 4. Find unscheduled tasks to present for review (only today or future)
             const plannedStr = await AsyncStorage.getItem('@option_app_planned_assignments');
             const plannedIds = plannedStr ? JSON.parse(plannedStr) : [];
+            const todayStr = new Date().toISOString().slice(0, 10);
             const unscheduled = tasks.filter(
                 t => !plannedIds.includes(t.id) && !t.completed && (t.type === 'assignment' || !t.type) && !t.isFixedTime && !String(t.id).startsWith('wt_')
+                     && (!t.due_date || t.due_date >= todayStr)
             );
 
             if (unscheduled.length === 0) {

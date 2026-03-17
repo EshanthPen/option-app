@@ -6,9 +6,10 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { ChevronLeft, RefreshCw, Plus, Wand2, Target, BookOpen, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, RefreshCw, Plus, Wand2, Target, BookOpen, Trash2, Sparkles } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { parseStudentVueGradebook } from '../utils/studentVueParser';
+import { getRecentGradeChanges, dismissGradeChanges, isAssignmentNew, isClassGradeChanged, saveGradeSnapshot, checkForGradeChanges, formatChangeMessage } from '../utils/gradeNotifications';
 
 // ── Helpers ───────────────────────────────────────────────────
 const gradeColor = (pct, theme) => {
@@ -67,6 +68,7 @@ export default function GradebookScreen() {
     const [curPeriodName, setCurPeriodName] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [gradeChanges, setGradeChanges] = useState(null);
 
     // Navigation
     const [selectedClass, setSelectedClass] = useState(null);
@@ -112,6 +114,9 @@ export default function GradebookScreen() {
                 if (pName) setCurPeriodName(pName);
                 if (pIdx !== null) setCurPeriodIdx(parseInt(pIdx));
                 if (manRaw) setManClasses(JSON.parse(manRaw));
+                // Load grade change indicators
+                const changes = await getRecentGradeChanges();
+                if (changes) setGradeChanges(changes.changes);
             } catch (e) { console.error(e); }
             finally { setIsLoading(false); }
         })();
@@ -122,6 +127,9 @@ export default function GradebookScreen() {
     // ── Sync quarter ──────────────────────────────────────────
     const syncPeriod = async (periodIndex) => {
         try {
+            // Save snapshot before syncing for grade diff detection
+            await saveGradeSnapshot();
+
             const isDemo = await AsyncStorage.getItem('isDemoData') === 'true';
 
             // Check if we have credentials; if so, we should probably be in real mode
@@ -191,7 +199,19 @@ export default function GradebookScreen() {
                 setSelectedClass(null);
             } else { Alert.alert('No Data', 'No grades found for this period.'); }
         } catch (e) { Alert.alert('Sync Error', e.message); }
-        finally { setIsSyncing(false); }
+        finally {
+            setIsSyncing(false);
+            // Check for grade changes after sync
+            const changes = await checkForGradeChanges();
+            if (changes && changes.length > 0) {
+                setGradeChanges(changes);
+                const msg = changes.length === 1
+                    ? formatChangeMessage(changes[0])
+                    : `${changes.length} grade updates detected`;
+                if (Platform.OS === 'web') window.alert(`Grade Update: ${msg}`);
+                else Alert.alert('Grade Update', msg);
+            }
+        }
     };
 
     // ── Manual class CRUD ─────────────────────────────────────
@@ -466,7 +486,14 @@ export default function GradebookScreen() {
                                                 return (
                                                     <View key={a.id || i} style={[S.asgnRow, { borderLeftColor: ac }]}>
                                                         <View style={{ flex: 1 }}>
-                                                            <Text style={S.asgnName} numberOfLines={2}>{a.name || a.title}</Text>
+                                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                                                <Text style={S.asgnName} numberOfLines={2}>{a.name || a.title}</Text>
+                                                                {isAssignmentNew(gradeChanges, cls.name, a.name || a.title) && (
+                                                                    <View style={{ backgroundColor: theme.colors.accent, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                                                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 8, fontWeight: '700', color: theme.colors.bg, textTransform: 'uppercase', letterSpacing: 0.5 }}>NEW</Text>
+                                                                    </View>
+                                                                )}
+                                                            </View>
                                                             {a.date ? <Text style={S.asgnDate}>{a.date}</Text> : null}
                                                         </View>
                                                         <View style={{ alignItems: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 8 }}>

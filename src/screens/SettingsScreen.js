@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform, Modal, Image } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
@@ -9,7 +9,7 @@ import { syncStudentVueGrades } from '../utils/studentVueAPI';
 import { theme as staticTheme } from '../utils/theme';
 import DistrictPickerModal, { KNOWN_DISTRICTS } from '../components/DistrictPickerModal';
 import { syncAssignmentsToCalendar } from '../utils/googleCalendarAPI';
-import { ChevronDown, RefreshCw, Moon, Sun, User } from 'lucide-react-native';
+import { ChevronDown, RefreshCw, Moon, Sun, User, Copy, Camera, Bell, BellOff } from 'lucide-react-native';
 import { loadMockGradebookData } from '../utils/mockStudentData';
 import ICAL from 'ical.js';
 import { useTheme } from '../context/ThemeContext';
@@ -17,6 +17,8 @@ import { useNavigation } from '@react-navigation/native';
 import { parseStudentVueGradebook, parseStudentVuePeriods } from '../utils/studentVueParser';
 import { getUserId } from '../utils/auth';
 import WorkingHoursGraph from '../components/WorkingHoursGraph';
+import { getOrCreateProfile, updateProfile, uploadAvatar, setPresetAvatar, PRESET_AVATARS } from '../utils/profileService';
+import { isNotificationsEnabled, setNotificationsEnabled } from '../utils/gradeNotifications';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -39,6 +41,13 @@ export default function SettingsScreen() {
     const [isMockLoading, setIsMockLoading] = useState(false);
     const [isSchoologySyncing, setIsSchoologySyncing] = useState(false);
     const [isHelpVisible, setIsHelpVisible] = useState(false);
+
+    // Profile & Leaderboard State
+    const [profile, setProfile] = useState(null);
+    const [schoolName, setSchoolName] = useState('');
+    const [friendCode, setFriendCode] = useState('');
+    const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+    const [gradeNotifs, setGradeNotifs] = useState(false);
 
     // Working Hours State (7 days. 0=Mon, ..., 6=Sun visually)
     const [smartHours, setSmartHours] = useState({
@@ -95,6 +104,22 @@ export default function SettingsScreen() {
 
             const savedPass = await AsyncStorage.getItem('svPassword');
             if (savedPass) setSvPass(savedPass);
+
+            // Load profile data
+            try {
+                const p = await getOrCreateProfile();
+                if (p) {
+                    setProfile(p);
+                    setSchoolName(p.school_name || '');
+                    setFriendCode(p.friend_code || '');
+                }
+            } catch (err) {
+                console.log('Profile load skipped (not authenticated):', err.message);
+            }
+
+            // Load notification preference
+            const notifsOn = await isNotificationsEnabled();
+            setGradeNotifs(notifsOn);
 
             const savedHours = await AsyncStorage.getItem('smartScheduleHours');
             if (savedHours) {
@@ -551,6 +576,30 @@ export default function SettingsScreen() {
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Profile</Text>
                 <View style={[styles.card, { paddingBottom: 16 }]}>
+                    {/* Avatar Section */}
+                    <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                        <TouchableOpacity onPress={() => setShowAvatarPicker(true)} style={{ alignItems: 'center' }}>
+                            <View style={{
+                                width: 80, height: 80, borderRadius: 40,
+                                borderWidth: 3, borderColor: theme.colors.border,
+                                backgroundColor: theme.colors.surface2,
+                                alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+                            }}>
+                                {profile?.avatar_url ? (
+                                    <Image source={{ uri: profile.avatar_url }} style={{ width: 80, height: 80 }} />
+                                ) : profile?.avatar_preset && PRESET_AVATARS[profile.avatar_preset] ? (
+                                    <Text style={{ fontSize: 40 }}>{PRESET_AVATARS[profile.avatar_preset].emoji}</Text>
+                                ) : (
+                                    <User color={theme.colors.ink3} size={32} />
+                                )}
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                                <Camera size={12} color={theme.colors.ink3} />
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 }}>Change Avatar</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
+
                     <Text style={styles.label}>Display Name</Text>
                     <TextInput
                         style={styles.input}
@@ -559,7 +608,119 @@ export default function SettingsScreen() {
                         value={userName}
                         onChangeText={handleSaveName}
                     />
+
+                    <Text style={[styles.label, { marginTop: 12 }]}>School Name</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="e.g. Lincoln High School"
+                        placeholderTextColor={theme.colors.ink3}
+                        value={schoolName}
+                        onChangeText={setSchoolName}
+                        onBlur={() => {
+                            if (schoolName.trim()) {
+                                updateProfile({ school_name: schoolName.trim() });
+                            }
+                        }}
+                    />
+                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink4, marginTop: 4 }}>
+                        Used for the school leaderboard
+                    </Text>
+
+                    {friendCode ? (
+                        <View style={{ marginTop: 14, alignItems: 'center' }}>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                                Your Friend Code
+                            </Text>
+                            <TouchableOpacity
+                                style={{
+                                    flexDirection: 'row', alignItems: 'center', gap: 8,
+                                    backgroundColor: theme.colors.surface2, borderRadius: theme.radii.r,
+                                    paddingVertical: 8, paddingHorizontal: 16,
+                                }}
+                                onPress={() => {
+                                    if (Platform.OS === 'web') {
+                                        try { navigator.clipboard.writeText(friendCode); } catch {}
+                                        window.alert(`Copied: ${friendCode}`);
+                                    } else {
+                                        Alert.alert('Copied!', `Your friend code: ${friendCode}`);
+                                    }
+                                }}
+                            >
+                                <Text style={{ fontFamily: theme.fonts.d, fontSize: 20, fontWeight: '700', color: theme.colors.ink, letterSpacing: 3 }}>
+                                    {friendCode}
+                                </Text>
+                                <Copy size={14} color={theme.colors.ink} />
+                            </TouchableOpacity>
+                        </View>
+                    ) : null}
                 </View>
+
+                {/* Avatar Picker Modal */}
+                <Modal visible={showAvatarPicker} transparent animationType="fade">
+                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+                        <View style={{
+                            backgroundColor: theme.colors.surface, borderWidth: 3, borderColor: theme.colors.border,
+                            borderRadius: theme.radii.xl, padding: 24, width: '85%', maxWidth: 360,
+                            shadowColor: theme.colors.border, shadowOffset: { width: 6, height: 6 }, shadowOpacity: 1, shadowRadius: 0,
+                        }}>
+                            <Text style={{ fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, marginBottom: 16 }}>
+                                Choose Avatar
+                            </Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
+                                {Object.entries(PRESET_AVATARS).map(([key, { emoji, label }]) => (
+                                    <TouchableOpacity
+                                        key={key}
+                                        style={{
+                                            width: 60, height: 60, borderRadius: 30,
+                                            borderWidth: 2,
+                                            borderColor: profile?.avatar_preset === key ? theme.colors.ink : theme.colors.surface2,
+                                            backgroundColor: profile?.avatar_preset === key ? theme.colors.surface2 : theme.colors.surface,
+                                            alignItems: 'center', justifyContent: 'center',
+                                        }}
+                                        onPress={async () => {
+                                            const updated = await setPresetAvatar(key);
+                                            if (updated) setProfile(updated);
+                                            setShowAvatarPicker(false);
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: 28 }}>{emoji}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                            <TouchableOpacity
+                                style={{ marginTop: 16, alignItems: 'center', paddingVertical: 10, borderWidth: 2, borderColor: theme.colors.border, borderRadius: theme.radii.r }}
+                                onPress={() => setShowAvatarPicker(false)}
+                            >
+                                <Text style={{ fontFamily: theme.fonts.b, fontSize: 14, color: theme.colors.ink }}>Cancel</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Grade Notifications Toggle */}
+                <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Notifications</Text>
+                <TouchableOpacity
+                    style={styles.settingRow}
+                    onPress={async () => {
+                        const newVal = !gradeNotifs;
+                        setGradeNotifs(newVal);
+                        await setNotificationsEnabled(newVal);
+                    }}
+                    activeOpacity={0.7}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={[styles.iconBox, { backgroundColor: theme.colors.surface2 }]}>
+                            {gradeNotifs ? <Bell size={20} color={theme.colors.ink} /> : <BellOff size={20} color={theme.colors.ink3} />}
+                        </View>
+                        <View>
+                            <Text style={styles.settingLabel}>Grade Notifications</Text>
+                            <Text style={styles.settingSub}>{gradeNotifs ? 'Enabled' : 'Disabled'} - alerts for new grades</Text>
+                        </View>
+                    </View>
+                    <View style={[styles.toggleContainer, gradeNotifs && { backgroundColor: theme.colors.accent }]}>
+                        <View style={[styles.toggleCircle, gradeNotifs && { transform: [{ translateX: 20 }] }]} />
+                    </View>
+                </TouchableOpacity>
 
                 <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Appearance</Text>
                 <TouchableOpacity

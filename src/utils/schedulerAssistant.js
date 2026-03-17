@@ -544,17 +544,19 @@ const rebalanceSchedule = (scheduledBlocks, freeSlots, now, dailyTracker, userPr
 export const performSmartScheduling = (tasks, busyPeriods, workingHours, userPrefs = {}) => {
     console.log("SMART SCHEDULER: Initiating Advanced Algorithm with", tasks.length, "tasks");
 
-    // Filter to unscheduled, incomplete, flexible tasks
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+
+    // Filter to unscheduled, incomplete, flexible tasks due today or in the future
     const unscheduledTasks = tasks.filter(
         t => !t.is_planned && !t.completed && (t.type === 'assignment' || !t.type) && !t.isFixedTime
+             && (!t.due_date || t.due_date >= todayStr)
     );
 
     if (unscheduledTasks.length === 0) {
         console.log("SMART SCHEDULER: No tasks to schedule");
         return [];
     }
-
-    const now = new Date();
     const horizonMs = PLANNING_HORIZON_DAYS * MS_PER_DAY;
 
     // Round start to next 30-minute boundary

@@ -7,6 +7,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BookOpen, CalendarDays, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react-native';
 import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
+import { computeFocusScore, syncScoreToSupabase, getScoreLabel } from '../utils/focusScoreEngine';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -67,10 +68,8 @@ export default function DashboardScreen() {
     const [greeting, setGreeting] = useState(getGreeting());
     const [userName, setUserName] = useState('Student');
     const [loaded, setLoaded] = useState(false);
-    const focusScoreNum = (() => {
-        // Mock score for now
-        return 88;
-    })();
+    const [focusScoreNum, setFocusScoreNum] = useState(0);
+    const [focusLabel, setFocusLabel] = useState('');
 
     useFocusEffect(
         useCallback(() => {
@@ -82,6 +81,13 @@ export default function DashboardScreen() {
                     if (raw) setClasses(JSON.parse(raw));
                     if (pn) setPeriodName(pn);
                     if (savedName) setUserName(savedName);
+
+                    // Compute real focus score
+                    const { score, breakdown } = await computeFocusScore();
+                    setFocusScoreNum(score);
+                    setFocusLabel(getScoreLabel(score));
+                    // Sync to Supabase in background (non-blocking)
+                    syncScoreToSupabase(score, breakdown).catch(() => {});
                 } catch (e) {
                     console.error(e);
                 }
