@@ -606,8 +606,16 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours, userPre
             earliestStartMs = Math.max(now.getTime(), Math.min(idealStart, now.getTime()));
         }
 
-        // Max 1 block per task per day to spread work out
-        const MAX_BLOCKS_PER_TASK_PER_DAY = 1;
+        // Allow more blocks per day when the due date is very close
+        let maxBlocksPerTaskPerDay = 1;
+        if (task.due_date) {
+            const due = new Date(task.due_date);
+            if (!task.due_date.includes('T')) due.setHours(23, 59, 59, 999);
+            const daysUntilDue = (due.getTime() - now.getTime()) / MS_PER_DAY;
+            if (daysUntilDue <= 1) maxBlocksPerTaskPerDay = 4;
+            else if (daysUntilDue <= 2) maxBlocksPerTaskPerDay = 3;
+            else if (daysUntilDue <= 3) maxBlocksPerTaskPerDay = 2;
+        }
 
         for (const blockDuration of task.blocks) {
             const requiredMs = blockDuration * MS_PER_MINUTE;
@@ -624,7 +632,7 @@ export const performSmartScheduling = (tasks, busyPeriods, workingHours, userPre
                 // Enforce max blocks per task per day
                 const slotDay = slot.start.toISOString().split('T')[0];
                 const dayCount = taskDayBlockCount[task.id][slotDay] || 0;
-                if (dayCount >= MAX_BLOCKS_PER_TASK_PER_DAY) continue;
+                if (dayCount >= maxBlocksPerTaskPerDay) continue;
 
                 const score = scoreSlot(
                     slot, requiredMs, task, lastBlockEnd, now, dailyTracker, userPrefs
