@@ -1,0 +1,129 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #FFF8F0;
+  color: #1a1a2e;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.container {
+  max-width: 500px;
+  width: 100%;
+  padding: 24px;
+}
+
+.card {
+  background: white;
+  border: 3px solid #1a1a2e;
+  border-radius: 24px;
+  padding: 48px 36px;
+  text-align: center;
+  box-shadow: 8px 8px 0 #1a1a2e;
+}
+
+.logo {
+  width: 64px;
+  height: 64px;
+  background: #1a1a2e;
+  color: #FFF8F0;
+  border-radius: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 32px;
+  margin-bottom: 24px;
+  border: 3px solid #1a1a2e;
+}
+
+h1 {
+  font-size: 36px;
+  font-weight: 900;
+  margin-bottom: 12px;
+  letter-spacing: -1px;
+}
+
+.message {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.blocked-site {
+  display: inline-block;
+  padding: 8px 20px;
+  background: #fee2e2;
+  color: #ef4444;
+  border: 2px solid #ef4444;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 32px;
+  text-decoration: line-through;
+}
+
+.timer-section {
+  margin-bottom: 32px;
+}
+
+.timer-label {
+  font-size: 13px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.timer {
+  font-size: 48px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: #1a1a2e;
+  letter-spacing: 2px;
+}
+
+.quotes {
+  margin-bottom: 32px;
+  padding: 0 16px;
+}
+
+.quote {
+  font-size: 15px;
+  font-style: italic;
+  color: #888;
+  line-height: 1.6;
+}
+
+.back-btn {
+  padding: 14px 32px;
+  background: #1a1a2e;
+  color: #FFF8F0;
+  border: 3px solid #1a1a2e;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 #ccc;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.back-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 #ccc;
+}
+
+.back-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 #ccc;
+}

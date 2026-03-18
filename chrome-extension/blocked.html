@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blocked - Option Focus Mode</title>
+  <link rel="stylesheet" href="blocked.css">
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="logo">O</div>
+      <h1>Stay Focused!</h1>
+      <p class="message">This site is blocked by <strong>Option</strong> to help you stay on track.</p>
+
+      <div class="blocked-site" id="blockedSite"></div>
+
+      <div class="timer-section">
+        <p class="timer-label">You've been focused for</p>
+        <div class="timer" id="timer">00:00:00</div>
+      </div>
+
+      <div class="quotes">
+        <p id="quote" class="quote"></p>
+      </div>
+
+      <button class="back-btn" onclick="history.back()">Go Back</button>
+    </div>
+  </div>
+
+  <script>
+    // Show blocked domain
+    const url = new URL(window.location.href);
+    const blockedUrl = document.referrer || 'this website';
+    try {
+      const domain = new URL(blockedUrl).hostname;
+      document.getElementById('blockedSite').textContent = domain;
+    } catch {
+      document.getElementById('blockedSite').textContent = 'Distraction blocked';
+    }
+
+    // Focus timer (time since midnight as rough "today" timer)
+    function updateTimer() {
+      const now = new Date();
+      const startOfDay = new Date(now);
+      startOfDay.setHours(0, 0, 0, 0);
+
+      // Use session storage to track when blocking started
+      let startTime = sessionStorage.getItem('option_focus_start');
+      if (!startTime) {
+        startTime = Date.now().toString();
+        sessionStorage.setItem('option_focus_start', startTime);
+      }
+
+      const elapsed = Date.now() - parseInt(startTime);
+      const hours = Math.floor(elapsed / 3600000);
+      const mins = Math.floor((elapsed % 3600000) / 60000);
+      const secs = Math.floor((elapsed % 60000) / 1000);
+
+      document.getElementById('timer').textContent =
+        `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    setInterval(updateTimer, 1000);
+    updateTimer();
+
+    // Motivational quotes
+    const quotes = [
+      "The secret of getting ahead is getting started.",
+      "Focus on being productive instead of busy.",
+      "Small daily improvements lead to stunning results.",
+      "Don't watch the clock; do what it does. Keep going.",
+      "Success is the sum of small efforts repeated day in and day out.",
+      "The future depends on what you do today.",
+      "Discipline is choosing between what you want now and what you want most.",
+      "Your focus determines your reality.",
+      "It's not about having time, it's about making time.",
+      "The only way to do great work is to love what you do."
+    ];
+
+    const quote = quotes[Math.floor(Math.random() * quotes.length)];
+    document.getElementById('quote').textContent = `"${quote}"`;
+  </script>
+</body>
+</html>

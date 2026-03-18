@@ -81,7 +81,44 @@ CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
--- 5. STORAGE BUCKET FOR AVATARS
+-- 5. RPC: Add friend (bidirectional, bypasses RLS)
+CREATE OR REPLACE FUNCTION add_friend(friend_uuid UUID)
+RETURNS VOID AS $$
+DECLARE
+    me UUID := auth.uid();
+BEGIN
+    IF me IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+    IF me = friend_uuid THEN
+        RAISE EXCEPTION 'Cannot add yourself';
+    END IF;
+    -- Insert both directions, skip if already exists
+    INSERT INTO friendships (user_id, friend_id)
+    VALUES (me, friend_uuid)
+    ON CONFLICT (user_id, friend_id) DO NOTHING;
+
+    INSERT INTO friendships (user_id, friend_id)
+    VALUES (friend_uuid, me)
+    ON CONFLICT (user_id, friend_id) DO NOTHING;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 5b. RPC: Remove friend (bidirectional, bypasses RLS)
+CREATE OR REPLACE FUNCTION remove_friend(friend_uuid UUID)
+RETURNS VOID AS $$
+DECLARE
+    me UUID := auth.uid();
+BEGIN
+    IF me IS NULL THEN
+        RAISE EXCEPTION 'Not authenticated';
+    END IF;
+    DELETE FROM friendships WHERE user_id = me AND friend_id = friend_uuid;
+    DELETE FROM friendships WHERE user_id = friend_uuid AND friend_id = me;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 6. STORAGE BUCKET FOR AVATARS
 -- Run this separately in Supabase Dashboard > Storage:
 -- Create bucket "avatars" with public access, 2MB max, allowed MIME: image/jpeg, image/png, image/webp
 

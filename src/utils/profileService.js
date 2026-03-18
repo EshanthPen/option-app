@@ -159,7 +159,7 @@ export const lookupByFriendCode = async (code) => {
 };
 
 /**
- * Add a friend (bidirectional).
+ * Add a friend (bidirectional via Postgres RPC to bypass RLS).
  */
 export const addFriend = async (friendUserId) => {
     try {
@@ -169,17 +169,14 @@ export const addFriend = async (friendUserId) => {
         const myId = session.user.id;
         if (myId === friendUserId) return { success: false, error: 'Cannot add yourself' };
 
-        // Insert both directions
-        const { error: err1 } = await supabase
-            .from('friendships')
-            .upsert({ user_id: myId, friend_id: friendUserId }, { onConflict: 'user_id,friend_id' });
+        // Use RPC function that runs with SECURITY DEFINER to insert both directions
+        const { error } = await supabase.rpc('add_friend', { friend_uuid: friendUserId });
 
-        const { error: err2 } = await supabase
-            .from('friendships')
-            .upsert({ user_id: friendUserId, friend_id: myId }, { onConflict: 'user_id,friend_id' });
-
-        if (err1 || err2) {
-            console.error('addFriend error:', err1 || err2);
+        if (error) {
+            console.error('addFriend error:', error);
+            if (error.message?.includes('already friends')) {
+                return { success: false, error: 'Already friends with this user' };
+            }
             return { success: false, error: 'Failed to add friend' };
         }
 
@@ -191,7 +188,7 @@ export const addFriend = async (friendUserId) => {
 };
 
 /**
- * Remove a friend (bidirectional).
+ * Remove a friend (bidirectional via Postgres RPC).
  */
 export const removeFriend = async (friendUserId) => {
     try {
@@ -200,8 +197,12 @@ export const removeFriend = async (friendUserId) => {
 
         const myId = session.user.id;
 
+        // Use RPC to remove both directions
+        const { error } = await supabase.rpc('remove_friend', { friend_uuid: friendUserId });
+        if (error) console.error('removeFriend rpc error:', error);
+
+        // Fallback: also try direct delete for the direction we own
         await supabase.from('friendships').delete().match({ user_id: myId, friend_id: friendUserId });
-        await supabase.from('friendships').delete().match({ user_id: friendUserId, friend_id: myId });
 
         return true;
     } catch (err) {
