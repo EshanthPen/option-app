@@ -1,6 +1,6 @@
 {
     "version": 2,
-    "buildCommand": "npx expo export -p web",
+    "buildCommand": "npx expo export -p web && cp -r public/* dist/ 2>/dev/null || true",
     "outputDirectory": "dist",
     "rewrites": [
         {
@@ -8,8 +8,21 @@
             "destination": "/api/$1"
         },
         {
+            "source": "/downloads/(.*)",
+            "destination": "/downloads/$1"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
+        }
+    ],
+    "headers": [
+        {
+            "source": "/downloads/(.*)",
+            "headers": [
+                { "key": "Content-Disposition", "value": "attachment" },
+                { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+            ]
         }
     ]
 }
