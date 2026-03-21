@@ -8,13 +8,31 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
-    Alert
+    Alert,
+    ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
 import { useTheme } from '../context/ThemeContext';
-import { Mail, Lock, User, ArrowRight, BookOpen, GraduationCap, X, Eye, EyeOff, CheckCircle2 } from 'lucide-react-native';
+import { Mail, Lock, User, ArrowRight, BookOpen, GraduationCap, X, Eye, EyeOff, CheckCircle2, Shield, Calendar } from 'lucide-react-native';
 import { Modal } from 'react-native';
+
+const MIN_AGE = 13;
+
+/**
+ * Calculate age from a date of birth string (YYYY-MM-DD or MM/DD/YYYY).
+ */
+const calculateAge = (dobString) => {
+    const dob = new Date(dobString);
+    if (isNaN(dob.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+        age--;
+    }
+    return age;
+};
 
 const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
     const { theme } = useTheme();
@@ -24,9 +42,12 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
     const [password, setPassword] = useState('');
     const [fullName, setFullName] = useState('');
     const [schoologyUrl, setSchoologyUrl] = useState('');
+    const [dateOfBirth, setDateOfBirth] = useState('');
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showVerifyModal, setShowVerifyModal] = useState(false);
-    const [status, setStatus] = useState({ message: '', type: '' }); // { message: string, type: 'error' | 'success' }
+    const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+    const [status, setStatus] = useState({ message: '', type: '' });
 
     const handleAuth = async () => {
         const trimmedEmail = email.trim();
@@ -37,9 +58,33 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
             return;
         }
 
+        // Age verification for signup
+        if (!isLogin) {
+            if (!dateOfBirth.trim()) {
+                setStatus({ message: 'Please enter your date of birth', type: 'error' });
+                return;
+            }
+            const age = calculateAge(dateOfBirth.trim());
+            if (age === null) {
+                setStatus({ message: 'Please enter a valid date (YYYY-MM-DD)', type: 'error' });
+                return;
+            }
+            if (age < MIN_AGE) {
+                setStatus({
+                    message: `You must be at least ${MIN_AGE} years old to create an account. This is required by the Children's Online Privacy Protection Act (COPPA).`,
+                    type: 'error'
+                });
+                return;
+            }
+            if (!acceptedTerms) {
+                setStatus({ message: 'Please accept the Privacy Policy and Terms of Service to continue', type: 'error' });
+                return;
+            }
+        }
+
         setLoading(true);
         setStatus({ message: '', type: '' });
-        
+
         try {
             if (isLogin) {
                 const { error } = await supabase.auth.signInWithPassword({
@@ -47,12 +92,9 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                     password: trimmedPassword,
                 });
                 if (error) throw error;
-                
-                // CRITICAL: Only trigger the global "authenticating" loader ON SUCCESS
-                // This prevents the infinite spinner if the credentials are wrong.
+
                 if (onAuthStart) onAuthStart();
 
-                // Small delay to ensure session is recognized if needed, then close modal
                 setTimeout(() => {
                     if (onAuthSuccess) onAuthSuccess();
                 }, 500);
@@ -63,15 +105,14 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                     options: {
                         data: {
                             full_name: fullName.trim(),
-                            schoology_url: schoologyUrl.trim(),
                             app_name: 'Option Dashboard',
-                            signup_source: Platform.OS,
-                            signup_date: new Date().toISOString(),
+                            accepted_terms_at: new Date().toISOString(),
+                            age_verified: true,
                         }
                     }
                 });
                 if (error) throw error;
-                
+
                 if (schoologyUrl) {
                     await AsyncStorage.setItem('schoologyUrl', schoologyUrl);
                 }
@@ -80,8 +121,8 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                 }
 
                 setShowVerifyModal(true);
-                setIsLogin(true); // Switch to login after signup
-                setPassword(''); // Clear password for login
+                setIsLogin(true);
+                setPassword('');
             }
         } catch (error) {
             let message = error.message;
@@ -89,7 +130,7 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                 message = "Too many attempts. Please wait a minute before trying again.";
             }
             setStatus({ message, type: 'error' });
-            if (onAuthReset) onAuthReset(); // Ensure global state is reset if we hit an error
+            if (onAuthReset) onAuthReset();
         } finally {
             setLoading(false);
         }
@@ -164,6 +205,21 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
 
                     {!isLogin && (
                         <View style={getStyles(theme).inputContainer}>
+                            <Calendar size={18} color={theme.colors.ink3} />
+                            <TextInput
+                                style={getStyles(theme).input}
+                                placeholder="Date of Birth (YYYY-MM-DD)"
+                                placeholderTextColor={theme.colors.ink3}
+                                value={dateOfBirth}
+                                onChangeText={setDateOfBirth}
+                                autoCapitalize="none"
+                                keyboardType="numbers-and-punctuation"
+                            />
+                        </View>
+                    )}
+
+                    {!isLogin && (
+                        <View style={getStyles(theme).inputContainer}>
                             <BookOpen size={18} color={theme.colors.ink3} />
                             <TextInput
                                 style={getStyles(theme).input}
@@ -174,6 +230,27 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                                 autoCapitalize="none"
                             />
                         </View>
+                    )}
+
+                    {!isLogin && (
+                        <TouchableOpacity
+                            style={getStyles(theme).termsRow}
+                            onPress={() => setAcceptedTerms(!acceptedTerms)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={[
+                                getStyles(theme).checkbox,
+                                acceptedTerms && { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent }
+                            ]}>
+                                {acceptedTerms && <CheckCircle2 size={14} color="#fff" />}
+                            </View>
+                            <Text style={getStyles(theme).termsText}>
+                                I agree to the{' '}
+                                <Text style={getStyles(theme).termsLink} onPress={() => setShowPrivacyModal(true)}>
+                                    Privacy Policy & Terms of Service
+                                </Text>
+                            </Text>
+                        </TouchableOpacity>
                     )}
 
                     <TouchableOpacity
@@ -219,11 +296,60 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                         <Text style={getStyles(theme).verifyText}>
                             We've sent a verification link to <Text style={{fontWeight: '700'}}>{email}</Text>. Please click it to activate your account!
                         </Text>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={getStyles(theme).verifyBtn}
                             onPress={() => setShowVerifyModal(false)}
                         >
                             <Text style={getStyles(theme).verifyBtnText}>Got it!</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Privacy Policy & Terms Modal */}
+            <Modal
+                visible={showPrivacyModal}
+                transparent
+                animationType="fade"
+            >
+                <View style={getStyles(theme).modalOverlay}>
+                    <View style={[getStyles(theme).verifyPopup, { maxHeight: '80%' }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 12 }}>
+                            <Text style={getStyles(theme).verifyTitle}>Privacy & Terms</Text>
+                            <TouchableOpacity onPress={() => setShowPrivacyModal(false)}>
+                                <X size={22} color={theme.colors.ink} />
+                            </TouchableOpacity>
+                        </View>
+                        <ScrollView style={{ maxHeight: 400, width: '100%' }}>
+                            <Text style={{ fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink, marginBottom: 8 }}>
+                                Privacy Policy Summary
+                            </Text>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2, lineHeight: 20, marginBottom: 16 }}>
+                                {'\u2022'} We collect only your email, display name, and focus scores{'\n'}
+                                {'\u2022'} StudentVUE credentials are stored locally on your device only{'\n'}
+                                {'\u2022'} We never sell or share your data with advertisers{'\n'}
+                                {'\u2022'} You must be 13+ to use this app (COPPA compliance){'\n'}
+                                {'\u2022'} You can delete your account and all data at any time{'\n'}
+                                {'\u2022'} Leaderboard shows only your chosen display name
+                            </Text>
+                            <Text style={{ fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink, marginBottom: 8 }}>
+                                Terms of Service Summary
+                            </Text>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2, lineHeight: 20 }}>
+                                {'\u2022'} You must be 13+ and agree to use the app responsibly{'\n'}
+                                {'\u2022'} Do not harass others or share inappropriate content{'\n'}
+                                {'\u2022'} Grade data accuracy depends on your school's system{'\n'}
+                                {'\u2022'} We provide the app "as is" without warranties
+                            </Text>
+                        </ScrollView>
+                        <TouchableOpacity
+                            style={[getStyles(theme).verifyBtn, { marginTop: 16 }]}
+                            onPress={() => {
+                                setAcceptedTerms(true);
+                                setShowPrivacyModal(false);
+                            }}
+                        >
+                            <Text style={getStyles(theme).verifyBtnText}>I Agree</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -414,6 +540,33 @@ const getStyles = (theme) => StyleSheet.create({
         color: '#fff',
         fontSize: 18,
         fontWeight: '700',
+    },
+    termsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingVertical: 4,
+    },
+    checkbox: {
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        borderWidth: 2,
+        borderColor: theme.colors.border2,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    termsText: {
+        fontFamily: theme.fonts.m,
+        fontSize: 12,
+        color: theme.colors.ink2,
+        flex: 1,
+        lineHeight: 18,
+    },
+    termsLink: {
+        color: theme.colors.accent,
+        fontWeight: '700',
+        textDecorationLine: 'underline',
     },
 });
 

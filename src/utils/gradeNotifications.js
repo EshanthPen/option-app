@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { getSecureItem } from './secureStorage';
 
 // ── Storage Keys ──────────────────────────────────────────────
 const PREV_GRADES_KEY = '@grade_snapshot_prev';
@@ -203,9 +204,9 @@ export const backgroundGradeCheck = async () => {
         const enabled = await isNotificationsEnabled();
         if (!enabled) return false;
 
-        // Load StudentVUE credentials
-        const svUsername = await AsyncStorage.getItem('svUsername');
-        const svPassword = await AsyncStorage.getItem('svPassword');
+        // Load StudentVUE credentials from secure storage
+        const svUsername = await getSecureItem('svUsername');
+        const svPassword = await getSecureItem('svPassword');
         const svDistrictUrl = await AsyncStorage.getItem('svDistrictUrl');
 
         if (!svUsername || !svPassword || !svDistrictUrl) return false;
