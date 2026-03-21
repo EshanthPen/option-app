@@ -24,12 +24,9 @@ CREATE INDEX IF NOT EXISTS idx_profiles_monthly_score ON profiles(focus_score_mo
 CREATE INDEX IF NOT EXISTS idx_profiles_friend_code ON profiles(friend_code);
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
--- Only authenticated users can read profiles (prevents anonymous enumeration)
-CREATE POLICY "Authenticated users can read profiles" ON profiles FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Anyone can read profiles" ON profiles FOR SELECT USING (true);
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = user_id);
--- Users can delete their own profile (for account deletion)
-CREATE POLICY "Users can delete own profile" ON profiles FOR DELETE USING (auth.uid() = user_id);
 
 -- 2. FRIENDSHIPS TABLE
 CREATE TABLE IF NOT EXISTS friendships (
@@ -65,7 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_focus_scores_user_date ON focus_scores(user_id, r
 CREATE INDEX IF NOT EXISTS idx_focus_scores_date ON focus_scores(recorded_at);
 
 ALTER TABLE focus_scores ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Authenticated users can read scores" ON focus_scores FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Users can read all scores" ON focus_scores FOR SELECT USING (true);
 CREATE POLICY "Users can insert own scores" ON focus_scores FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own scores" ON focus_scores FOR UPDATE USING (auth.uid() = user_id);
 

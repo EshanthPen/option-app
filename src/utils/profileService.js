@@ -141,21 +141,16 @@ export const PRESET_AVATARS = {
 
 /**
  * Look up a user by their 6-character friend code.
- * Requires authentication to prevent anonymous enumeration.
  */
 export const lookupByFriendCode = async (code) => {
     try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user?.id) return null;
-
         const { data, error } = await supabase
             .from('profiles')
-            .select('user_id, display_name, avatar_preset, friend_code')
+            .select('user_id, display_name, avatar_url, avatar_preset, friend_code')
             .eq('friend_code', code.toUpperCase().trim())
             .single();
 
         if (error) return null;
-        // Only return minimal info needed for friend request — no avatar URL
         return data;
     } catch (err) {
         console.error('lookupByFriendCode error:', err);
@@ -291,7 +286,7 @@ export const getSchoolLeaderboard = async (period = 'weekly') => {
 
         const { data, error } = await supabase
             .from('profiles')
-            .select('user_id, display_name, avatar_preset, focus_score_weekly, focus_score_monthly')
+            .select('user_id, display_name, avatar_url, avatar_preset, focus_score_weekly, focus_score_monthly')
             .eq('school_name', myProfile.school_name)
             .order(scoreField, { ascending: false })
             .limit(100);
@@ -301,6 +296,7 @@ export const getSchoolLeaderboard = async (period = 'weekly') => {
         return (data || []).map((p, idx) => ({
             user_id: p.user_id,
             display_name: p.display_name,
+            avatar_url: p.avatar_url,
             avatar_preset: p.avatar_preset,
             score: Number(p[scoreField] || 0),
             rank: idx + 1,
@@ -318,14 +314,13 @@ export const getSchoolLeaderboard = async (period = 'weekly') => {
 export const getGlobalLeaderboard = async (period = 'weekly') => {
     try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user?.id) return [];
-        const myId = session.user.id;
+        const myId = session?.user?.id;
 
         const scoreField = period === 'monthly' ? 'focus_score_monthly' : 'focus_score_weekly';
 
         const { data, error } = await supabase
             .from('profiles')
-            .select('user_id, display_name, avatar_preset, focus_score_weekly, focus_score_monthly')
+            .select('user_id, display_name, avatar_url, avatar_preset, focus_score_weekly, focus_score_monthly')
             .order(scoreField, { ascending: false })
             .limit(100);
 
@@ -334,6 +329,7 @@ export const getGlobalLeaderboard = async (period = 'weekly') => {
         return (data || []).map((p, idx) => ({
             user_id: p.user_id,
             display_name: p.display_name,
+            avatar_url: p.avatar_url,
             avatar_preset: p.avatar_preset,
             score: Number(p[scoreField] || 0),
             rank: idx + 1,

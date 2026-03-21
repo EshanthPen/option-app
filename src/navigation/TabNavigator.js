@@ -8,7 +8,6 @@ import GradebookScreen from '../screens/GradebookScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ScreentimeScreen from '../screens/ScreentimeScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
-import LegalScreen from '../screens/LegalScreen';
 import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
 
@@ -83,7 +82,6 @@ export default function TabNavigator() {
             <Tab.Screen name="Focus" component={ScreentimeScreen} options={{ tabBarLabel: 'Focus' }} />
             <Tab.Screen name="Leaderboard" component={LeaderboardScreen} options={{ tabBarLabel: 'Leaderboard' }} />
             <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarLabel: 'Settings' }} />
-            <Tab.Screen name="Legal" component={LegalScreen} options={{ tabBarLabel: 'Legal', tabBarButton: () => null }} />
         </Tab.Navigator>
     );
 }

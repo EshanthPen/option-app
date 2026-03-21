@@ -133,10 +133,9 @@ export default function GradebookScreen() {
             const isDemo = await AsyncStorage.getItem('isDemoData') === 'true';
 
             // Check if we have credentials; if so, we should probably be in real mode
-            const { getSecureItem } = require('../utils/secureStorage');
             const [svUser, svPass, svUrl] = await Promise.all([
-                getSecureItem('svUsername'),
-                getSecureItem('svPassword'),
+                AsyncStorage.getItem('svUsername'),
+                AsyncStorage.getItem('svPassword'),
                 AsyncStorage.getItem('svDistrictUrl'),
             ]);
 

@@ -19,7 +19,6 @@ import { getUserId } from '../utils/auth';
 import WorkingHoursGraph from '../components/WorkingHoursGraph';
 import { getOrCreateProfile, updateProfile, uploadAvatar, setPresetAvatar, PRESET_AVATARS } from '../utils/profileService';
 import { isNotificationsEnabled, setNotificationsEnabled } from '../utils/gradeNotifications';
-import { setSecureItem, getSecureItem } from '../utils/secureStorage';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -77,7 +76,8 @@ export default function SettingsScreen() {
         androidClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
         webClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
         scopes: [
-            'https://www.googleapis.com/auth/calendar.events.owned',
+            'https://www.googleapis.com/auth/calendar.events',
+            'https://www.googleapis.com/auth/userinfo.profile'
         ],
         redirectUri,
     });
@@ -87,7 +87,7 @@ export default function SettingsScreen() {
             const uid = await getUserId();
             setUserId(uid);
             
-            let storedToken = await getSecureItem('googleAccessToken');
+            let storedToken = await AsyncStorage.getItem('googleAccessToken');
             if (!storedToken && typeof window !== 'undefined') {
                 storedToken = window.localStorage.getItem('googleAccessToken');
             }
@@ -99,10 +99,10 @@ export default function SettingsScreen() {
             const savedName = await AsyncStorage.getItem('userName');
             if (savedName) setUserName(savedName);
 
-            const savedUser = await getSecureItem('svUsername');
+            const savedUser = await AsyncStorage.getItem('svUsername');
             if (savedUser) setSvUser(savedUser);
 
-            const savedPass = await getSecureItem('svPassword');
+            const savedPass = await AsyncStorage.getItem('svPassword');
             if (savedPass) setSvPass(savedPass);
 
             // Load profile data
@@ -157,7 +157,7 @@ export default function SettingsScreen() {
             if (token) {
                 setAccessToken(token);
                 window.localStorage.setItem('googleAccessToken', token);
-                setSecureItem('googleAccessToken', token);
+                AsyncStorage.setItem('googleAccessToken', token);
                 window.alert("Success! Successfully linked your Google Account.");
                 window.history.replaceState(null, '', window.location.pathname);
             }
@@ -181,7 +181,7 @@ export default function SettingsScreen() {
                     await AsyncStorage.setItem('googleUserName', name);
                 }
 
-                await setSecureItem('googleAccessToken', token);
+                await AsyncStorage.setItem('googleAccessToken', token);
                 if (typeof window !== 'undefined') window.alert("Success! Successfully linked your Google Account.");
                 else Alert.alert("Success", "Successfully linked your Google Account!");
             } catch (err) {
@@ -361,8 +361,8 @@ export default function SettingsScreen() {
         setIsSyncing(true);
 
         try {
-            await setSecureItem('svUsername', svUser);
-            await setSecureItem('svPassword', svPass);
+            await AsyncStorage.setItem('svUsername', svUser);
+            await AsyncStorage.setItem('svPassword', svPass);
             await AsyncStorage.setItem('svDistrictUrl', baseUrl);
 
             // Prioritize the logic from remote branch for 'auth' (Proxy + Parser)
@@ -527,76 +527,21 @@ export default function SettingsScreen() {
     const logoutAction = async () => {
         try {
             await supabase.auth.signOut();
-
+            
             const keysToClear = [
                 'svUsername', 'svPassword', 'svDistrictUrl',
                 'studentVueGrades', 'studentVuePeriods',
                 'studentVuePeriodName', 'studentVuePeriodIndex',
-                'isDemoData', 'schoologyUrl', 'userName',
-                'googleAccessToken',
+                'isDemoData', 'schoologyUrl', 'userName'
             ];
             for (let i = 0; i < 10; i++) keysToClear.push(`studentVueGradesQ${i}`);
-
+            
             await AsyncStorage.multiRemove(keysToClear);
-
-            if (typeof window !== 'undefined') {
-                window.localStorage.removeItem('googleAccessToken');
-            }
-
+            
             if (Platform.OS === 'web') window.alert('Logged out successfully.');
             else Alert.alert('Logged Out', 'Your data has been cleared.');
         } catch (e) {
             console.error('Logout error:', e);
-        }
-    };
-
-    const handleDeleteAccount = async () => {
-        const doDelete = async () => {
-            try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (!session?.user?.id) {
-                    const msg = 'You must be logged in to delete your account.';
-                    if (Platform.OS === 'web') window.alert(msg);
-                    else Alert.alert('Error', msg);
-                    return;
-                }
-
-                const uid = session.user.id;
-
-                // Delete user data from all tables
-                await supabase.from('focus_scores').delete().eq('user_id', uid);
-                await supabase.from('friendships').delete().or(`user_id.eq.${uid},friend_id.eq.${uid}`);
-                await supabase.from('tasks').delete().eq('user_id', uid);
-                await supabase.from('profiles').delete().eq('user_id', uid);
-
-                // Clear all local data
-                await logoutAction();
-
-                const msg = 'Your account data has been deleted. Your authentication record will be fully removed within 30 days.';
-                if (Platform.OS === 'web') window.alert(msg);
-                else Alert.alert('Account Deleted', msg);
-            } catch (e) {
-                console.error('Delete account error:', e);
-                const msg = 'Failed to delete account: ' + e.message;
-                if (Platform.OS === 'web') window.alert(msg);
-                else Alert.alert('Error', msg);
-            }
-        };
-
-        if (Platform.OS === 'web') {
-            const confirmed = window.confirm(
-                'Are you sure you want to delete your account? This will permanently remove all your data including grades, focus scores, friends, and profile. This action cannot be undone.'
-            );
-            if (confirmed) await doDelete();
-        } else {
-            Alert.alert(
-                'Delete Account',
-                'Are you sure you want to delete your account? This will permanently remove all your data including grades, focus scores, friends, and profile. This action cannot be undone.',
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Delete Everything', style: 'destructive', onPress: doDelete }
-                ]
-            );
         }
     };
 
@@ -1091,43 +1036,6 @@ export default function SettingsScreen() {
 
                 <TouchableOpacity style={[styles.actionBtn, { marginTop: 15 }]} onPress={handleSaveWorkingHours}>
                     <Text style={styles.actionBtnText}>Save Hours</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* Privacy & Account Management */}
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Privacy & Data</Text>
-
-                <TouchableOpacity
-                    style={styles.settingRow}
-                    onPress={() => navigation.navigate('Legal')}
-                    activeOpacity={0.7}
-                >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <View style={[styles.iconBox, { backgroundColor: theme.colors.surface2 }]}>
-                            <Text style={{ fontSize: 18 }}>📋</Text>
-                        </View>
-                        <View>
-                            <Text style={styles.settingLabel}>Privacy Policy & Terms</Text>
-                            <Text style={styles.settingSub}>View our data practices</Text>
-                        </View>
-                    </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.settingRow, { marginTop: 8, borderColor: theme.colors.red + '50' }]}
-                    onPress={handleDeleteAccount}
-                    activeOpacity={0.7}
-                >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <View style={[styles.iconBox, { backgroundColor: theme.colors.red + '15' }]}>
-                            <Text style={{ fontSize: 18 }}>🗑️</Text>
-                        </View>
-                        <View>
-                            <Text style={[styles.settingLabel, { color: theme.colors.red }]}>Delete Account</Text>
-                            <Text style={styles.settingSub}>Permanently remove all your data</Text>
-                        </View>
-                    </View>
                 </TouchableOpacity>
             </View>
 
