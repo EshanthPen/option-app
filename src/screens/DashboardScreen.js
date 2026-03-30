@@ -8,6 +8,12 @@ import { BookOpen, CalendarDays, TrendingUp, TrendingDown, AlertTriangle } from 
 import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
 import { computeFocusScore, syncScoreToSupabase, getScoreLabel } from '../utils/focusScoreEngine';
+import { generateNudges } from '../utils/studyNudges';
+import { checkAchievements, getUnlockedAchievements, ACHIEVEMENTS } from '../utils/achievements';
+import { lightImpact, successNotification } from '../utils/haptics';
+import GradeTrendChart from '../components/GradeTrendChart';
+import SyncStatusBar from '../components/SyncStatusBar';
+import { Award, Zap, AlertCircle, Lightbulb, ChevronRight } from 'lucide-react-native';
 
 const screenWidth = Dimensions.get('window').width;
 

@@ -33,18 +33,23 @@ import { ThemeProvider } from './src/context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './src/supabaseClient';
 import WelcomeScreen from './src/screens/WelcomeScreen';
+import OnboardingScreen from './src/screens/OnboardingScreen';
+import { initializeNotifications } from './src/utils/notificationService';
 
 export default function App() {
   const [session, setSession] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [isAuthenticating, setIsAuthenticating] = React.useState(false);
   const [showVerifiedModal, setShowVerifiedModal] = React.useState(false);
+  const [hasOnboarded, setHasOnboarded] = React.useState(null);
 
   React.useEffect(() => {
     // Initial session check
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setLoading(false);
+      const onboarded = await AsyncStorage.getItem('hasCompletedOnboarding');
+      setHasOnboarded(onboarded === 'true');
     });
 
     // Listen for auth changes
@@ -70,6 +75,10 @@ export default function App() {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  React.useEffect(() => {
+    initializeNotifications().catch(console.warn);
   }, []);
 
   // Safeguard: Reset authentication state after 10s if it gets stuck
@@ -125,7 +134,7 @@ export default function App() {
     'CormorantGaramond-Bold': CormorantGaramond_700Bold,
   });
 
-  if (!fontsLoaded || loading || (isAuthenticating && !session)) {
+  if (!fontsLoaded || loading || hasOnboarded === null || (isAuthenticating && !session)) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }}>
         <ActivityIndicator size="large" color="#F5F3E9" />
@@ -150,10 +159,14 @@ export default function App() {
     <ThemeProvider>
       <NavigationContainer linking={linking}>
         {session ? (
-          <TabNavigator />
+          hasOnboarded === false ? (
+            <OnboardingScreen onComplete={() => setHasOnboarded(true)} />
+          ) : (
+            <TabNavigator />
+          )
         ) : (
-          <WelcomeScreen 
-            onAuthStart={() => setIsAuthenticating(true)} 
+          <WelcomeScreen
+            onAuthStart={() => setIsAuthenticating(true)}
             onAuthReset={() => setIsAuthenticating(false)}
           />
         )}
