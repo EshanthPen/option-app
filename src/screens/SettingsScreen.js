@@ -9,7 +9,7 @@ import { syncStudentVueGrades } from '../utils/studentVueAPI';
 import { theme as staticTheme } from '../utils/theme';
 import DistrictPickerModal, { KNOWN_DISTRICTS } from '../components/DistrictPickerModal';
 import { syncAssignmentsToCalendar } from '../utils/googleCalendarAPI';
-import { ChevronDown, RefreshCw, Moon, Sun, User, Copy, Camera, Bell, BellOff } from 'lucide-react-native';
+import { ChevronDown, RefreshCw, Moon, Sun, User, Copy, Camera, Bell, BellOff, Trash2, ExternalLink, GraduationCap, BookMarked, Calculator, Brain, Palette } from 'lucide-react-native';
 import { loadMockGradebookData } from '../utils/mockStudentData';
 import ICAL from 'ical.js';
 import { useTheme } from '../context/ThemeContext';
@@ -19,11 +19,14 @@ import { getUserId } from '../utils/auth';
 import WorkingHoursGraph from '../components/WorkingHoursGraph';
 import { getOrCreateProfile, updateProfile, uploadAvatar, setPresetAvatar, PRESET_AVATARS } from '../utils/profileService';
 import { isNotificationsEnabled, setNotificationsEnabled } from '../utils/gradeNotifications';
+import { syncGoogleClassroom, syncCanvas, syncPearson, syncDeltaMath, syncKhanAcademy } from '../utils/lmsIntegrations';
+import { mediumImpact, heavyImpact } from '../utils/haptics';
+import { THEME_PRESETS } from '../utils/theme';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function SettingsScreen() {
-    const { theme, toggleTheme, isDarkMode } = useTheme();
+    const { theme, toggleTheme, isDarkMode, themePreset, changePreset } = useTheme();
     const styles = getStyles(theme);
     const navigation = useNavigation();
     const [schoologyUrl, setSchoologyUrl] = useState('');
@@ -545,6 +548,38 @@ export default function SettingsScreen() {
         }
     };
 
+    const handleDeleteAccount = async () => {
+        const doDelete = () => new Promise((resolve) => {
+            if (Platform.OS === 'web') {
+                resolve(window.confirm('Permanently delete your account? All data will be removed forever.'));
+            } else {
+                Alert.alert('Delete Account', 'Permanently delete your account? All data will be removed forever.', [
+                    { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                    { text: 'Delete Forever', style: 'destructive', onPress: () => resolve(true) }
+                ]);
+            }
+        });
+        if (!(await doDelete())) return;
+        try {
+            heavyImpact();
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.id) {
+                const uid = session.user.id;
+                await supabase.from('focus_scores').delete().eq('user_id', uid);
+                await supabase.from('friendships').delete().or(`user_id.eq.${uid},friend_id.eq.${uid}`);
+                await supabase.from('profiles').delete().eq('user_id', uid);
+            }
+            await AsyncStorage.clear();
+            await supabase.auth.signOut();
+            if (Platform.OS === 'web') window.alert('Account deleted.');
+            else Alert.alert('Deleted', 'Your account and data have been permanently removed.');
+        } catch (e) {
+            console.error('Delete error:', e);
+            if (Platform.OS === 'web') window.alert('Failed: ' + e.message);
+            else Alert.alert('Error', e.message);
+        }
+    };
+
     return (
         <ScrollView style={styles.container}>
             <View style={styles.headerContainer}>
@@ -739,6 +774,87 @@ export default function SettingsScreen() {
                     </View>
                     <View style={[styles.toggleContainer, isDarkMode && { backgroundColor: theme.colors.accent }]}>
                         <View style={[styles.toggleCircle, isDarkMode && { transform: [{ translateX: 20 }] }]} />
+                    </View>
+                </TouchableOpacity>
+
+                <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Theme</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                    {Object.entries(THEME_PRESETS).map(([key, preset]) => (
+                        <TouchableOpacity
+                            key={key}
+                            style={{
+                                width: '30%', minWidth: 90,
+                                backgroundColor: themePreset === key ? theme.colors.ink : theme.colors.surface,
+                                borderWidth: 2, borderColor: theme.colors.border,
+                                borderRadius: theme.radii.lg, padding: 12, alignItems: 'center',
+                                shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 },
+                                shadowOpacity: 1, shadowRadius: 0, elevation: 3,
+                            }}
+                            onPress={() => { mediumImpact(); changePreset(key); }}
+                        >
+                            <View style={{ flexDirection: 'row', gap: 4, marginBottom: 8 }}>
+                                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: preset.light.bg, borderWidth: 1, borderColor: preset.light.border }} />
+                                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: preset.light.border }} />
+                                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: preset.light.accent || preset.light.ink }} />
+                            </View>
+                            <Text style={{
+                                fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600',
+                                color: themePreset === key ? theme.colors.bg : theme.colors.ink,
+                            }}>{preset.name}</Text>
+                            <Text style={{
+                                fontFamily: theme.fonts.m, fontSize: 9,
+                                color: themePreset === key ? theme.colors.bg : theme.colors.ink3,
+                                marginTop: 2,
+                            }}>{preset.description}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                {/* ── Legal ── */}
+                <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Legal</Text>
+                <TouchableOpacity
+                    style={[styles.settingRow, { marginBottom: 10 }]}
+                    onPress={() => {
+                        if (Platform.OS === 'web') window.alert('Privacy Policy: Option collects grades, focus sessions, and profile data. Data is stored securely via Supabase. You can delete your account at any time.');
+                        else Alert.alert('Privacy Policy', 'Option collects grades, focus sessions, and profile data. Data is stored securely via Supabase. You can delete your account at any time.');
+                    }}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={[styles.iconBox, { backgroundColor: theme.colors.surface2 }]}>
+                            <ExternalLink size={20} color={theme.colors.ink} />
+                        </View>
+                        <Text style={styles.settingLabel}>Privacy Policy</Text>
+                    </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.settingRow, { marginBottom: 10 }]}
+                    onPress={() => {
+                        if (Platform.OS === 'web') window.alert('Terms of Service: By using Option, you agree to use it as a supplementary educational tool. Option is not a substitute for direct communication with your school.');
+                        else Alert.alert('Terms of Service', 'By using Option, you agree to use it as a supplementary educational tool. Option is not a substitute for direct communication with your school.');
+                    }}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={[styles.iconBox, { backgroundColor: theme.colors.surface2 }]}>
+                            <ExternalLink size={20} color={theme.colors.ink} />
+                        </View>
+                        <Text style={styles.settingLabel}>Terms of Service</Text>
+                    </View>
+                </TouchableOpacity>
+
+                {/* ── Danger Zone ── */}
+                <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Danger Zone</Text>
+                <TouchableOpacity
+                    style={[styles.settingRow, { borderColor: '#dc2626' }]}
+                    onPress={handleDeleteAccount}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={[styles.iconBox, { backgroundColor: '#fef2f2' }]}>
+                            <Trash2 size={20} color="#dc2626" />
+                        </View>
+                        <View>
+                            <Text style={[styles.settingLabel, { color: '#dc2626' }]}>Delete Account</Text>
+                            <Text style={styles.settingSub}>Permanently delete all your data</Text>
+                        </View>
                     </View>
                 </TouchableOpacity>
 
@@ -1008,6 +1124,106 @@ export default function SettingsScreen() {
                     ) : (
                         <Text style={styles.actionBtnText}>🎓 Load Demo Data</Text>
                     )}
+                </TouchableOpacity>
+            </View>
+
+            {/* ── Google Classroom ── */}
+            <View style={[styles.card, { borderLeftColor: theme.colors.green, borderLeftWidth: 4 }]}>
+                <Text style={styles.cardTitle}>Google Classroom</Text>
+                <Text style={styles.instructions}>Import courses and assignments from Google Classroom using your linked Google account.</Text>
+                <TouchableOpacity style={styles.actionBtn} onPress={async () => {
+                    if (!accessToken) { if (Platform.OS === 'web') window.alert('Link your Google account first.'); else Alert.alert('Not Linked', 'Link your Google account first.'); return; }
+                    mediumImpact();
+                    try {
+                        const result = await syncGoogleClassroom(accessToken);
+                        const msg = `Imported ${result.length} courses from Google Classroom.`;
+                        if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Success', msg);
+                    } catch (err) { if (Platform.OS === 'web') window.alert('Failed: ' + err.message); else Alert.alert('Error', err.message); }
+                }}>
+                    <GraduationCap size={18} color={theme.colors.bg} />
+                    <Text style={styles.actionBtnText}>Sync Google Classroom</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* ── Canvas LMS ── */}
+            <View style={[styles.card, { borderLeftColor: theme.colors.red, borderLeftWidth: 4 }]}>
+                <Text style={styles.cardTitle}>Canvas LMS</Text>
+                <Text style={styles.instructions}>Connect to your school's Canvas with an API access token.</Text>
+                <Text style={styles.label}>Canvas URL</Text>
+                <TextInput style={styles.input} placeholder="https://yourschool.instructure.com" placeholderTextColor={theme.colors.ink3} autoCapitalize="none" onChangeText={(t) => AsyncStorage.setItem('canvasBaseUrl', t)} />
+                <Text style={styles.label}>Access Token</Text>
+                <TextInput style={styles.input} placeholder="Canvas API token" placeholderTextColor={theme.colors.ink3} secureTextEntry onChangeText={(t) => AsyncStorage.setItem('canvasToken', t)} />
+                <TouchableOpacity style={styles.actionBtn} onPress={async () => {
+                    mediumImpact();
+                    try {
+                        const baseUrl = await AsyncStorage.getItem('canvasBaseUrl');
+                        const token = await AsyncStorage.getItem('canvasToken');
+                        if (!baseUrl || !token) throw new Error('Enter your Canvas URL and token.');
+                        const result = await syncCanvas(baseUrl, token);
+                        if (Platform.OS === 'web') window.alert(`Imported ${result.length} courses.`); else Alert.alert('Success', `Imported ${result.length} courses.`);
+                    } catch (err) { if (Platform.OS === 'web') window.alert('Failed: ' + err.message); else Alert.alert('Error', err.message); }
+                }}>
+                    <Text style={styles.actionBtnText}>Sync Canvas</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* ── DeltaMath ── */}
+            <View style={[styles.card, { borderLeftColor: theme.colors.orange, borderLeftWidth: 4 }]}>
+                <Text style={styles.cardTitle}>DeltaMath</Text>
+                <Text style={styles.instructions}>Import DeltaMath assignments. Paste your session token from the browser cookie.</Text>
+                <Text style={styles.label}>Session Token</Text>
+                <TextInput style={styles.input} placeholder="DeltaMath session token" placeholderTextColor={theme.colors.ink3} secureTextEntry onChangeText={(t) => AsyncStorage.setItem('deltaMathToken', t)} />
+                <TouchableOpacity style={styles.actionBtn} onPress={async () => {
+                    mediumImpact();
+                    try {
+                        const token = await AsyncStorage.getItem('deltaMathToken');
+                        if (!token) throw new Error('Enter your DeltaMath session token.');
+                        const result = await syncDeltaMath(token);
+                        if (Platform.OS === 'web') window.alert(`Imported ${result.length} assignments.`); else Alert.alert('Success', `Imported ${result.length} assignments.`);
+                    } catch (err) { if (Platform.OS === 'web') window.alert('Failed: ' + err.message); else Alert.alert('Error', err.message); }
+                }}>
+                    <Calculator size={18} color={theme.colors.bg} />
+                    <Text style={styles.actionBtnText}>Sync DeltaMath</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* ── Pearson ── */}
+            <View style={[styles.card, { borderLeftColor: theme.colors.purple, borderLeftWidth: 4 }]}>
+                <Text style={styles.cardTitle}>Pearson Realize</Text>
+                <Text style={styles.instructions}>Import from Pearson Realize. Requires your session cookie.</Text>
+                <Text style={styles.label}>Session Cookie</Text>
+                <TextInput style={styles.input} placeholder="Pearson session cookie" placeholderTextColor={theme.colors.ink3} secureTextEntry onChangeText={(t) => AsyncStorage.setItem('pearsonCookie', t)} />
+                <TouchableOpacity style={styles.actionBtn} onPress={async () => {
+                    mediumImpact();
+                    try {
+                        const cookie = await AsyncStorage.getItem('pearsonCookie');
+                        if (!cookie) throw new Error('Enter your Pearson session cookie.');
+                        const result = await syncPearson(cookie);
+                        if (Platform.OS === 'web') window.alert(`Imported ${result.length} courses.`); else Alert.alert('Success', `Imported ${result.length} courses.`);
+                    } catch (err) { if (Platform.OS === 'web') window.alert('Failed: ' + err.message); else Alert.alert('Error', err.message); }
+                }}>
+                    <BookMarked size={18} color={theme.colors.bg} />
+                    <Text style={styles.actionBtnText}>Sync Pearson</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* ── Khan Academy ── */}
+            <View style={[styles.card, { borderLeftColor: theme.colors.blue, borderLeftWidth: 4 }]}>
+                <Text style={styles.cardTitle}>Khan Academy</Text>
+                <Text style={styles.instructions}>Track Khan Academy progress and mastery levels.</Text>
+                <Text style={styles.label}>API Token</Text>
+                <TextInput style={styles.input} placeholder="Khan Academy token" placeholderTextColor={theme.colors.ink3} secureTextEntry onChangeText={(t) => AsyncStorage.setItem('khanToken', t)} />
+                <TouchableOpacity style={styles.actionBtn} onPress={async () => {
+                    mediumImpact();
+                    try {
+                        const token = await AsyncStorage.getItem('khanToken');
+                        if (!token) throw new Error('Enter your Khan Academy token.');
+                        const result = await syncKhanAcademy(token);
+                        if (Platform.OS === 'web') window.alert(`Imported ${result.length} courses.`); else Alert.alert('Success', `Imported ${result.length} courses.`);
+                    } catch (err) { if (Platform.OS === 'web') window.alert('Failed: ' + err.message); else Alert.alert('Error', err.message); }
+                }}>
+                    <Brain size={18} color={theme.colors.bg} />
+                    <Text style={styles.actionBtnText}>Sync Khan Academy</Text>
                 </TouchableOpacity>
             </View>
 

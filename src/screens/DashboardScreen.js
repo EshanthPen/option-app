@@ -76,6 +76,8 @@ export default function DashboardScreen() {
     const [loaded, setLoaded] = useState(false);
     const [focusScoreNum, setFocusScoreNum] = useState(0);
     const [focusLabel, setFocusLabel] = useState('');
+    const [nudges, setNudges] = useState([]);
+    const [recentAchievements, setRecentAchievements] = useState([]);
 
     useFocusEffect(
         useCallback(() => {
@@ -94,6 +96,19 @@ export default function DashboardScreen() {
                     setFocusLabel(getScoreLabel(score));
                     // Sync to Supabase in background (non-blocking)
                     syncScoreToSupabase(score, breakdown).catch(() => {});
+
+                    // Load study nudges
+                    try {
+                        const n = await generateNudges();
+                        setNudges(n.slice(0, 3));
+                    } catch (e) { console.warn('Nudges error:', e); }
+
+                    // Check achievements
+                    try {
+                        const unlocked = await getUnlockedAchievements();
+                        const recent = unlocked.slice(-3).reverse();
+                        setRecentAchievements(recent.map(id => ACHIEVEMENTS[id]).filter(Boolean));
+                    } catch (e) { console.warn('Achievements error:', e); }
                 } catch (e) {
                     console.error(e);
                 }
@@ -251,6 +266,92 @@ export default function DashboardScreen() {
                     </View>
                 </View>
             </View>
+            {/* ── Smart Nudges ── */}
+            {nudges.length > 0 && (
+                <View style={{ marginTop: 24, width: '100%' }}>
+                    <View style={styles.sectionHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Lightbulb size={18} color={theme.colors.ink} strokeWidth={2.5} />
+                            <Text style={styles.sectionTitle}>Smart Nudges</Text>
+                        </View>
+                    </View>
+                    {nudges.map((nudge, idx) => (
+                        <TouchableOpacity
+                            key={nudge.id || idx}
+                            style={{
+                                backgroundColor: theme.colors.surface,
+                                borderWidth: 2, borderColor: theme.colors.border,
+                                borderRadius: theme.radii.lg, padding: 16, marginBottom: 10,
+                                flexDirection: 'row', alignItems: 'center', gap: 12,
+                                shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 },
+                                shadowOpacity: 1, shadowRadius: 0,
+                            }}
+                            onPress={() => {
+                                lightImpact();
+                                if (nudge.action === 'navigate_focus') navigation.navigate('Focus');
+                                else if (nudge.action === 'navigate_gradebook') navigation.navigate('Gradebook');
+                                else if (nudge.action === 'navigate_calendar') navigation.navigate('Calendar');
+                                else if (nudge.action === 'navigate_leaderboard') navigation.navigate('Leaderboard');
+                            }}
+                        >
+                            <View style={{
+                                width: 36, height: 36, borderRadius: 18,
+                                backgroundColor: nudge.type === 'warning' ? theme.colors.red + '20' :
+                                    nudge.type === 'motivation' ? theme.colors.green + '20' :
+                                    theme.colors.accent + '20',
+                                alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                {nudge.type === 'warning' ? <AlertCircle size={18} color={theme.colors.red} /> :
+                                 nudge.type === 'achievement' ? <Award size={18} color={theme.colors.accent} /> :
+                                 <Lightbulb size={18} color={theme.colors.ink} />}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink }}>{nudge.title}</Text>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 2 }}>{nudge.message}</Text>
+                            </View>
+                            <ChevronRight size={16} color={theme.colors.ink3} />
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
+
+            {/* ── Recent Achievements ── */}
+            {recentAchievements.length > 0 && (
+                <View style={{ marginTop: 24, width: '100%' }}>
+                    <View style={styles.sectionHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Award size={18} color={theme.colors.ink} strokeWidth={2.5} />
+                            <Text style={styles.sectionTitle}>Achievements</Text>
+                        </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                        {recentAchievements.map((ach, idx) => (
+                            <View key={idx} style={{
+                                flex: 1, backgroundColor: theme.colors.surface,
+                                borderWidth: 2, borderColor: theme.colors.border,
+                                borderRadius: theme.radii.lg, padding: 14, alignItems: 'center',
+                                shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 },
+                                shadowOpacity: 1, shadowRadius: 0,
+                            }}>
+                                <Text style={{ fontSize: 28, marginBottom: 6 }}>{ach.icon}</Text>
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '600', color: theme.colors.ink, textAlign: 'center' }}>{ach.title}</Text>
+                            </View>
+                        ))}
+                    </View>
+                </View>
+            )}
+
+            {/* ── Grade Trends ── */}
+            <View style={{ marginTop: 24, marginBottom: 10, width: '100%' }}>
+                <View style={styles.sectionHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <TrendingUp size={18} color={theme.colors.ink} strokeWidth={2.5} />
+                        <Text style={styles.sectionTitle}>Grade Trends</Text>
+                    </View>
+                </View>
+                <GradeTrendChart />
+            </View>
+
             <View style={{ height: 100 }} />
         </ScrollView>
     );

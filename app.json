@@ -10,14 +10,15 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#F5F3E9"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.eshanthpen.optionapp",
       "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSUserNotificationsUsageDescription": "Option sends reminders for upcoming deadlines, grade changes, and focus streaks."
       }
     },
     "android": {
@@ -36,7 +37,14 @@
     "plugins": [
       "expo-web-browser",
       "expo-font",
-      "expo-updates"
+      "expo-updates",
+      [
+        "expo-notifications",
+        {
+          "color": "#232E52",
+          "sounds": []
+        }
+      ]
     ],
     "extra": {
       "eas": {

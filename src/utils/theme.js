@@ -1,56 +1,246 @@
-export const colors = {
-    light: {
-        bg: '#F5F3E9', // Cream bg
-        surface: '#FFFFFF', // White surface for contrast
-        surface2: '#EBE8DC', // Darker cream for secondary
-        border: '#232E52', // Thick Navy border
-        border2: '#232E52',
-        ink: '#232E52', // Navy text
-        ink2: '#4A5576', // Muted navy text
-        ink3: '#727C9C', // Tertiary text
-        ink4: '#A2AAC5', // Quaternary
-        // For a strict duotone retro look, we'll map status colors to variations of navy or muted vintage tones.
-        // Actually, pure monochrome navy might be hard for grades. Let's use pure Navy for everything.
-        red: '#232E52', // Navy
-        orange: '#232E52', // Navy
-        green: '#232E52', // Navy
-        blue: '#232E52', // Navy
-        purple: '#232E52', // Navy
-        accent: '#232E52', // Navy
+export const THEME_PRESETS = {
+    classic: {
+        name: 'Classic',
+        description: 'Original cream & navy',
+        light: {
+            bg: '#F5F3E9',
+            surface: '#FFFFFF',
+            surface2: '#EBE8DC',
+            border: '#232E52',
+            border2: '#232E52',
+            ink: '#232E52',
+            ink2: '#4A5576',
+            ink3: '#727C9C',
+            ink4: '#A2AAC5',
+            red: '#232E52',
+            orange: '#232E52',
+            green: '#232E52',
+            blue: '#232E52',
+            purple: '#232E52',
+            accent: '#232E52',
+        },
+        dark: {
+            bg: '#121212',
+            surface: '#1E1E1E',
+            surface2: '#282828',
+            border: '#F5F3E9',
+            border2: '#F5F3E9',
+            ink: '#F5F3E9',
+            ink2: '#DADBCC',
+            ink3: '#9EA18D',
+            ink4: '#646857',
+            red: '#F5F3E9',
+            orange: '#F5F3E9',
+            green: '#F5F3E9',
+            blue: '#F5F3E9',
+            purple: '#F5F3E9',
+            accent: '#F5F3E9',
+        },
     },
-    dark: {
-        bg: '#121212', // Softer Eerie-Black
-        surface: '#1E1E1E', // Dark Charcoal surface
-        surface2: '#282828', // Muted charcoal for cards
-        border: '#F5F3E9', // Cream border
-        border2: '#F5F3E9',
-        ink: '#F5F3E9', // Cream text
-        ink2: '#DADBCC',
-        ink3: '#9EA18D', // Slightly more muted for contrast on dark
-        ink4: '#646857',
-        red: '#F5F3E9',
-        orange: '#F5F3E9',
-        green: '#F5F3E9',
-        blue: '#F5F3E9',
-        purple: '#F5F3E9',
-        accent: '#F5F3E9',
-    }
+    ocean: {
+        name: 'Ocean',
+        description: 'Deep blue & teal',
+        light: {
+            bg: '#EFF6FF',
+            surface: '#FFFFFF',
+            surface2: '#DBEAFE',
+            border: '#1E3A5F',
+            border2: '#1E3A5F',
+            ink: '#1E3A5F',
+            ink2: '#3B5998',
+            ink3: '#6B8DB5',
+            ink4: '#A0BFD9',
+            red: '#DC2626',
+            orange: '#EA580C',
+            green: '#16A34A',
+            blue: '#2563EB',
+            purple: '#7C3AED',
+            accent: '#0EA5E9',
+        },
+        dark: {
+            bg: '#0C1929',
+            surface: '#142338',
+            surface2: '#1C3150',
+            border: '#60A5FA',
+            border2: '#60A5FA',
+            ink: '#E0EDFF',
+            ink2: '#BAD4F5',
+            ink3: '#7BA3D0',
+            ink4: '#4A6F9A',
+            red: '#F87171',
+            orange: '#FB923C',
+            green: '#4ADE80',
+            blue: '#60A5FA',
+            purple: '#A78BFA',
+            accent: '#38BDF8',
+        },
+    },
+    forest: {
+        name: 'Forest',
+        description: 'Earthy greens',
+        light: {
+            bg: '#F0FDF4',
+            surface: '#FFFFFF',
+            surface2: '#DCFCE7',
+            border: '#1A3D2B',
+            border2: '#1A3D2B',
+            ink: '#1A3D2B',
+            ink2: '#2D5A3E',
+            ink3: '#5C8A6E',
+            ink4: '#93B8A2',
+            red: '#DC2626',
+            orange: '#EA580C',
+            green: '#16A34A',
+            blue: '#0D9488',
+            purple: '#7C3AED',
+            accent: '#22C55E',
+        },
+        dark: {
+            bg: '#0A1F13',
+            surface: '#122B1C',
+            surface2: '#1A3D2B',
+            border: '#4ADE80',
+            border2: '#4ADE80',
+            ink: '#E0FFF0',
+            ink2: '#B8E6CA',
+            ink3: '#7BBF95',
+            ink4: '#4A8A64',
+            red: '#F87171',
+            orange: '#FB923C',
+            green: '#4ADE80',
+            blue: '#2DD4BF',
+            purple: '#A78BFA',
+            accent: '#34D399',
+        },
+    },
+    sunset: {
+        name: 'Sunset',
+        description: 'Warm orange & coral',
+        light: {
+            bg: '#FFF7ED',
+            surface: '#FFFFFF',
+            surface2: '#FFEDD5',
+            border: '#78350F',
+            border2: '#78350F',
+            ink: '#78350F',
+            ink2: '#92400E',
+            ink3: '#B45309',
+            ink4: '#D97706',
+            red: '#DC2626',
+            orange: '#EA580C',
+            green: '#16A34A',
+            blue: '#2563EB',
+            purple: '#7C3AED',
+            accent: '#F97316',
+        },
+        dark: {
+            bg: '#1C0F05',
+            surface: '#2A1A0D',
+            surface2: '#3D2514',
+            border: '#FB923C',
+            border2: '#FB923C',
+            ink: '#FFF1E0',
+            ink2: '#FDDCB5',
+            ink3: '#D4A373',
+            ink4: '#A0724A',
+            red: '#F87171',
+            orange: '#FB923C',
+            green: '#4ADE80',
+            blue: '#60A5FA',
+            purple: '#A78BFA',
+            accent: '#FB923C',
+        },
+    },
+    midnight: {
+        name: 'Midnight',
+        description: 'Purple & indigo',
+        light: {
+            bg: '#F5F3FF',
+            surface: '#FFFFFF',
+            surface2: '#EDE9FE',
+            border: '#3B1F7E',
+            border2: '#3B1F7E',
+            ink: '#3B1F7E',
+            ink2: '#5B3BA0',
+            ink3: '#7E5FC0',
+            ink4: '#A78BDA',
+            red: '#DC2626',
+            orange: '#EA580C',
+            green: '#16A34A',
+            blue: '#6366F1',
+            purple: '#7C3AED',
+            accent: '#8B5CF6',
+        },
+        dark: {
+            bg: '#0F0A1F',
+            surface: '#1A1230',
+            surface2: '#251B45',
+            border: '#A78BFA',
+            border2: '#A78BFA',
+            ink: '#EDE9FF',
+            ink2: '#C4B5FD',
+            ink3: '#8B7BBF',
+            ink4: '#5A4D8A',
+            red: '#F87171',
+            orange: '#FB923C',
+            green: '#4ADE80',
+            blue: '#818CF8',
+            purple: '#A78BFA',
+            accent: '#8B5CF6',
+        },
+    },
+    rose: {
+        name: 'Rose',
+        description: 'Pink & rose gold',
+        light: {
+            bg: '#FFF1F2',
+            surface: '#FFFFFF',
+            surface2: '#FFE4E6',
+            border: '#881337',
+            border2: '#881337',
+            ink: '#881337',
+            ink2: '#9F1239',
+            ink3: '#BE185D',
+            ink4: '#DB2777',
+            red: '#DC2626',
+            orange: '#EA580C',
+            green: '#16A34A',
+            blue: '#2563EB',
+            purple: '#7C3AED',
+            accent: '#F43F5E',
+        },
+        dark: {
+            bg: '#1C0A10',
+            surface: '#2A1018',
+            surface2: '#3D1524',
+            border: '#FB7185',
+            border2: '#FB7185',
+            ink: '#FFE0E5',
+            ink2: '#FBBDC5',
+            ink3: '#D4737F',
+            ink4: '#A04A5A',
+            red: '#F87171',
+            orange: '#FB923C',
+            green: '#4ADE80',
+            blue: '#60A5FA',
+            purple: '#A78BFA',
+            accent: '#FB7185',
+        },
+    },
 };
 
-export const getTheme = (isDark) => ({
-    colors: isDark ? colors.dark : colors.light,
+// Keep backward compat
+export const colors = THEME_PRESETS.classic;
+
+export const getTheme = (isDark, presetKey = 'classic') => ({
+    colors: isDark ? THEME_PRESETS[presetKey].dark : THEME_PRESETS[presetKey].light,
     fonts: {
-        d: 'CormorantGaramond-Bold', // Thick, vintage serif
+        d: 'CormorantGaramond-Bold',
         m: 'CormorantGaramond-Regular',
-        s: 'CormorantGaramond-SemiBold', // Elegant body
-        b: 'CormorantGaramond-Bold', // Button font
+        s: 'CormorantGaramond-SemiBold',
+        b: 'CormorantGaramond-Bold',
     },
-    radii: {
-        r: 10,
-        lg: 16,
-        xl: 24,
-        round: 9999,
-    }
+    radii: { r: 10, lg: 16, xl: 24, round: 9999 },
 });
 
 export const theme = getTheme(false);
