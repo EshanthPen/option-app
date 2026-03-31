@@ -70,7 +70,7 @@ CREATE POLICY "Users can update own scores" ON focus_scores FOR UPDATE USING (au
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO profiles (user_id, display_name)
+    INSERT INTO public.profiles (user_id, display_name)
     VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'full_name', 'Student'));
     RETURN NEW;
 END;

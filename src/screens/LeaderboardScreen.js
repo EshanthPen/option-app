@@ -158,8 +158,10 @@ export default function LeaderboardScreen() {
         return (
             <View style={styles.container}>
                 <View style={styles.header}>
-                    <Trophy size={28} color={theme.colors.ink} strokeWidth={2.5} />
-                    <Text style={styles.headerTitle}>Leaderboard</Text>
+                    <View style={styles.headerLeft}>
+                        <Trophy size={28} color={theme.colors.ink} strokeWidth={2.5} />
+                        <Text style={styles.headerTitle}>Leaderboard</Text>
+                    </View>
                 </View>
                 <View style={styles.authPrompt}>
                     <Trophy size={48} color={theme.colors.ink3} strokeWidth={1.5} />

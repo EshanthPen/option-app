@@ -33,23 +33,25 @@ import { ThemeProvider } from './src/context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './src/supabaseClient';
 import WelcomeScreen from './src/screens/WelcomeScreen';
-import OnboardingScreen from './src/screens/OnboardingScreen';
-import { initializeNotifications } from './src/utils/notificationService';
 
 export default function App() {
   const [session, setSession] = React.useState(null);
+  const [guestMode, setGuestMode] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [isAuthenticating, setIsAuthenticating] = React.useState(false);
   const [showVerifiedModal, setShowVerifiedModal] = React.useState(false);
-  const [hasOnboarded, setHasOnboarded] = React.useState(null);
 
   React.useEffect(() => {
-    // Initial session check
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    // Initial session check + guest mode check
+    Promise.all([
+      supabase.auth.getSession(),
+      AsyncStorage.getItem('@OptionApp_GuestMode'),
+    ]).then(([{ data: { session } }, guestFlag]) => {
       setSession(session);
+      if (!session && guestFlag === 'true') {
+        setGuestMode(true);
+      }
       setLoading(false);
-      const onboarded = await AsyncStorage.getItem('hasCompletedOnboarding');
-      setHasOnboarded(onboarded === 'true');
     });
 
     // Listen for auth changes
@@ -75,10 +77,6 @@ export default function App() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
-
-  React.useEffect(() => {
-    initializeNotifications().catch(console.warn);
   }, []);
 
   // Safeguard: Reset authentication state after 10s if it gets stuck
@@ -134,7 +132,7 @@ export default function App() {
     'CormorantGaramond-Bold': CormorantGaramond_700Bold,
   });
 
-  if (!fontsLoaded || loading || hasOnboarded === null || (isAuthenticating && !session)) {
+  if (!fontsLoaded || loading || (isAuthenticating && !session)) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }}>
         <ActivityIndicator size="large" color="#F5F3E9" />
@@ -155,19 +153,27 @@ export default function App() {
     },
   };
 
+  const handleGuestMode = async () => {
+    await AsyncStorage.setItem('@OptionApp_GuestMode', 'true');
+    setGuestMode(true);
+  };
+
+  const handleSignOut = async () => {
+    await AsyncStorage.removeItem('@OptionApp_GuestMode');
+    setGuestMode(false);
+    await supabase.auth.signOut();
+  };
+
   return (
     <ThemeProvider>
       <NavigationContainer linking={linking}>
-        {session ? (
-          hasOnboarded === false ? (
-            <OnboardingScreen onComplete={() => setHasOnboarded(true)} />
-          ) : (
-            <TabNavigator />
-          )
+        {(session || guestMode) ? (
+          <TabNavigator isGuest={guestMode && !session} onSignOut={handleSignOut} />
         ) : (
           <WelcomeScreen
             onAuthStart={() => setIsAuthenticating(true)}
             onAuthReset={() => setIsAuthenticating(false)}
+            onGuestMode={handleGuestMode}
           />
         )}
       </NavigationContainer>

@@ -65,7 +65,7 @@ function CustomSidebar({ state, descriptors, navigation }) {
     );
 }
 
-export default function TabNavigator() {
+export default function TabNavigator({ isGuest, onSignOut }) {
     const { theme } = useTheme();
     return (
         <Tab.Navigator
@@ -81,7 +81,9 @@ export default function TabNavigator() {
             <Tab.Screen name="Gradebook" component={GradebookScreen} options={{ tabBarLabel: 'Gradebook' }} />
             <Tab.Screen name="Focus" component={ScreentimeScreen} options={{ tabBarLabel: 'Focus' }} />
             <Tab.Screen name="Leaderboard" component={LeaderboardScreen} options={{ tabBarLabel: 'Leaderboard' }} />
-            <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarLabel: 'Settings' }} />
+            <Tab.Screen name="Settings">
+                {(props) => <SettingsScreen {...props} isGuest={isGuest} onSignOut={onSignOut} />}
+            </Tab.Screen>
         </Tab.Navigator>
     );
 }

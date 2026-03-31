@@ -59,13 +59,17 @@ const OnboardingScreen = ({ onComplete }) => {
     const handleScroll = useCallback((event) => {
         const offsetX = event.nativeEvent.contentOffset.x;
         const index = Math.round(offsetX / width);
-        setActiveIndex(index);
+        if (index >= 0 && index < slides.length) {
+            setActiveIndex(index);
+        }
     }, []);
 
     const goToNext = useCallback(() => {
-        if (activeIndex < slides.length - 1) {
+        const nextIndex = activeIndex + 1;
+        if (nextIndex < slides.length) {
+            setActiveIndex(nextIndex);
             scrollRef.current?.scrollTo({
-                x: (activeIndex + 1) * width,
+                x: nextIndex * width,
                 animated: true,
             });
         }
@@ -92,6 +96,7 @@ const OnboardingScreen = ({ onComplete }) => {
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 onMomentumScrollEnd={handleScroll}
+                onScroll={Platform.OS === 'web' ? handleScroll : undefined}
                 scrollEventThrottle={16}
                 bounces={false}
             >

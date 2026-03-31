@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform, Modal, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform, Modal } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
@@ -9,24 +9,19 @@ import { syncStudentVueGrades } from '../utils/studentVueAPI';
 import { theme as staticTheme } from '../utils/theme';
 import DistrictPickerModal, { KNOWN_DISTRICTS } from '../components/DistrictPickerModal';
 import { syncAssignmentsToCalendar } from '../utils/googleCalendarAPI';
-import { ChevronDown, RefreshCw, Moon, Sun, User, Copy, Camera, Bell, BellOff, Trash2, ExternalLink, GraduationCap, BookMarked, Calculator, Brain, Palette } from 'lucide-react-native';
+import { ChevronDown, RefreshCw, Moon, Sun } from 'lucide-react-native';
 import { loadMockGradebookData } from '../utils/mockStudentData';
 import ICAL from 'ical.js';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { parseStudentVueGradebook, parseStudentVuePeriods } from '../utils/studentVueParser';
-import { getUserId } from '../utils/auth';
+import { getDeviceId } from '../utils/auth';
 import WorkingHoursGraph from '../components/WorkingHoursGraph';
-import { getOrCreateProfile, updateProfile, uploadAvatar, setPresetAvatar, PRESET_AVATARS } from '../utils/profileService';
-import { isNotificationsEnabled, setNotificationsEnabled } from '../utils/gradeNotifications';
-import { syncGoogleClassroom, syncCanvas, syncPearson, syncDeltaMath, syncKhanAcademy } from '../utils/lmsIntegrations';
-import { mediumImpact, heavyImpact } from '../utils/haptics';
-import { THEME_PRESETS } from '../utils/theme';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function SettingsScreen() {
-    const { theme, toggleTheme, isDarkMode, themePreset, changePreset } = useTheme();
+    const { theme, toggleTheme, isDarkMode } = useTheme();
     const styles = getStyles(theme);
     const navigation = useNavigation();
     const [schoologyUrl, setSchoologyUrl] = useState('');
@@ -45,13 +40,6 @@ export default function SettingsScreen() {
     const [isSchoologySyncing, setIsSchoologySyncing] = useState(false);
     const [isHelpVisible, setIsHelpVisible] = useState(false);
 
-    // Profile & Leaderboard State
-    const [profile, setProfile] = useState(null);
-    const [schoolName, setSchoolName] = useState('');
-    const [friendCode, setFriendCode] = useState('');
-    const [showAvatarPicker, setShowAvatarPicker] = useState(false);
-    const [gradeNotifs, setGradeNotifs] = useState(false);
-
     // Working Hours State (7 days. 0=Mon, ..., 6=Sun visually)
     const [smartHours, setSmartHours] = useState({
         0: { start: 15, end: 22 },
@@ -65,7 +53,7 @@ export default function SettingsScreen() {
 
     // Auth State
     const [accessToken, setAccessToken] = useState(null);
-    const [userId, setUserId] = useState(null);
+    const [deviceId, setDeviceId] = useState(null);
 
     const isWeb = typeof window !== 'undefined' && window.location;
 
@@ -87,9 +75,6 @@ export default function SettingsScreen() {
 
     useEffect(() => {
         const loadSettings = async () => {
-            const uid = await getUserId();
-            setUserId(uid);
-            
             let storedToken = await AsyncStorage.getItem('googleAccessToken');
             if (!storedToken && typeof window !== 'undefined') {
                 storedToken = window.localStorage.getItem('googleAccessToken');
@@ -107,22 +92,6 @@ export default function SettingsScreen() {
 
             const savedPass = await AsyncStorage.getItem('svPassword');
             if (savedPass) setSvPass(savedPass);
-
-            // Load profile data
-            try {
-                const p = await getOrCreateProfile();
-                if (p) {
-                    setProfile(p);
-                    setSchoolName(p.school_name || '');
-                    setFriendCode(p.friend_code || '');
-                }
-            } catch (err) {
-                console.log('Profile load skipped (not authenticated):', err.message);
-            }
-
-            // Load notification preference
-            const notifsOn = await isNotificationsEnabled();
-            setGradeNotifs(notifsOn);
 
             const savedHours = await AsyncStorage.getItem('smartScheduleHours');
             if (savedHours) {
@@ -323,7 +292,7 @@ export default function SettingsScreen() {
                     duration: 60,
                     due_date: dueDate.toISOString().split('T')[0],
                     source: 'schoology_import',
-                    user_id: userId
+                    user_id: deviceId
                 };
             }).filter(t => t !== null);
 
@@ -407,13 +376,12 @@ export default function SettingsScreen() {
                 const { classes: formattedClasses, periods } = parseStudentVueGradebook(xmlText);
                 if (formattedClasses && formattedClasses.length > 0) {
                     await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
-                    await AsyncStorage.setItem('isDemoData', 'false');
                     if (periods && periods.length > 0) {
                         await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(periods));
-                        // Set current period to index 0 (matching the fetch above)
-                        const firstPeriod = periods.find(p => p.index === 0) || periods[0];
-                        await AsyncStorage.setItem('studentVuePeriodName', firstPeriod.name);
-                        await AsyncStorage.setItem('studentVuePeriodIndex', "0");
+                        // Set current period to the last one by default if it's the first sync
+                        const lastPeriod = periods[periods.length - 1];
+                        await AsyncStorage.setItem('studentVuePeriodName', lastPeriod.name);
+                        await AsyncStorage.setItem('studentVuePeriodIndex', String(lastPeriod.index));
                     }
 
                     const totalAssignments = formattedClasses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
@@ -484,7 +452,7 @@ export default function SettingsScreen() {
         const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
 
         const event = {
-            summary: 'Option App: Study Block 📚',
+            summary: 'Option App: Study Block 📚', 
             description: 'Automatically scheduled by Option.',
             start: { dateTime: startTime.toISOString(), timeZone: 'America/New_York' },
             end: { dateTime: endTime.toISOString(), timeZone: 'America/New_York' },
@@ -510,76 +478,6 @@ export default function SettingsScreen() {
         }
     };
 
-    const handleLogout = async () => {
-        if (Platform.OS === 'web') {
-            const confirmed = window.confirm('Are you sure you want to log out? This will clear all your StudentVUE and Schoology data from this device.');
-            if (!confirmed) return;
-            await logoutAction();
-        } else {
-            Alert.alert(
-                'Logout',
-                'Are you sure you want to log out? This will clear all your StudentVUE and Schoology data from this device.',
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Logout', style: 'destructive', onPress: logoutAction }
-                ]
-            );
-        }
-    };
-
-    const logoutAction = async () => {
-        try {
-            await supabase.auth.signOut();
-            
-            const keysToClear = [
-                'svUsername', 'svPassword', 'svDistrictUrl',
-                'studentVueGrades', 'studentVuePeriods',
-                'studentVuePeriodName', 'studentVuePeriodIndex',
-                'isDemoData', 'schoologyUrl', 'userName'
-            ];
-            for (let i = 0; i < 10; i++) keysToClear.push(`studentVueGradesQ${i}`);
-            
-            await AsyncStorage.multiRemove(keysToClear);
-            
-            if (Platform.OS === 'web') window.alert('Logged out successfully.');
-            else Alert.alert('Logged Out', 'Your data has been cleared.');
-        } catch (e) {
-            console.error('Logout error:', e);
-        }
-    };
-
-    const handleDeleteAccount = async () => {
-        const doDelete = () => new Promise((resolve) => {
-            if (Platform.OS === 'web') {
-                resolve(window.confirm('Permanently delete your account? All data will be removed forever.'));
-            } else {
-                Alert.alert('Delete Account', 'Permanently delete your account? All data will be removed forever.', [
-                    { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-                    { text: 'Delete Forever', style: 'destructive', onPress: () => resolve(true) }
-                ]);
-            }
-        });
-        if (!(await doDelete())) return;
-        try {
-            heavyImpact();
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user?.id) {
-                const uid = session.user.id;
-                await supabase.from('focus_scores').delete().eq('user_id', uid);
-                await supabase.from('friendships').delete().or(`user_id.eq.${uid},friend_id.eq.${uid}`);
-                await supabase.from('profiles').delete().eq('user_id', uid);
-            }
-            await AsyncStorage.clear();
-            await supabase.auth.signOut();
-            if (Platform.OS === 'web') window.alert('Account deleted.');
-            else Alert.alert('Deleted', 'Your account and data have been permanently removed.');
-        } catch (e) {
-            console.error('Delete error:', e);
-            if (Platform.OS === 'web') window.alert('Failed: ' + e.message);
-            else Alert.alert('Error', e.message);
-        }
-    };
-
     return (
         <ScrollView style={styles.container}>
             <View style={styles.headerContainer}>
@@ -588,53 +486,8 @@ export default function SettingsScreen() {
             </View>
 
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Account</Text>
-                <View style={styles.profileCard}>
-                    <View style={styles.profileInfo}>
-                        <View style={styles.avatar}>
-                            <User color="#fff" size={24} />
-                        </View>
-                        <View>
-                            <Text style={styles.profileEmail}>
-                                {supabase.auth.getUser()?.email || 'Logged In'}
-                            </Text>
-                            <Text style={styles.profileStatus}>Personal Account</Text>
-                        </View>
-                    </View>
-                    <TouchableOpacity style={styles.logoutBtn} onPress={logoutAction}>
-                        <RefreshCw size={16} color={theme.colors.red} />
-                        <Text style={styles.logoutText}>Sign Out</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Profile</Text>
                 <View style={[styles.card, { paddingBottom: 16 }]}>
-                    {/* Avatar Section */}
-                    <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                        <TouchableOpacity onPress={() => setShowAvatarPicker(true)} style={{ alignItems: 'center' }}>
-                            <View style={{
-                                width: 80, height: 80, borderRadius: 40,
-                                borderWidth: 3, borderColor: theme.colors.border,
-                                backgroundColor: theme.colors.surface2,
-                                alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-                            }}>
-                                {profile?.avatar_url ? (
-                                    <Image source={{ uri: profile.avatar_url }} style={{ width: 80, height: 80 }} />
-                                ) : profile?.avatar_preset && PRESET_AVATARS[profile.avatar_preset] ? (
-                                    <Text style={{ fontSize: 40 }}>{PRESET_AVATARS[profile.avatar_preset].emoji}</Text>
-                                ) : (
-                                    <User color={theme.colors.ink3} size={32} />
-                                )}
-                            </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                                <Camera size={12} color={theme.colors.ink3} />
-                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 }}>Change Avatar</Text>
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-
                     <Text style={styles.label}>Display Name</Text>
                     <TextInput
                         style={styles.input}
@@ -643,119 +496,7 @@ export default function SettingsScreen() {
                         value={userName}
                         onChangeText={handleSaveName}
                     />
-
-                    <Text style={[styles.label, { marginTop: 12 }]}>School Name</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="e.g. Lincoln High School"
-                        placeholderTextColor={theme.colors.ink3}
-                        value={schoolName}
-                        onChangeText={setSchoolName}
-                        onBlur={() => {
-                            if (schoolName.trim()) {
-                                updateProfile({ school_name: schoolName.trim() });
-                            }
-                        }}
-                    />
-                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink4, marginTop: 4 }}>
-                        Used for the school leaderboard
-                    </Text>
-
-                    {friendCode ? (
-                        <View style={{ marginTop: 14, alignItems: 'center' }}>
-                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
-                                Your Friend Code
-                            </Text>
-                            <TouchableOpacity
-                                style={{
-                                    flexDirection: 'row', alignItems: 'center', gap: 8,
-                                    backgroundColor: theme.colors.surface2, borderRadius: theme.radii.r,
-                                    paddingVertical: 8, paddingHorizontal: 16,
-                                }}
-                                onPress={() => {
-                                    if (Platform.OS === 'web') {
-                                        try { navigator.clipboard.writeText(friendCode); } catch {}
-                                        window.alert(`Copied: ${friendCode}`);
-                                    } else {
-                                        Alert.alert('Copied!', `Your friend code: ${friendCode}`);
-                                    }
-                                }}
-                            >
-                                <Text style={{ fontFamily: theme.fonts.d, fontSize: 20, fontWeight: '700', color: theme.colors.ink, letterSpacing: 3 }}>
-                                    {friendCode}
-                                </Text>
-                                <Copy size={14} color={theme.colors.ink} />
-                            </TouchableOpacity>
-                        </View>
-                    ) : null}
                 </View>
-
-                {/* Avatar Picker Modal */}
-                <Modal visible={showAvatarPicker} transparent animationType="fade">
-                    <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-                        <View style={{
-                            backgroundColor: theme.colors.surface, borderWidth: 3, borderColor: theme.colors.border,
-                            borderRadius: theme.radii.xl, padding: 24, width: '85%', maxWidth: 360,
-                            shadowColor: theme.colors.border, shadowOffset: { width: 6, height: 6 }, shadowOpacity: 1, shadowRadius: 0,
-                        }}>
-                            <Text style={{ fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, marginBottom: 16 }}>
-                                Choose Avatar
-                            </Text>
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center' }}>
-                                {Object.entries(PRESET_AVATARS).map(([key, { emoji, label }]) => (
-                                    <TouchableOpacity
-                                        key={key}
-                                        style={{
-                                            width: 60, height: 60, borderRadius: 30,
-                                            borderWidth: 2,
-                                            borderColor: profile?.avatar_preset === key ? theme.colors.ink : theme.colors.surface2,
-                                            backgroundColor: profile?.avatar_preset === key ? theme.colors.surface2 : theme.colors.surface,
-                                            alignItems: 'center', justifyContent: 'center',
-                                        }}
-                                        onPress={async () => {
-                                            const updated = await setPresetAvatar(key);
-                                            if (updated) setProfile(updated);
-                                            setShowAvatarPicker(false);
-                                        }}
-                                    >
-                                        <Text style={{ fontSize: 28 }}>{emoji}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                            <TouchableOpacity
-                                style={{ marginTop: 16, alignItems: 'center', paddingVertical: 10, borderWidth: 2, borderColor: theme.colors.border, borderRadius: theme.radii.r }}
-                                onPress={() => setShowAvatarPicker(false)}
-                            >
-                                <Text style={{ fontFamily: theme.fonts.b, fontSize: 14, color: theme.colors.ink }}>Cancel</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </Modal>
-
-                {/* Grade Notifications Toggle */}
-                <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Notifications</Text>
-                <TouchableOpacity
-                    style={styles.settingRow}
-                    onPress={async () => {
-                        const newVal = !gradeNotifs;
-                        setGradeNotifs(newVal);
-                        await setNotificationsEnabled(newVal);
-                    }}
-                    activeOpacity={0.7}
-                >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <View style={[styles.iconBox, { backgroundColor: theme.colors.surface2 }]}>
-                            {gradeNotifs ? <Bell size={20} color={theme.colors.ink} /> : <BellOff size={20} color={theme.colors.ink3} />}
-                        </View>
-                        <View>
-                            <Text style={styles.settingLabel}>Grade Notifications</Text>
-                            <Text style={styles.settingSub}>{gradeNotifs ? 'Enabled' : 'Disabled'} - alerts for new grades</Text>
-                        </View>
-                    </View>
-                    <View style={[styles.toggleContainer, gradeNotifs && { backgroundColor: theme.colors.accent }]}>
-                        <View style={[styles.toggleCircle, gradeNotifs && { transform: [{ translateX: 20 }] }]} />
-                    </View>
-                </TouchableOpacity>
 
                 <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Appearance</Text>
                 <TouchableOpacity
@@ -776,88 +517,6 @@ export default function SettingsScreen() {
                         <View style={[styles.toggleCircle, isDarkMode && { transform: [{ translateX: 20 }] }]} />
                     </View>
                 </TouchableOpacity>
-
-                <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Theme</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                    {Object.entries(THEME_PRESETS).map(([key, preset]) => (
-                        <TouchableOpacity
-                            key={key}
-                            style={{
-                                width: '30%', minWidth: 90,
-                                backgroundColor: themePreset === key ? theme.colors.ink : theme.colors.surface,
-                                borderWidth: 2, borderColor: theme.colors.border,
-                                borderRadius: theme.radii.lg, padding: 12, alignItems: 'center',
-                                shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 },
-                                shadowOpacity: 1, shadowRadius: 0, elevation: 3,
-                            }}
-                            onPress={() => { mediumImpact(); changePreset(key); }}
-                        >
-                            <View style={{ flexDirection: 'row', gap: 4, marginBottom: 8 }}>
-                                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: preset.light.bg, borderWidth: 1, borderColor: preset.light.border }} />
-                                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: preset.light.border }} />
-                                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: preset.light.accent || preset.light.ink }} />
-                            </View>
-                            <Text style={{
-                                fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600',
-                                color: themePreset === key ? theme.colors.bg : theme.colors.ink,
-                            }}>{preset.name}</Text>
-                            <Text style={{
-                                fontFamily: theme.fonts.m, fontSize: 9,
-                                color: themePreset === key ? theme.colors.bg : theme.colors.ink3,
-                                marginTop: 2,
-                            }}>{preset.description}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-
-                {/* ── Legal ── */}
-                <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Legal</Text>
-                <TouchableOpacity
-                    style={[styles.settingRow, { marginBottom: 10 }]}
-                    onPress={() => {
-                        if (Platform.OS === 'web') window.alert('Privacy Policy: Option collects grades, focus sessions, and profile data. Data is stored securely via Supabase. You can delete your account at any time.');
-                        else Alert.alert('Privacy Policy', 'Option collects grades, focus sessions, and profile data. Data is stored securely via Supabase. You can delete your account at any time.');
-                    }}
-                >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <View style={[styles.iconBox, { backgroundColor: theme.colors.surface2 }]}>
-                            <ExternalLink size={20} color={theme.colors.ink} />
-                        </View>
-                        <Text style={styles.settingLabel}>Privacy Policy</Text>
-                    </View>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.settingRow, { marginBottom: 10 }]}
-                    onPress={() => {
-                        if (Platform.OS === 'web') window.alert('Terms of Service: By using Option, you agree to use it as a supplementary educational tool. Option is not a substitute for direct communication with your school.');
-                        else Alert.alert('Terms of Service', 'By using Option, you agree to use it as a supplementary educational tool. Option is not a substitute for direct communication with your school.');
-                    }}
-                >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <View style={[styles.iconBox, { backgroundColor: theme.colors.surface2 }]}>
-                            <ExternalLink size={20} color={theme.colors.ink} />
-                        </View>
-                        <Text style={styles.settingLabel}>Terms of Service</Text>
-                    </View>
-                </TouchableOpacity>
-
-                {/* ── Danger Zone ── */}
-                <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Danger Zone</Text>
-                <TouchableOpacity
-                    style={[styles.settingRow, { borderColor: '#dc2626' }]}
-                    onPress={handleDeleteAccount}
-                >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <View style={[styles.iconBox, { backgroundColor: '#fef2f2' }]}>
-                            <Trash2 size={20} color="#dc2626" />
-                        </View>
-                        <View>
-                            <Text style={[styles.settingLabel, { color: '#dc2626' }]}>Delete Account</Text>
-                            <Text style={styles.settingSub}>Permanently delete all your data</Text>
-                        </View>
-                    </View>
-                </TouchableOpacity>
-
             </View>
 
             <View style={[styles.card, { borderLeftColor: theme.colors.blue, borderLeftWidth: 4 }]}>
@@ -1127,106 +786,6 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* ── Google Classroom ── */}
-            <View style={[styles.card, { borderLeftColor: theme.colors.green, borderLeftWidth: 4 }]}>
-                <Text style={styles.cardTitle}>Google Classroom</Text>
-                <Text style={styles.instructions}>Import courses and assignments from Google Classroom using your linked Google account.</Text>
-                <TouchableOpacity style={styles.actionBtn} onPress={async () => {
-                    if (!accessToken) { if (Platform.OS === 'web') window.alert('Link your Google account first.'); else Alert.alert('Not Linked', 'Link your Google account first.'); return; }
-                    mediumImpact();
-                    try {
-                        const result = await syncGoogleClassroom(accessToken);
-                        const msg = `Imported ${result.length} courses from Google Classroom.`;
-                        if (Platform.OS === 'web') window.alert(msg); else Alert.alert('Success', msg);
-                    } catch (err) { if (Platform.OS === 'web') window.alert('Failed: ' + err.message); else Alert.alert('Error', err.message); }
-                }}>
-                    <GraduationCap size={18} color={theme.colors.bg} />
-                    <Text style={styles.actionBtnText}>Sync Google Classroom</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* ── Canvas LMS ── */}
-            <View style={[styles.card, { borderLeftColor: theme.colors.red, borderLeftWidth: 4 }]}>
-                <Text style={styles.cardTitle}>Canvas LMS</Text>
-                <Text style={styles.instructions}>Connect to your school's Canvas with an API access token.</Text>
-                <Text style={styles.label}>Canvas URL</Text>
-                <TextInput style={styles.input} placeholder="https://yourschool.instructure.com" placeholderTextColor={theme.colors.ink3} autoCapitalize="none" onChangeText={(t) => AsyncStorage.setItem('canvasBaseUrl', t)} />
-                <Text style={styles.label}>Access Token</Text>
-                <TextInput style={styles.input} placeholder="Canvas API token" placeholderTextColor={theme.colors.ink3} secureTextEntry onChangeText={(t) => AsyncStorage.setItem('canvasToken', t)} />
-                <TouchableOpacity style={styles.actionBtn} onPress={async () => {
-                    mediumImpact();
-                    try {
-                        const baseUrl = await AsyncStorage.getItem('canvasBaseUrl');
-                        const token = await AsyncStorage.getItem('canvasToken');
-                        if (!baseUrl || !token) throw new Error('Enter your Canvas URL and token.');
-                        const result = await syncCanvas(baseUrl, token);
-                        if (Platform.OS === 'web') window.alert(`Imported ${result.length} courses.`); else Alert.alert('Success', `Imported ${result.length} courses.`);
-                    } catch (err) { if (Platform.OS === 'web') window.alert('Failed: ' + err.message); else Alert.alert('Error', err.message); }
-                }}>
-                    <Text style={styles.actionBtnText}>Sync Canvas</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* ── DeltaMath ── */}
-            <View style={[styles.card, { borderLeftColor: theme.colors.orange, borderLeftWidth: 4 }]}>
-                <Text style={styles.cardTitle}>DeltaMath</Text>
-                <Text style={styles.instructions}>Import DeltaMath assignments. Paste your session token from the browser cookie.</Text>
-                <Text style={styles.label}>Session Token</Text>
-                <TextInput style={styles.input} placeholder="DeltaMath session token" placeholderTextColor={theme.colors.ink3} secureTextEntry onChangeText={(t) => AsyncStorage.setItem('deltaMathToken', t)} />
-                <TouchableOpacity style={styles.actionBtn} onPress={async () => {
-                    mediumImpact();
-                    try {
-                        const token = await AsyncStorage.getItem('deltaMathToken');
-                        if (!token) throw new Error('Enter your DeltaMath session token.');
-                        const result = await syncDeltaMath(token);
-                        if (Platform.OS === 'web') window.alert(`Imported ${result.length} assignments.`); else Alert.alert('Success', `Imported ${result.length} assignments.`);
-                    } catch (err) { if (Platform.OS === 'web') window.alert('Failed: ' + err.message); else Alert.alert('Error', err.message); }
-                }}>
-                    <Calculator size={18} color={theme.colors.bg} />
-                    <Text style={styles.actionBtnText}>Sync DeltaMath</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* ── Pearson ── */}
-            <View style={[styles.card, { borderLeftColor: theme.colors.purple, borderLeftWidth: 4 }]}>
-                <Text style={styles.cardTitle}>Pearson Realize</Text>
-                <Text style={styles.instructions}>Import from Pearson Realize. Requires your session cookie.</Text>
-                <Text style={styles.label}>Session Cookie</Text>
-                <TextInput style={styles.input} placeholder="Pearson session cookie" placeholderTextColor={theme.colors.ink3} secureTextEntry onChangeText={(t) => AsyncStorage.setItem('pearsonCookie', t)} />
-                <TouchableOpacity style={styles.actionBtn} onPress={async () => {
-                    mediumImpact();
-                    try {
-                        const cookie = await AsyncStorage.getItem('pearsonCookie');
-                        if (!cookie) throw new Error('Enter your Pearson session cookie.');
-                        const result = await syncPearson(cookie);
-                        if (Platform.OS === 'web') window.alert(`Imported ${result.length} courses.`); else Alert.alert('Success', `Imported ${result.length} courses.`);
-                    } catch (err) { if (Platform.OS === 'web') window.alert('Failed: ' + err.message); else Alert.alert('Error', err.message); }
-                }}>
-                    <BookMarked size={18} color={theme.colors.bg} />
-                    <Text style={styles.actionBtnText}>Sync Pearson</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* ── Khan Academy ── */}
-            <View style={[styles.card, { borderLeftColor: theme.colors.blue, borderLeftWidth: 4 }]}>
-                <Text style={styles.cardTitle}>Khan Academy</Text>
-                <Text style={styles.instructions}>Track Khan Academy progress and mastery levels.</Text>
-                <Text style={styles.label}>API Token</Text>
-                <TextInput style={styles.input} placeholder="Khan Academy token" placeholderTextColor={theme.colors.ink3} secureTextEntry onChangeText={(t) => AsyncStorage.setItem('khanToken', t)} />
-                <TouchableOpacity style={styles.actionBtn} onPress={async () => {
-                    mediumImpact();
-                    try {
-                        const token = await AsyncStorage.getItem('khanToken');
-                        if (!token) throw new Error('Enter your Khan Academy token.');
-                        const result = await syncKhanAcademy(token);
-                        if (Platform.OS === 'web') window.alert(`Imported ${result.length} courses.`); else Alert.alert('Success', `Imported ${result.length} courses.`);
-                    } catch (err) { if (Platform.OS === 'web') window.alert('Failed: ' + err.message); else Alert.alert('Error', err.message); }
-                }}>
-                    <Brain size={18} color={theme.colors.bg} />
-                    <Text style={styles.actionBtnText}>Sync Khan Academy</Text>
-                </TouchableOpacity>
-            </View>
-
             <View style={styles.card}>
                 <Text style={styles.cardTitle}>Smart Scheduling</Text>
                 <Text style={styles.instructions}>Drag the nodes to define your available working hours per day. The AI Scheduler will only place tasks between the green (Start) and blue (End) lines.</Text>
@@ -1273,72 +832,16 @@ const getStyles = (theme) => StyleSheet.create({
 
     section: { marginBottom: 30 },
     sectionTitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 15 },
-    settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.colors.surface, padding: 16, borderRadius: theme.radii.lg, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
+    settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.colors.surface, padding: 16, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border },
     iconBox: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
     settingLabel: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink },
     settingSub: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink3, marginTop: 2 },
     toggleContainer: { width: 44, height: 24, borderRadius: 12, backgroundColor: theme.colors.surface2, padding: 2, justifyContent: 'center' },
     toggleCircle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
 
-    profileCard: {
-        backgroundColor: theme.colors.surface,
-        borderRadius: theme.radii.lg,
-        padding: 20,
-        borderWidth: 2,
-        borderColor: theme.colors.border,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        shadowColor: theme.colors.border,
-        shadowOffset: { width: 4, height: 4 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
-        elevation: 4,
-        marginBottom: 10,
-    },
-    profileInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    avatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: theme.colors.accent,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    profileEmail: {
-        fontFamily: theme.fonts.s,
-        fontSize: 16,
-        fontWeight: '700',
-        color: theme.colors.ink,
-    },
-    profileStatus: {
-        fontFamily: theme.fonts.m,
-        fontSize: 12,
-        color: theme.colors.ink3,
-        textTransform: 'uppercase',
-    },
-    logoutBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 8,
-        backgroundColor: theme.colors.red + '15',
-    },
-    logoutText: {
-        fontFamily: theme.fonts.b,
-        fontSize: 14,
-        color: theme.colors.red,
-        fontWeight: '700',
-    },
     card: {
-        backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border,
-        borderRadius: theme.radii.lg, padding: 24, marginBottom: 20, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
+        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
+        borderRadius: theme.radii.lg, padding: 24, marginBottom: 20
     },
     cardTitle: { fontFamily: theme.fonts.d, fontSize: 20, fontWeight: '600', color: theme.colors.ink, marginBottom: 10 },
     instructions: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, lineHeight: 20, marginBottom: 15 },
@@ -1353,51 +856,51 @@ const getStyles = (theme) => StyleSheet.create({
 
     label: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8, marginTop: 16 },
     input: {
-        backgroundColor: theme.colors.surface2, borderWidth: 2, borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
         borderRadius: theme.radii.r, padding: 14, fontFamily: theme.fonts.m, fontSize: 13,
-        color: theme.colors.ink, marginBottom: 12, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3
+        color: theme.colors.ink, marginBottom: 12
     },
 
     saveBtn: {
-        backgroundColor: theme.colors.accent, padding: 16, borderRadius: theme.radii.r,
-        alignItems: 'center', marginTop: 20, shadowColor: theme.colors.border, shadowOpacity: 1, shadowOffset: { width: 4, height: 4 }, shadowRadius: 0, elevation: 4,
-        borderWidth: 2, borderColor: theme.colors.border,
+        backgroundColor: '#FFFFFF', padding: 16, borderRadius: theme.radii.r,
+        alignItems: 'center', marginTop: 20, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4,
+        borderWidth: 1, borderColor: '#000000',
     },
-    saveBtnText: { color: '#000000', fontFamily: theme.fonts.b, fontSize: 20, letterSpacing: 1 },
+    saveBtnText: { color: '#000000', fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
 
     syncBtn: {
         backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
         padding: 14, borderRadius: theme.radii.r, alignItems: 'center', marginTop: 12,
     },
-    syncBtnText: { color: theme.colors.ink, fontFamily: theme.fonts.b, fontSize: 18, letterSpacing: 1 },
+    syncBtnText: { color: theme.colors.ink, fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600' },
 
     googleBtn: {
         backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
         padding: 14, borderRadius: theme.radii.r, alignItems: 'center', marginTop: 12,
         flexDirection: 'row', justifyContent: 'center', gap: 10,
     },
-    googleBtnText: { color: theme.colors.ink, fontFamily: theme.fonts.b, fontSize: 18, letterSpacing: 1 },
+    googleBtnText: { color: theme.colors.ink, fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600' },
 
     logoutBtn: {
         backgroundColor: theme.colors.red + '15', padding: 16, borderRadius: theme.radii.r,
         alignItems: 'center', marginTop: 40, borderWidth: 1, borderColor: theme.colors.red + '30',
     },
-    logoutBtnText: { color: theme.colors.red, fontFamily: theme.fonts.b, fontSize: 20, letterSpacing: 1 },
+    logoutBtnText: { color: theme.colors.red, fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
 
     actionBtn: {
-        backgroundColor: theme.colors.ink, paddingVertical: 14, paddingHorizontal: 24,
+        backgroundColor: '#FFFFFF', paddingVertical: 14, paddingHorizontal: 24,
         borderRadius: theme.radii.r, alignItems: 'center', justifyContent: 'center',
-        flexDirection: 'row', gap: 10, borderWidth: 2, borderColor: theme.colors.border,
-        shadowColor: theme.colors.border, shadowOpacity: 1, shadowOffset: { width: 4, height: 4 }, shadowRadius: 0, elevation: 4,
+        flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: '#000000',
+        shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5,
     },
-    actionBtnText: { color: theme.colors.bg, fontFamily: theme.fonts.b, fontSize: 18, letterSpacing: 1 },
+    actionBtnText: { color: '#000000', fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700' },
 
     actionBtnLight: {
-        backgroundColor: theme.colors.surface2, borderWidth: 2, borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border,
         paddingVertical: 14, paddingHorizontal: 24, borderRadius: theme.radii.r,
-        alignItems: 'center', justifyContent: 'center', shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
+        alignItems: 'center', justifyContent: 'center',
     },
-    actionBtnLightText: { fontFamily: theme.fonts.b, color: theme.colors.ink, fontSize: 18, letterSpacing: 1 },
+    actionBtnLightText: { fontFamily: theme.fonts.s, color: theme.colors.ink, fontSize: 16, fontWeight: '700' },
 
     progressBarTrack: { height: 4, backgroundColor: theme.colors.border, borderRadius: 2, marginTop: 12, overflow: 'hidden' },
     progressBarFill: { height: 4, width: '60%', backgroundColor: theme.colors.ink, borderRadius: 2 },

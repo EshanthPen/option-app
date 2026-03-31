@@ -15,7 +15,7 @@ import { ArrowRight, Sparkles } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
 
-const WelcomeScreen = ({ onAuthStart, onAuthReset }) => {
+const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
     const [authModalVisible, setAuthModalVisible] = useState(false);
 
     const handleCloseModal = () => {
@@ -40,12 +40,19 @@ const WelcomeScreen = ({ onAuthStart, onAuthReset }) => {
                     </View>
 
                     <View style={styles.footer}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.primaryButton}
                             onPress={() => setAuthModalVisible(true)}
                         >
                             <Text style={styles.buttonText}>Get Started</Text>
                             <ArrowRight size={20} color="#000" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.guestButton}
+                            onPress={onGuestMode}
+                        >
+                            <Text style={styles.guestButtonText}>Continue as Guest</Text>
                         </TouchableOpacity>
 
                         <Text style={styles.footerText}>
@@ -154,6 +161,20 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '700',
         color: '#000',
+    },
+    guestButton: {
+        height: 52,
+        borderRadius: 26,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.3)',
+    },
+    guestButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: 'rgba(255,255,255,0.7)',
     },
     footerText: {
         textAlign: 'center',

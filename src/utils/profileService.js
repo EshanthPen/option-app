@@ -219,17 +219,33 @@ export const getFriends = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user?.id) return [];
 
-        const { data, error } = await supabase
+        // Step 1: Get friend IDs from friendships table
+        const { data: friendships, error: fError } = await supabase
             .from('friendships')
-            .select('friend_id, profiles!friendships_friend_id_fkey(user_id, display_name, avatar_url, avatar_preset, focus_score_weekly, focus_score_monthly)')
+            .select('friend_id')
             .eq('user_id', session.user.id);
 
-        if (error) {
-            console.error('getFriends error:', error);
+        if (fError) {
+            console.error('getFriends friendships error:', fError);
             return [];
         }
 
-        return (data || []).map(f => f.profiles).filter(Boolean);
+        if (!friendships || friendships.length === 0) return [];
+
+        const friendIds = friendships.map(f => f.friend_id);
+
+        // Step 2: Fetch profiles for those friend IDs
+        const { data: profiles, error: pError } = await supabase
+            .from('profiles')
+            .select('user_id, display_name, avatar_url, avatar_preset, focus_score_weekly, focus_score_monthly')
+            .in('user_id', friendIds);
+
+        if (pError) {
+            console.error('getFriends profiles error:', pError);
+            return [];
+        }
+
+        return profiles || [];
     } catch (err) {
         console.error('getFriends error:', err);
         return [];
