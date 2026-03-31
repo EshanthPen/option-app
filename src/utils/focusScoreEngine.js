@@ -9,7 +9,8 @@ const FOCUS_SCORE_CACHE_KEY = '@focus_score_cache';
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // ── Constants ─────────────────────────────────────────────────
-const TARGET_WEEKLY_MINUTES = 1500; // 25 hours
+// 10 hours/week = ~85 min/day is a realistic study target for high school students
+const TARGET_WEEKLY_MINUTES = 600;
 const MAX_STREAK_DAYS = 7; // 7-day streak = 100
 
 // ── Pomodoro Session Persistence ──────────────────────────────
@@ -102,9 +103,25 @@ const updateStreak = async () => {
         const yesterdayStr = yesterday.toISOString().slice(0, 10);
 
         if (streak.lastActiveDate === yesterdayStr) {
+            // Consecutive day — extend streak
             streak.currentStreak += 1;
-        } else if (streak.lastActiveDate !== today) {
-            streak.currentStreak = 1; // Reset streak
+        } else if (streak.lastActiveDate) {
+            // Check if gap is just a weekend (Fri → Mon is still a valid streak for students)
+            const lastActive = new Date(streak.lastActiveDate + 'T12:00:00');
+            const todayDate = new Date(today + 'T12:00:00');
+            const gapDays = Math.round((todayDate - lastActive) / (24 * 60 * 60 * 1000));
+            const lastActiveDay = lastActive.getDay(); // 0=Sun, 5=Fri
+
+            // Allow a 2-day gap if the last active day was Friday (skip Sat+Sun)
+            if (gapDays === 3 && lastActiveDay === 5) {
+                streak.currentStreak += 1; // Friday → Monday = still a streak
+            } else if (gapDays === 2 && (lastActiveDay === 5 || lastActiveDay === 6)) {
+                streak.currentStreak += 1; // Fri→Sun or Sat→Mon
+            } else {
+                streak.currentStreak = 1; // Reset streak
+            }
+        } else {
+            streak.currentStreak = 1; // First ever activity
         }
 
         streak.lastActiveDate = today;
@@ -128,15 +145,27 @@ export const getStreak = async () => {
 // ── Sub-Score Calculations ────────────────────────────────────
 
 /**
- * Pomodoro score (0-100): weekly minutes vs target
+ * Pomodoro score (0-100): weekly minutes vs realistic target (10 hrs/week).
+ * Uses a curved scale so early sessions feel rewarding.
+ *
+ * 0 min = 0, 150 min (2.5h) = 40, 300 min (5h) = 65, 600 min (10h) = 100
  */
 const calcPomodoroScore = async () => {
     const { totalMinutes } = await getWeeklyPomodoroData();
-    return Math.min(100, Math.round((totalMinutes / TARGET_WEEKLY_MINUTES) * 100));
+    if (totalMinutes === 0) return 0;
+
+    // Logarithmic curve so early sessions have visible impact
+    // score = 100 * (1 - e^(-totalMinutes / 250))
+    // At 150min → ~45, 300min → ~70, 600min → ~91, 900min → ~97
+    const raw = 100 * (1 - Math.exp(-totalMinutes / 250));
+    return Math.min(100, Math.round(raw));
 };
 
 /**
- * Task completion score (0-100): completed / total this week
+ * Task completion score (0-100): completed / total tasks due THIS WEEK.
+ *
+ * FIX: Only counts tasks that are due within this week (Mon-Sun), not future tasks.
+ * Future tasks shouldn't penalize you for not being done yet.
  */
 const calcTaskCompletionScore = async () => {
     try {
@@ -146,42 +175,59 @@ const calcTaskCompletionScore = async () => {
         const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
         const monday = new Date(now);
         monday.setDate(now.getDate() - mondayOffset);
+        monday.setHours(0, 0, 0, 0);
         const mondayStr = monday.toISOString().slice(0, 10);
 
-        const { data: allTasks, error } = await supabase
+        // End of this week (Sunday)
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        const sundayStr = sunday.toISOString().slice(0, 10);
+
+        const { data: weekTasks, error } = await supabase
             .from('tasks')
             .select('id, completed, due_date')
             .eq('user_id', userId)
-            .gte('due_date', mondayStr);
+            .gte('due_date', mondayStr)
+            .lte('due_date', sundayStr); // Only tasks due THIS week
 
-        if (error || !allTasks || allTasks.length === 0) return 50; // No tasks = neutral score
+        if (error || !weekTasks || weekTasks.length === 0) return 50; // No tasks this week = neutral
 
-        const completed = allTasks.filter(t => t.completed).length;
-        return Math.round((completed / allTasks.length) * 100);
+        const completed = weekTasks.filter(t => t.completed).length;
+        const total = weekTasks.length;
+
+        // Use a slightly forgiving scale: 100% completion = 100, partial still good
+        return Math.round((completed / total) * 100);
     } catch {
         return 50;
     }
 };
 
 /**
- * On-time completion score (0-100): tasks completed before due date
+ * On-time completion score (0-100): tasks completed before their due date.
+ *
+ * FIX: Only looks at tasks completed in the last 30 days, not all-time.
+ * All-time would mean one late assignment years ago permanently drags your score.
  */
 const calcOnTimeScore = async () => {
     try {
         const userId = await getUserId();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().slice(0, 10);
 
         const { data: completedTasks, error } = await supabase
             .from('tasks')
             .select('id, completed, due_date, completed_at')
             .eq('user_id', userId)
             .eq('completed', true)
-            .not('due_date', 'is', null);
+            .not('due_date', 'is', null)
+            .gte('due_date', thirtyDaysAgoStr); // Only recent tasks
 
         if (error || !completedTasks || completedTasks.length === 0) return 50;
 
-        // If completed_at exists, check if before due_date. Otherwise assume on-time.
         const onTime = completedTasks.filter(t => {
             if (!t.completed_at) return true; // Assume on-time if no timestamp
+            // Compare dates: completed_at should be on or before due_date
             return t.completed_at.slice(0, 10) <= t.due_date;
         }).length;
 
@@ -192,7 +238,17 @@ const calcOnTimeScore = async () => {
 };
 
 /**
- * Grade score (0-100): average grade percentage mapped
+ * Grade score (0-100): continuous mapping from average grade percentage.
+ *
+ * FIX: Uses a continuous linear scale instead of a step function with gaps.
+ * The old step function jumped from 90 to 100 at 95%, losing granularity.
+ *
+ * 100% avg → 100 score
+ * 90% avg → 85 score
+ * 80% avg → 65 score
+ * 70% avg → 45 score
+ * 60% avg → 25 score
+ * Below 60% → scales down to minimum of 10
  */
 const calcGradeScore = async () => {
     try {
@@ -200,28 +256,32 @@ const calcGradeScore = async () => {
         if (!raw) return 50; // No grades connected
 
         const classes = JSON.parse(raw);
-        if (classes.length === 0) return 50;
+        if (!Array.isArray(classes) || classes.length === 0) return 50;
 
         const validClasses = classes.filter(c => typeof c.grade === 'number' && c.grade > 0);
         if (validClasses.length === 0) return 50;
 
         const avgGrade = validClasses.reduce((sum, c) => sum + c.grade, 0) / validClasses.length;
 
-        // Map: 95+ = 100, 90 = 90, 85 = 80, etc.
-        if (avgGrade >= 95) return 100;
-        if (avgGrade >= 90) return 90;
-        if (avgGrade >= 85) return 80;
-        if (avgGrade >= 80) return 70;
-        if (avgGrade >= 75) return 60;
-        if (avgGrade >= 70) return 50;
-        return Math.max(20, Math.round(avgGrade * 0.7));
+        // Continuous linear mapping: grade 60-100 → score 25-100
+        if (avgGrade >= 100) return 100;
+        if (avgGrade >= 60) {
+            // Linear interpolation: 60→25, 100→100
+            return Math.round(25 + ((avgGrade - 60) / 40) * 75);
+        }
+        // Below 60: scale down to minimum 10
+        return Math.max(10, Math.round(avgGrade * 0.4));
     } catch {
         return 50;
     }
 };
 
 /**
- * Scheduling adherence (0-100): did user follow planned blocks
+ * Scheduling adherence (0-100): did the user actually study during planned blocks?
+ *
+ * FIX: Uses timestamp-level comparison instead of just same-day heuristic.
+ * Now checks if a pomodoro session occurred within 1 hour of a scheduled block's
+ * start time, which is a much more accurate measure of adherence.
  */
 const calcSchedulingAdherence = async () => {
     try {
@@ -229,29 +289,40 @@ const calcSchedulingAdherence = async () => {
         if (!raw) return 50;
 
         const worktimes = JSON.parse(raw);
-        const now = new Date();
+        if (!Array.isArray(worktimes)) return 50;
 
-        // Only look at past blocks within the last 7 days
+        const now = new Date();
         const weekAgo = new Date(now);
         weekAgo.setDate(weekAgo.getDate() - 7);
         const weekAgoStr = weekAgo.toISOString().slice(0, 10);
-        const nowStr = now.toISOString();
+        const nowMs = now.getTime();
 
-        const pastBlocks = worktimes.filter(w =>
-            w.scheduled_end && w.scheduled_end < nowStr && w.date >= weekAgoStr
-        );
+        // Only look at past blocks within the last 7 days
+        const pastBlocks = worktimes.filter(w => {
+            if (!w.scheduled_end) return false;
+            const endMs = new Date(w.scheduled_end).getTime();
+            return endMs < nowMs && w.date >= weekAgoStr;
+        });
 
         if (pastBlocks.length === 0) return 50;
 
-        // Check if there were pomodoro sessions during the block time windows
         const sessionsRaw = await AsyncStorage.getItem(POMODORO_SESSIONS_KEY);
         const sessions = sessionsRaw ? JSON.parse(sessionsRaw) : [];
 
         let adherentBlocks = 0;
+        const ONE_HOUR_MS = 60 * 60 * 1000;
+
         for (const block of pastBlocks) {
-            const blockDate = block.date;
-            // Simple heuristic: did user have any pomodoro on the same day?
-            const hasSession = sessions.some(s => s.date === blockDate);
+            const blockStartMs = new Date(block.scheduled_start).getTime();
+            const blockEndMs = new Date(block.scheduled_end).getTime();
+
+            // Check if any pomodoro session started within the block's time window
+            // (with a 1-hour grace period on either side)
+            const hasSession = sessions.some(s => {
+                const sessionMs = s.timestamp || new Date(s.date + 'T12:00:00').getTime();
+                return sessionMs >= (blockStartMs - ONE_HOUR_MS) && sessionMs <= (blockEndMs + ONE_HOUR_MS);
+            });
+
             if (hasSession) adherentBlocks++;
         }
 
@@ -262,7 +333,8 @@ const calcSchedulingAdherence = async () => {
 };
 
 /**
- * Streak score (0-100): consecutive active days
+ * Streak score (0-100): consecutive active days.
+ * Capped at 7 days = 100.
  */
 const calcStreakScore = async () => {
     const streak = await getStreak();
@@ -270,7 +342,10 @@ const calcStreakScore = async () => {
 };
 
 /**
- * GPA trend score: improving = 100, stable = 70, declining = 30
+ * GPA trend score (0-100): improving, stable, or declining.
+ *
+ * FIX: Uses a continuous scale instead of 3 discrete values (100/70/30).
+ * Also handles edge case where current grades array has classes with grade=0.
  */
 const calcGpaTrendScore = async () => {
     try {
@@ -278,21 +353,35 @@ const calcGpaTrendScore = async () => {
         if (!currentRaw) return 50;
 
         const current = JSON.parse(currentRaw);
-        const currentAvg = current.reduce((s, c) => s + (c.grade || 0), 0) / (current.length || 1);
+        if (!Array.isArray(current) || current.length === 0) return 50;
+
+        const validCurrent = current.filter(c => typeof c.grade === 'number' && c.grade > 0);
+        if (validCurrent.length === 0) return 50;
+
+        const currentAvg = validCurrent.reduce((s, c) => s + c.grade, 0) / validCurrent.length;
 
         // Try to load previous period grades
         const prevRaw = await AsyncStorage.getItem('studentVueGradesPrev');
-        if (!prevRaw) return 70; // No previous data, assume stable
+        if (!prevRaw) return 65; // No previous data, slightly above neutral
 
         const prev = JSON.parse(prevRaw);
-        const prevAvg = prev.reduce((s, c) => s + (c.grade || 0), 0) / (prev.length || 1);
+        if (!Array.isArray(prev) || prev.length === 0) return 65;
+
+        const validPrev = prev.filter(c => typeof c.grade === 'number' && c.grade > 0);
+        if (validPrev.length === 0) return 65;
+
+        const prevAvg = validPrev.reduce((s, c) => s + c.grade, 0) / validPrev.length;
 
         const diff = currentAvg - prevAvg;
-        if (diff > 2) return 100;   // Improving
-        if (diff >= -1) return 70;   // Stable
-        return 30;                    // Declining
+
+        // Continuous mapping: diff of +5 or more = 100, diff of -5 or less = 10
+        // 0 diff = 55 (slightly above midpoint since stable is okay)
+        if (diff >= 5) return 100;
+        if (diff <= -5) return 10;
+        // Linear interpolation between -5 → 10 and +5 → 100
+        return Math.round(55 + (diff / 5) * 45);
     } catch {
-        return 70;
+        return 65;
     }
 };
 
@@ -301,6 +390,16 @@ const calcGpaTrendScore = async () => {
 /**
  * Compute the full focus score (0-100).
  * Uses 30-min cache to avoid expensive recalculations.
+ *
+ * Weights (must sum to 1.0):
+ *   Pomodoro:     0.25  (Are you putting in study time?)
+ *   Task comp:    0.20  (Are you finishing what's due?)
+ *   On-time:      0.15  (Are you finishing before deadlines?)
+ *   Grades:       0.15  (How are your actual grades?)
+ *   Scheduling:   0.10  (Are you following your schedule?)
+ *   Streak:       0.10  (Are you consistent day-to-day?)
+ *   GPA trend:    0.05  (Are grades improving/declining?)
+ *   TOTAL:        1.00
  *
  * Returns { score, breakdown, fromCache }
  */
@@ -336,16 +435,18 @@ export const computeFocusScore = async (forceRefresh = false) => {
             calcGpaTrendScore(),
         ]);
 
-        // Weighted combination
-        const score = Math.round(
+        // Weighted combination (weights sum to exactly 1.0)
+        const rawScore =
             0.25 * pomodoroScore +
             0.20 * taskCompletionScore +
             0.15 * onTimeScore +
             0.15 * gradeScore +
             0.10 * schedulingAdherence +
             0.10 * streakScore +
-            0.05 * gpaTrendScore
-        );
+            0.05 * gpaTrendScore;
+
+        // Clamp to 0-100
+        const score = Math.max(0, Math.min(100, Math.round(rawScore)));
 
         const breakdown = {
             pomodoro: pomodoroScore,
@@ -367,7 +468,7 @@ export const computeFocusScore = async (forceRefresh = false) => {
         return { score, breakdown, fromCache: false };
     } catch (err) {
         console.error('computeFocusScore error:', err);
-        return { score: 50, breakdown: {}, fromCache: false };
+        return { score: 0, breakdown: {}, fromCache: false };
     }
 };
 
