@@ -4,16 +4,14 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { BookOpen, CalendarDays, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react-native';
-import { theme as staticTheme } from '../utils/theme';
+import { BookOpen, CalendarDays, TrendingUp, TrendingDown, AlertTriangle, Award, AlertCircle, Lightbulb, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { computeFocusScore, syncScoreToSupabase, getScoreLabel } from '../utils/focusScoreEngine';
 import { generateNudges } from '../utils/studyNudges';
-import { checkAchievements, getUnlockedAchievements, ACHIEVEMENTS } from '../utils/achievements';
-import { lightImpact, successNotification } from '../utils/haptics';
+import { getUnlockedAchievements, ACHIEVEMENTS } from '../utils/achievements';
+import { lightImpact } from '../utils/haptics';
 import GradeTrendChart from '../components/GradeTrendChart';
 import SyncStatusBar from '../components/SyncStatusBar';
-import { Award, Zap, AlertCircle, Lightbulb, ChevronRight } from 'lucide-react-native';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -53,7 +51,7 @@ const getGreeting = () => {
     return 'Good evening';
 };
 
-const TODAY = new Date('2026-02-27');
+const TODAY = new Date();
 const fmt = (iso) => {
     const d = new Date(iso);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -155,7 +153,7 @@ export default function DashboardScreen() {
                         </View>
                         <View>
                             <Text style={styles.focusLabel}>Focus Score</Text>
-                            <Text style={styles.focusSub}>Excellent</Text>
+                            <Text style={styles.focusSub}>{focusLabel}</Text>
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -265,7 +263,7 @@ export default function DashboardScreen() {
                         </View>
                     </View>
                 </View>
-            </View>
+
             {/* ── Smart Nudges ── */}
             {nudges.length > 0 && (
                 <View style={{ marginTop: 24, width: '100%' }}>
@@ -350,6 +348,7 @@ export default function DashboardScreen() {
                     </View>
                 </View>
                 <GradeTrendChart />
+            </View>
             </View>
 
             <View style={{ height: 100 }} />

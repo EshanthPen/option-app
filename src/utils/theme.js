@@ -232,15 +232,18 @@ export const THEME_PRESETS = {
 // Keep backward compat
 export const colors = THEME_PRESETS.classic;
 
-export const getTheme = (isDark, presetKey = 'classic') => ({
-    colors: isDark ? THEME_PRESETS[presetKey].dark : THEME_PRESETS[presetKey].light,
-    fonts: {
-        d: 'CormorantGaramond-Bold',
-        m: 'CormorantGaramond-Regular',
-        s: 'CormorantGaramond-SemiBold',
-        b: 'CormorantGaramond-Bold',
-    },
-    radii: { r: 10, lg: 16, xl: 24, round: 9999 },
-});
+export const getTheme = (isDark, presetKey = 'classic') => {
+    const preset = THEME_PRESETS[presetKey] || THEME_PRESETS.classic;
+    return {
+        colors: isDark ? preset.dark : preset.light,
+        fonts: {
+            d: 'CormorantGaramond-Bold',
+            m: 'CormorantGaramond-Regular',
+            s: 'CormorantGaramond-SemiBold',
+            b: 'CormorantGaramond-Bold',
+        },
+        radii: { r: 10, lg: 16, xl: 24, round: 9999 },
+    };
+};
 
 export const theme = getTheme(false);

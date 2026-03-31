@@ -4,8 +4,8 @@ import { getUserId } from './auth';
 import { getWeeklyPomodoroData, getStreak } from './focusScoreEngine';
 
 // ── Constants ────────────────────────────────────────────────
-const WEEKLY_POMODORO_TARGET = 1500; // minutes
-const WEEKLY_POMODORO_LOW_THRESHOLD = 500; // below this = nudge
+const WEEKLY_POMODORO_TARGET = 600; // minutes (10 hrs/week, matches focusScoreEngine)
+const WEEKLY_POMODORO_LOW_THRESHOLD = 200; // below this = nudge (~3.3 hrs)
 const GRADE_DROP_THRESHOLD = 3; // percentage points
 const UPCOMING_DEADLINE_HOURS = 48; // 2 days
 const POMODORO_BREAK_THRESHOLD = 4; // sessions before break nudge
@@ -252,26 +252,38 @@ const checkGPABooster = async () => {
  */
 const checkAchievementProgress = async () => {
     try {
-        const { getAchievementProgress } = require('./achievements');
+        const { getAchievementProgress, getUnlockedAchievements } = require('./achievements');
         if (!getAchievementProgress) return [];
 
-        const achievements = await getAchievementProgress();
+        // Build a basic stats object from available data
+        const pomData = await getWeeklyPomodoroData();
+        const streak = await getStreak();
+        const unlocked = await getUnlockedAchievements();
+
+        const stats = {
+            totalPomodoros: pomData.totalMinutes > 0 ? Math.ceil(pomData.totalMinutes / 25) : 0,
+            currentStreak: streak.currentStreak || 0,
+        };
+
+        const achievements = getAchievementProgress(stats);
         if (!achievements || !Array.isArray(achievements)) return [];
 
+        // Filter out already unlocked
+        const unlockedSet = new Set(unlocked);
         const nudges = [];
 
         for (const achievement of achievements) {
-            const progress = achievement.progress || 0;
-            const target = achievement.target || 1;
-            const pct = (progress / target) * 100;
+            if (unlockedSet.has(achievement.id)) continue;
+
+            const pct = achievement.progress || 0;
 
             // Nudge if between 70% and 99% complete
             if (pct >= 70 && pct < 100) {
                 nudges.push({
-                    id: `achievement_${achievement.id || achievement.key}`,
+                    id: `achievement_${achievement.id}`,
                     type: TYPES.ACHIEVEMENT,
                     title: 'Achievement Almost Unlocked!',
-                    message: `You're ${Math.round(pct)}% of the way to "${achievement.title || achievement.name}". Keep going!`,
+                    message: `You're ${Math.round(pct)}% of the way to "${achievement.title}". Keep going!`,
                     priority: 2,
                     action: 'navigate_leaderboard',
                     actionLabel: 'View Achievements',
