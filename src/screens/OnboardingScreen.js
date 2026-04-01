@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BookOpen, Timer, Trophy, Sparkles, ArrowRight, Check } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const ONBOARDING_KEY = 'hasCompletedOnboarding';
 
@@ -51,11 +51,14 @@ const slides = [
     },
 ];
 
+const isWeb = Platform.OS === 'web';
+
 const OnboardingScreen = ({ onComplete }) => {
     const { theme } = useTheme();
     const scrollRef = useRef(null);
     const [activeIndex, setActiveIndex] = useState(0);
 
+    // Native only: sync index from scroll position
     const handleScroll = useCallback((event) => {
         const offsetX = event.nativeEvent.contentOffset.x;
         const index = Math.round(offsetX / width);
@@ -68,10 +71,13 @@ const OnboardingScreen = ({ onComplete }) => {
         const nextIndex = activeIndex + 1;
         if (nextIndex < slides.length) {
             setActiveIndex(nextIndex);
-            scrollRef.current?.scrollTo({
-                x: nextIndex * width,
-                animated: true,
-            });
+            // On native, also scroll the ScrollView
+            if (!isWeb) {
+                scrollRef.current?.scrollTo({
+                    x: nextIndex * width,
+                    animated: true,
+                });
+            }
         }
     }, [activeIndex]);
 
@@ -85,53 +91,46 @@ const OnboardingScreen = ({ onComplete }) => {
     }, [onComplete]);
 
     const isLast = activeIndex === slides.length - 1;
-
     const s = styles(theme);
+
+    // ── Render a single slide ──
+    const renderSlide = (slide) => {
+        const { Icon, title, subtitle, description } = slide;
+        return (
+            <View key={slide.key} style={isWeb ? s.slideWeb : s.slide}>
+                <View style={s.iconWrapper}>
+                    <View style={s.iconBox}>
+                        <Icon size={48} color={theme.colors.bg} strokeWidth={1.8} />
+                    </View>
+                    <View style={s.iconShadow} />
+                </View>
+                <Text style={s.title}>{title}</Text>
+                <Text style={s.subtitle}>{subtitle}</Text>
+                <View style={s.divider} />
+                <Text style={s.description}>{description}</Text>
+            </View>
+        );
+    };
 
     return (
         <View style={s.container}>
-            <ScrollView
-                ref={scrollRef}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={handleScroll}
-                onScroll={Platform.OS === 'web' ? handleScroll : undefined}
-                scrollEventThrottle={16}
-                bounces={false}
-            >
-                {slides.map((slide, index) => {
-                    const { Icon, title, subtitle, description } = slide;
-                    return (
-                        <View key={slide.key} style={s.slide}>
-                            {/* Icon container */}
-                            <View style={s.iconWrapper}>
-                                <View style={s.iconBox}>
-                                    <Icon
-                                        size={48}
-                                        color={theme.colors.bg}
-                                        strokeWidth={1.8}
-                                    />
-                                </View>
-                                {/* Offset shadow */}
-                                <View style={s.iconShadow} />
-                            </View>
-
-                            {/* Title */}
-                            <Text style={s.title}>{title}</Text>
-
-                            {/* Subtitle */}
-                            <Text style={s.subtitle}>{subtitle}</Text>
-
-                            {/* Divider */}
-                            <View style={s.divider} />
-
-                            {/* Description */}
-                            <Text style={s.description}>{description}</Text>
-                        </View>
-                    );
-                })}
-            </ScrollView>
+            {/* On web: just render the active slide. No ScrollView needed. */}
+            {/* On native: use horizontal paging ScrollView. */}
+            {isWeb ? (
+                renderSlide(slides[activeIndex])
+            ) : (
+                <ScrollView
+                    ref={scrollRef}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    onMomentumScrollEnd={handleScroll}
+                    scrollEventThrottle={16}
+                    bounces={false}
+                >
+                    {slides.map((slide) => renderSlide(slide))}
+                </ScrollView>
+            )}
 
             {/* Bottom controls */}
             <View style={s.footer}>
@@ -140,10 +139,7 @@ const OnboardingScreen = ({ onComplete }) => {
                     {slides.map((_, i) => (
                         <View
                             key={i}
-                            style={[
-                                s.dot,
-                                i === activeIndex && s.dotActive,
-                            ]}
+                            style={[s.dot, i === activeIndex && s.dotActive]}
                         />
                     ))}
                 </View>
@@ -164,7 +160,6 @@ const OnboardingScreen = ({ onComplete }) => {
                             <ArrowRight size={20} color={theme.colors.bg} strokeWidth={2.5} />
                         )}
                     </View>
-                    {/* Button offset shadow */}
                     <View style={s.buttonShadow} />
                 </TouchableOpacity>
             </View>
@@ -178,8 +173,17 @@ const styles = (theme) =>
             flex: 1,
             backgroundColor: theme.colors.bg,
         },
+        // Native: fixed-width slide inside horizontal ScrollView
         slide: {
             width,
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 40,
+            paddingBottom: 160,
+        },
+        // Web: centered slide filling the screen
+        slideWeb: {
             flex: 1,
             justifyContent: 'center',
             alignItems: 'center',
