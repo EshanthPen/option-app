@@ -299,12 +299,12 @@ const getStyles = (theme) => StyleSheet.create({
     subtitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginTop: 3 },
 
     scoreCard: {
-        backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
         borderRadius: theme.radii.lg, padding: 20, flexDirection: 'row', alignItems: 'center',
-        marginBottom: 16, gap: 20, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
+        marginBottom: 16, gap: 20, ...theme.shadows.sm
     },
     scoreLeft: { flex: 1 },
-    scoreNum: { fontFamily: theme.fonts.d, fontSize: 56, fontWeight: '900', color: theme.colors.ink, letterSpacing: -2, lineHeight: 64 },
+    scoreNum: { fontFamily: theme.fonts.d, fontSize: 42, fontWeight: '700', color: theme.colors.ink, letterSpacing: -2, lineHeight: 50 },
     scoreLabel: { fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '700', marginTop: 2 },
     scoreDesc: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 },
     scoreRight: { alignItems: 'center', gap: 10 },
@@ -317,8 +317,8 @@ const getStyles = (theme) => StyleSheet.create({
     sessionLabel: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.8 },
 
     card: {
-        backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border,
-        borderRadius: theme.radii.lg, padding: 20, marginBottom: 16, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
+        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
+        borderRadius: theme.radii.lg, padding: 20, marginBottom: 16, ...theme.shadows.sm
     },
     cardTitle: { fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink, marginBottom: 4 },
     cardSub: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
@@ -330,10 +330,10 @@ const getStyles = (theme) => StyleSheet.create({
     timerProgressFill: { height: 4, borderRadius: 2 },
     timeDisplay: { fontFamily: theme.fonts.d, fontSize: 64, fontWeight: '300', color: theme.colors.ink, textAlign: 'center', letterSpacing: -2, marginBottom: 20 },
     timerButtonRow: { flexDirection: 'row', gap: 12, justifyContent: 'center' },
-    timerBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 24, borderRadius: theme.radii.lg, gap: 8, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
-    timerBtnText: { fontFamily: theme.fonts.b, color: '#fff', fontSize: 22, letterSpacing: 1 },
-    timerBtnOut: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 20, borderRadius: theme.radii.lg, gap: 8, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3 },
-    timerBtnOutText: { fontFamily: theme.fonts.b, color: theme.colors.ink2, fontSize: 20, letterSpacing: 1 },
+    timerBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 24, borderRadius: theme.radii.lg, gap: 8, ...theme.shadows.sm },
+    timerBtnText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15 },
+    timerBtnOut: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 20, borderRadius: theme.radii.lg, gap: 8, borderWidth: 1, borderColor: theme.colors.border },
+    timerBtnOutText: { fontFamily: theme.fonts.s, color: theme.colors.ink2, fontSize: 14 },
 
     tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 10 },
     tipEmoji: { fontSize: 16, width: 22 },

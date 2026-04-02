@@ -4,8 +4,11 @@
     {
       "name": "expo-web",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["expo", "start", "--web"],
-      "port": 8081
+      "runtimeArgs": ["expo", "start", "--web", "--offline"],
+      "port": 8081,
+      "env": {
+        "EXPO_OFFLINE": "1"
+      }
     }
   ]
 }

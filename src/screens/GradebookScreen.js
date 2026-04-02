@@ -723,7 +723,7 @@ const getStyles = (theme) => StyleSheet.create({
 
     // Header
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 52, paddingBottom: 12 },
-    title: { fontFamily: theme.fonts.d, fontSize: 36, fontWeight: '700', color: theme.colors.ink, letterSpacing: -1 },
+    title: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
     titleSub: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2 },
     backBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
     backTxt: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },
@@ -733,19 +733,19 @@ const getStyles = (theme) => StyleSheet.create({
     // Quarter tabs
     tabsScroll: { paddingLeft: 24, marginBottom: 10, flexGrow: 0 },
     tabsContent: { gap: 8, paddingRight: 24 },
-    qTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border, flexDirection: 'row', alignItems: 'center', shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3 },
+    qTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, flexDirection: 'row', alignItems: 'center', ...theme.shadows.sm },
     qTabActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
     qTabTxt: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2, fontWeight: '700' },
     qTabTxtActive: { color: theme.colors.bg, fontWeight: '700' },
 
     // Class list
     listContent: { paddingHorizontal: 20, paddingTop: 4 },
-    gpaBanner: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border, borderRadius: 16, padding: 18, marginBottom: 16, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
+    gpaBanner: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 16, padding: 18, marginBottom: 16, ...theme.shadows.sm },
     gpaBannerLabel: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 },
-    gpaBannerVal: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '900', color: theme.colors.ink, letterSpacing: -1 },
+    gpaBannerVal: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '700', color: theme.colors.ink, letterSpacing: -1 },
 
     // Class card
-    classCard: { backgroundColor: theme.colors.surface, borderRadius: 16, borderWidth: 2, borderColor: theme.colors.border, marginBottom: 16, overflow: 'hidden', flexDirection: 'row', shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
+    classCard: { backgroundColor: theme.colors.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 16, overflow: 'hidden', flexDirection: 'row', ...theme.shadows.sm },
     classCardAccent: { width: 5 },
     classCardBody: { flex: 1, padding: 16, flexDirection: 'row', alignItems: 'center' },
     classCardTags: { flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 6 },
@@ -753,7 +753,7 @@ const getStyles = (theme) => StyleSheet.create({
     teacherTxt: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 3 },
     periodTxt: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3 },
     gradeBlock: { alignItems: 'flex-end', marginLeft: 12 },
-    gradeLetterBig: { fontFamily: theme.fonts.d, fontSize: 42, fontWeight: '900', letterSpacing: -1, lineHeight: 48 },
+    gradeLetterBig: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', letterSpacing: -1, lineHeight: 38 },
     gradePctSmall: { fontFamily: theme.fonts.m, fontSize: 11, fontWeight: '600' },
 
     // Tags
@@ -763,7 +763,7 @@ const getStyles = (theme) => StyleSheet.create({
     tagTxt: { fontFamily: theme.fonts.m, fontSize: 8, fontWeight: '700', color: theme.colors.ink2, letterSpacing: 0.5, textTransform: 'uppercase' },
 
     // Detail view
-    detailHeader: { margin: 20, marginBottom: 12, backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border, borderRadius: 16, padding: 18, flexDirection: 'row', alignItems: 'flex-start', borderLeftWidth: 5, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
+    detailHeader: { margin: 20, marginBottom: 12, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 16, padding: 18, flexDirection: 'row', alignItems: 'flex-start', borderLeftWidth: 3, ...theme.shadows.md },
     detailName: { fontFamily: theme.fonts.d, fontSize: 24, fontWeight: '700', color: theme.colors.ink, marginBottom: 4, lineHeight: 28 },
     detailMeta: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginBottom: 8 },
     detailTags: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
@@ -774,42 +774,42 @@ const getStyles = (theme) => StyleSheet.create({
     detailTabTxtActive: { color: theme.colors.ink, fontWeight: '700' },
 
     // Assignments
-    catHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 6, borderBottomWidth: 2, borderBottomColor: theme.colors.border, marginBottom: 6 },
+    catHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: theme.colors.border, marginBottom: 6 },
     catLabel: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink, letterSpacing: 2 },
     catAvg: { fontFamily: theme.fonts.m, fontSize: 10, fontWeight: '700' },
-    asgnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 16, marginHorizontal: 20, backgroundColor: theme.colors.surface, borderRadius: 10, borderWidth: 2, borderColor: theme.colors.border, marginBottom: 8, borderLeftWidth: 4, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3 },
+    asgnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 16, marginHorizontal: 20, backgroundColor: theme.colors.surface, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 8, borderLeftWidth: 3, ...theme.shadows.sm },
     asgnName: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '500', color: theme.colors.ink, lineHeight: 18 },
     asgnDate: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 2 },
     asgnScore: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '700' },
     asgnPct: { fontFamily: theme.fonts.m, fontSize: 10 },
 
     // What-If
-    wiBreakdown: { marginHorizontal: 20, marginBottom: 16, backgroundColor: theme.colors.surface, borderRadius: 14, borderWidth: 2, borderColor: theme.colors.border, padding: 16, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
+    wiBreakdown: { marginHorizontal: 20, marginBottom: 16, backgroundColor: theme.colors.surface, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, padding: 16, ...theme.shadows.sm },
     wiBreakdownTitle: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '700', color: theme.colors.ink, marginBottom: 12 },
     wiCatRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
     wiCatName: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink },
     wiCatWeight: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3 },
-    wiCatPct: { fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '800' },
+    wiCatPct: { fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700' },
 
     // Inputs
     inputLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8, marginTop: 14, paddingHorizontal: 20 },
-    input: { backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border, borderRadius: 10, padding: 13, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, marginHorizontal: 20, marginBottom: 0, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3 },
+    input: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, padding: 13, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, marginHorizontal: 20, marginBottom: 0 },
     segRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 4 },
-    seg: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10, backgroundColor: theme.colors.surface2, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3 },
+    seg: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
     segActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
     segTxt: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink },
     segTxtActive: { color: theme.colors.bg, fontWeight: '700' },
-    calcBtn: { backgroundColor: theme.colors.accent, borderRadius: 12, padding: 15, alignItems: 'center', marginHorizontal: 20, marginTop: 12, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
-    calcBtnTxt: { fontFamily: theme.fonts.b, fontSize: 22, color: theme.colors.bg, letterSpacing: 1.5 },
+    calcBtn: { backgroundColor: theme.colors.accent, borderRadius: 12, padding: 14, alignItems: 'center', marginHorizontal: 20, marginTop: 12, ...theme.shadows.sm },
+    calcBtnTxt: { fontFamily: theme.fonts.s, fontSize: 15, color: theme.colors.bg, letterSpacing: 0.5 },
 
     // Result card
-    resultCard: { marginHorizontal: 20, marginTop: 24, backgroundColor: theme.colors.surface, borderRadius: 16, borderWidth: 2, borderColor: theme.colors.border, padding: 20, alignItems: 'center', shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
+    resultCard: { marginHorizontal: 20, marginTop: 24, backgroundColor: theme.colors.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, padding: 20, alignItems: 'center', ...theme.shadows.sm },
     resultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', width: '100%' },
     resultCol: { alignItems: 'center', flex: 1 },
     resultColLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, textAlign: 'center' },
-    resultColVal: { fontFamily: theme.fonts.d, fontSize: 26, fontWeight: '900', letterSpacing: -1 },
+    resultColVal: { fontFamily: theme.fonts.d, fontSize: 26, fontWeight: '700', letterSpacing: -1 },
     resultDivider: { width: 1, height: 40, backgroundColor: theme.colors.border },
-    resultBig: { fontFamily: theme.fonts.d, fontSize: 40, fontWeight: '900', letterSpacing: -1, marginVertical: 10 },
+    resultBig: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', letterSpacing: -1, marginVertical: 10 },
 
     // FAB
     fab: { position: 'absolute', bottom: 32, right: 24, backgroundColor: theme.colors.accent, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: theme.colors.accent, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8 },

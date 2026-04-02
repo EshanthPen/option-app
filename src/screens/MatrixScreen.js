@@ -596,7 +596,7 @@ export default function MatrixScreen() {
                                                     <Text style={[
                                                         styles.eventText,
                                                         { color: c.text },
-                                                        isHigh && { fontSize: 11, fontWeight: '900' },
+                                                        isHigh && { fontSize: 11, fontWeight: '700' },
                                                         isMed && { fontWeight: '700' }
                                                     ]} numberOfLines={1}>
                                                         {t.type === 'worktime' ? '🎯 ' : ''}{t.title}
@@ -813,7 +813,7 @@ export default function MatrixScreen() {
 
                         <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ gap: 16 }}>
                             {pendingImports.map((item, idx) => (
-                                <View key={idx} style={{ backgroundColor: theme.colors.surface2, padding: 16, borderRadius: theme.radii.lg, borderWidth: 2, borderColor: theme.colors.border }}>
+                                <View key={idx} style={{ backgroundColor: theme.colors.surface2, padding: 16, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border }}>
                                     <Text style={[styles.eventText, { fontSize: 15, color: theme.colors.ink, marginBottom: 4 }]} numberOfLines={2}>{item.title}</Text>
                                     <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginBottom: 12 }}>Due: {item.due_date}</Text>
 
@@ -892,7 +892,7 @@ export default function MatrixScreen() {
                                 const sessionMin = parseInt(item.sessionLength) || 50;
                                 const numSessions = sessionMin > 0 ? Math.ceil(totalMin / sessionMin) : 0;
                                 return (
-                                    <View key={item.id || idx} style={{ backgroundColor: theme.colors.surface2, padding: 16, borderRadius: theme.radii.lg, borderWidth: 2, borderColor: theme.colors.border }}>
+                                    <View key={item.id || idx} style={{ backgroundColor: theme.colors.surface2, padding: 16, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border }}>
                                         <Text style={[styles.eventText, { fontSize: 15, color: theme.colors.ink, marginBottom: 4 }]} numberOfLines={2}>{item.title}</Text>
                                         <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginBottom: 12 }}>
                                             Due: {item.due_date || 'No due date'}
@@ -970,32 +970,32 @@ const getStyles = (theme) => StyleSheet.create({
     title: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
     subtitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 },
     btnRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-    btnDark: { backgroundColor: theme.colors.accent, flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: theme.radii.r, gap: 8, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
-    btnDarkText: { color: '#fff', fontFamily: theme.fonts.b, fontSize: 18, letterSpacing: 1 },
-    saveButton: { backgroundColor: theme.colors.accent, padding: 16, borderRadius: theme.radii.lg, alignItems: 'center', marginTop: 20, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
-    saveButtonText: { color: '#fff', fontFamily: theme.fonts.b, fontSize: 20, letterSpacing: 1 },
-    btnOut: { borderWidth: 2, borderColor: theme.colors.border, padding: 10, borderRadius: theme.radii.r, alignItems: 'center', backgroundColor: theme.colors.surface, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3 },
-    btnOutText: { color: theme.colors.ink, fontFamily: theme.fonts.b, fontSize: 18, letterSpacing: 1 },
+    btnDark: { backgroundColor: theme.colors.accent, flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: theme.radii.r, gap: 8, ...theme.shadows.sm },
+    btnDarkText: { color: '#fff', fontFamily: theme.fonts.s, fontSize: 14 },
+    saveButton: { backgroundColor: theme.colors.accent, padding: 14, borderRadius: theme.radii.lg, alignItems: 'center', marginTop: 20, ...theme.shadows.sm },
+    saveButtonText: { color: '#fff', fontFamily: theme.fonts.s, fontSize: 15 },
+    btnOut: { borderWidth: 1, borderColor: theme.colors.border, padding: 10, borderRadius: theme.radii.r, alignItems: 'center', backgroundColor: theme.colors.surface },
+    btnOutText: { color: theme.colors.ink, fontFamily: theme.fonts.s, fontSize: 14 },
 
-    legend: { backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 16, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 20, marginBottom: 18, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
+    legend: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 16, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 20, marginBottom: 18, ...theme.shadows.sm },
     legendTitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 2, textTransform: 'uppercase', marginRight: 4 },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     swatch: { width: 14, height: 14, borderRadius: 3, borderWidth: 1.5 },
     legendText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink2, fontWeight: '500' },
 
     controlsRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 12 },
-    ctrlBtn: { borderWidth: 2, borderColor: theme.colors.border, padding: 5, borderRadius: theme.radii.r, shadowColor: theme.colors.border, shadowOffset: { width: 2, height: 2 }, shadowOpacity: 1, shadowRadius: 0, elevation: 2 },
+    ctrlBtn: { borderWidth: 1, borderColor: theme.colors.border, padding: 5, borderRadius: theme.radii.r },
     monthText: { fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink },
 
     daysRow: { flexDirection: 'row', marginBottom: 4 },
     dayText: { width: CELL_W, textAlign: 'center', fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.8 },
 
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
-    cell: { backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border, borderRadius: 5, padding: 4, overflow: 'hidden' },
+    cell: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 5, padding: 4, overflow: 'hidden' },
     cellEmpty: { backgroundColor: theme.colors.surface2, opacity: 0.4 },
-    cellToday: { borderColor: theme.colors.ink, borderWidth: 2 },
+    cellToday: { borderColor: theme.colors.ink, borderWidth: 1.5 },
     cellNum: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '700', color: theme.colors.ink2, marginBottom: 4 },
-    numToday: { color: theme.colors.ink, fontWeight: '900' },
+    numToday: { color: theme.colors.ink, fontWeight: '700' },
     cellSelected: { backgroundColor: theme.colors.surface2, borderColor: theme.colors.ink, borderWidth: 1.5 },
     event: { paddingVertical: 2, paddingHorizontal: 4, borderRadius: 4, marginBottom: 3 },
     eventText: { fontFamily: theme.fonts.s, fontSize: 10, fontWeight: '700' },
@@ -1003,14 +1003,14 @@ const getStyles = (theme) => StyleSheet.create({
 
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-    modalView: { width: '100%', maxWidth: 400, backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, padding: 24, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 6, height: 6 }, shadowOpacity: 1, shadowRadius: 0, elevation: 6 },
+    modalView: { width: '100%', maxWidth: 400, backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, padding: 24, borderWidth: 1, borderColor: theme.colors.border, ...theme.shadows.lg },
     modalTitle: { fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, marginBottom: 12, letterSpacing: -0.5 },
     instructions: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, lineHeight: 20, marginBottom: 15 },
     label: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 5 },
-    input: { backgroundColor: theme.colors.surface2, borderWidth: 2, borderColor: theme.colors.border, borderRadius: theme.radii.r, paddingVertical: 10, paddingHorizontal: 12, fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink, marginBottom: 14, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3 },
+    input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, paddingVertical: 10, paddingHorizontal: 12, fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink, marginBottom: 14 },
 
     // Mini calendar
-    miniCalWrap: { backgroundColor: theme.colors.surface2, borderWidth: 2, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, marginBottom: 14, marginTop: -8, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
+    miniCalWrap: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, marginBottom: 14, marginTop: -8 },
     miniCalNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
     miniCalMonth: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '700', color: theme.colors.ink },
     miniDaysRow: { flexDirection: 'row', marginBottom: 4 },
@@ -1022,7 +1022,7 @@ const getStyles = (theme) => StyleSheet.create({
     miniCellNumSelected: { color: '#fff', fontWeight: '700' },
 
     // Sidebar
-    sidebar: { backgroundColor: theme.colors.surface, borderLeftWidth: 2, borderTopWidth: 2, borderColor: theme.colors.border },
+    sidebar: { backgroundColor: theme.colors.surface, borderLeftWidth: 1, borderTopWidth: 1, borderColor: theme.colors.border },
     sidebarWide: { width: SIDEBAR_W, borderTopWidth: 0 },
     sidebarMobile: { height: 280, borderLeftWidth: 0 },
     sidebarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
@@ -1035,12 +1035,12 @@ const getStyles = (theme) => StyleSheet.create({
 
     sidebarTask: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
     sidebarTaskActive: { backgroundColor: theme.colors.surface2 },
-    checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.border2, alignItems: 'center', justifyContent: 'center' },
+    checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: theme.colors.border2, alignItems: 'center', justifyContent: 'center' },
     checkboxActive: { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink },
     checkboxInner: { width: 8, height: 8, borderRadius: 1.5, backgroundColor: '#fff' },
     sidebarTaskTitle: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink },
     sidebarTaskMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
     miniSwatch: { width: 8, height: 8, borderRadius: 4 },
     sidebarTaskPrio: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.5 },
-    sidebarBlockBtn: { padding: 10, borderRadius: 8, backgroundColor: theme.colors.surface2, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0, elevation: 3 },
+    sidebarBlockBtn: { padding: 10, borderRadius: 8, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
 });

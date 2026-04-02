@@ -1,13 +1,14 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, CalendarDays, BookOpen, Settings, Timer, Trophy } from 'lucide-react-native';
+import { Home, CalendarDays, BookOpen, Settings, Timer, Trophy, Plug } from 'lucide-react-native';
 import DashboardScreen from '../screens/DashboardScreen';
 import MatrixScreen from '../screens/MatrixScreen';
 import GradebookScreen from '../screens/GradebookScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ScreentimeScreen from '../screens/ScreentimeScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
+import IntegrationsScreen from '../screens/IntegrationsScreen';
 import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
 
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
     { name: 'Gradebook', label: 'Gradebook', Icon: BookOpen },
     { name: 'Focus', label: 'Focus', Icon: Timer },
     { name: 'Leaderboard', label: 'Leaderboard', Icon: Trophy },
+    { name: 'Integrations', label: 'Integrations', Icon: Plug },
     { name: 'Settings', label: 'Settings', Icon: Settings },
 ];
 
@@ -81,6 +83,7 @@ export default function TabNavigator({ isGuest, onSignOut }) {
             <Tab.Screen name="Gradebook" component={GradebookScreen} options={{ tabBarLabel: 'Gradebook' }} />
             <Tab.Screen name="Focus" component={ScreentimeScreen} options={{ tabBarLabel: 'Focus' }} />
             <Tab.Screen name="Leaderboard" component={LeaderboardScreen} options={{ tabBarLabel: 'Leaderboard' }} />
+            <Tab.Screen name="Integrations" component={IntegrationsScreen} options={{ tabBarLabel: 'Integrations' }} />
             <Tab.Screen name="Settings">
                 {(props) => <SettingsScreen {...props} isGuest={isGuest} onSignOut={onSignOut} />}
             </Tab.Screen>

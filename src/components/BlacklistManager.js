@@ -74,16 +74,12 @@ export default function BlacklistManager({ blacklist, onAdd, onRemove }) {
 const getStyles = (theme) => StyleSheet.create({
     container: {
         backgroundColor: theme.colors.surface,
-        borderWidth: 2,
+        borderWidth: 1,
         borderColor: theme.colors.border,
         borderRadius: theme.radii.lg,
         padding: 20,
         marginBottom: 16,
-        shadowColor: theme.colors.border,
-        shadowOffset: { width: 4, height: 4 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
-        elevation: 4
+        ...theme.shadows.sm
     },
     headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
     title: { fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink },
@@ -91,12 +87,12 @@ const getStyles = (theme) => StyleSheet.create({
     subtitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 },
 
     inputRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-    input: { flex: 1, height: 44, borderWidth: 2, borderColor: theme.colors.border, borderRadius: theme.radii.m, paddingHorizontal: 12, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, backgroundColor: theme.colors.bg },
+    input: { flex: 1, height: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.m, paddingHorizontal: 12, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, backgroundColor: theme.colors.bg },
     addBtn: { backgroundColor: theme.colors.ink, height: 44, paddingHorizontal: 16, borderRadius: theme.radii.m, flexDirection: 'row', alignItems: 'center', gap: 6 },
     addBtnText: { color: '#fff', fontFamily: theme.fonts.b, fontSize: 14, letterSpacing: 0.5 },
 
     listContainer: {
-        borderWidth: 2,
+        borderWidth: 1,
         borderColor: theme.colors.border,
         borderRadius: theme.radii.m,
         backgroundColor: theme.colors.bg,
@@ -105,8 +101,8 @@ const getStyles = (theme) => StyleSheet.create({
     domainItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 14 },
     domainText: { fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink },
     deleteBtn: { padding: 4 },
-    divider: { height: 2, backgroundColor: theme.colors.border },
+    divider: { height: 1, backgroundColor: theme.colors.border },
 
-    emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 24, borderWidth: 2, borderColor: theme.colors.border, borderRadius: theme.radii.m, borderStyle: 'dashed' },
+    emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 24, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.m, borderStyle: 'dashed' },
     emptyText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },
 });
