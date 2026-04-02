@@ -278,11 +278,10 @@ export default function DashboardScreen() {
                             key={nudge.id || idx}
                             style={{
                                 backgroundColor: theme.colors.surface,
-                                borderWidth: 2, borderColor: theme.colors.border,
-                                borderRadius: theme.radii.lg, padding: 16, marginBottom: 10,
+                                borderWidth: 1, borderColor: theme.colors.border,
+                                borderRadius: theme.radii.lg, padding: 14, marginBottom: 8,
                                 flexDirection: 'row', alignItems: 'center', gap: 12,
-                                shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 },
-                                shadowOpacity: 1, shadowRadius: 0,
+                                ...theme.shadows.sm,
                             }}
                             onPress={() => {
                                 lightImpact();
@@ -326,10 +325,9 @@ export default function DashboardScreen() {
                         {recentAchievements.map((ach, idx) => (
                             <View key={idx} style={{
                                 flex: 1, backgroundColor: theme.colors.surface,
-                                borderWidth: 2, borderColor: theme.colors.border,
+                                borderWidth: 1, borderColor: theme.colors.border,
                                 borderRadius: theme.radii.lg, padding: 14, alignItems: 'center',
-                                shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 },
-                                shadowOpacity: 1, shadowRadius: 0,
+                                ...theme.shadows.sm,
                             }}>
                                 <Text style={{ fontSize: 28, marginBottom: 6 }}>{ach.icon}</Text>
                                 <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '600', color: theme.colors.ink, textAlign: 'center' }}>{ach.title}</Text>
@@ -358,23 +356,23 @@ export default function DashboardScreen() {
 
 const getStyles = (theme) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg },
-    scrollContent: { paddingTop: 60, paddingHorizontal: 40, alignItems: 'center' },
-    contentWrapper: { width: '100%', maxWidth: 1400 },
+    scrollContent: { paddingTop: 48, paddingHorizontal: 32, alignItems: 'center' },
+    contentWrapper: { width: '100%', maxWidth: 1200 },
 
     // Hero Section
-    heroSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 48 },
-    greetingText: { fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, textTransform: 'uppercase', letterSpacing: 3 },
-    userNameText: { fontFamily: theme.fonts.d, fontSize: 64, fontWeight: '900', color: theme.colors.ink, letterSpacing: -2, marginTop: -4 },
+    heroSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
+    greetingText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, letterSpacing: 0.5 },
+    userNameText: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5, marginTop: 2 },
 
     focusWidget: {
-        flexDirection: 'row', alignItems: 'center', gap: 14,
-        padding: 12, paddingRight: 20,
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        padding: 10, paddingRight: 18,
         backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        borderWidth: 2, borderColor: theme.colors.border,
-        shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
+        borderWidth: 1, borderColor: theme.colors.border,
+        ...theme.shadows.sm,
     },
     focusRing: {
-        width: 48, height: 48, borderRadius: 24,
+        width: 44, height: 44, borderRadius: 22,
         backgroundColor: theme.colors.surface2, overflow: 'hidden',
         justifyContent: 'center', alignItems: 'center',
         borderWidth: 1, borderColor: theme.colors.border
@@ -383,77 +381,77 @@ const getStyles = (theme) => StyleSheet.create({
         position: 'absolute', bottom: 0, width: '100%',
         backgroundColor: theme.colors.green, opacity: 0.15
     },
-    focusNumText: { fontFamily: theme.fonts.m, fontSize: 16, fontWeight: '700', color: theme.colors.ink },
-    focusLabel: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1 },
+    focusNumText: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700', color: theme.colors.ink },
+    focusLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.8 },
     focusSub: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.green },
 
     // Stats Row
-    statsRow: { flexDirection: 'row', gap: 16, marginBottom: 32 },
+    statsRow: { flexDirection: 'row', gap: 12, marginBottom: 28 },
     statCard: {
         flex: 1, padding: 16,
         backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        borderWidth: 2, borderColor: theme.colors.border,
-        shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
+        borderWidth: 1, borderColor: theme.colors.border,
+        ...theme.shadows.sm,
     },
-    statLabel: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 },
-    statValue: { fontFamily: theme.fonts.d, fontSize: 36, fontWeight: '700', color: theme.colors.ink },
-    statIndicator: { height: 4, width: 32, borderRadius: 2, marginTop: 12 },
+    statLabel: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
+    statValue: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '700', color: theme.colors.ink },
+    statIndicator: { height: 3, width: 28, borderRadius: 2, marginTop: 10 },
 
     // Main Layout
-    layoutMain: { flexDirection: 'row', gap: 32 },
+    layoutMain: { flexDirection: 'row', gap: 24 },
     columnLeft: { flex: 1.4 },
     columnRight: { flex: 1 },
 
-    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    sectionTitle: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '700', color: theme.colors.ink },
+    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+    sectionTitle: { fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '600', color: theme.colors.ink },
     seeAllText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },
 
     // Assignments
     assignmentCard: {
         flexDirection: 'row', backgroundColor: theme.colors.surface,
-        borderRadius: theme.radii.lg, marginBottom: 12, overflow: 'hidden',
-        borderWidth: 2, borderColor: theme.colors.border,
-        shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
+        borderRadius: theme.radii.lg, marginBottom: 10, overflow: 'hidden',
+        borderWidth: 1, borderColor: theme.colors.border,
+        ...theme.shadows.sm,
     },
-    asgnColorBar: { width: 4 },
-    asgnContent: { flex: 1, padding: 20, flexDirection: 'row', alignItems: 'center', gap: 16 },
-    asgnTitle: { fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '600', color: theme.colors.ink },
-    asgnCourse: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 4 },
-    asgnDate: { fontFamily: theme.fonts.m, fontSize: 14, fontWeight: '700', color: theme.colors.ink },
-    asgnDays: { fontFamily: theme.fonts.m, fontSize: 11, marginTop: 4 },
+    asgnColorBar: { width: 3 },
+    asgnContent: { flex: 1, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+    asgnTitle: { fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink },
+    asgnCourse: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 3 },
+    asgnDate: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink },
+    asgnDays: { fontFamily: theme.fonts.m, fontSize: 11, marginTop: 3 },
 
     // At Risk
     atRiskCard: {
         backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        padding: 16, marginBottom: 12, borderWidth: 2, borderColor: theme.colors.border,
-        shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
+        padding: 14, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border,
+        ...theme.shadows.sm,
     },
     atRiskHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    atRiskName: { fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink },
-    atRiskSub: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 2 },
-    atRiskGradeBox: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignItems: 'center' },
-    atRiskGradeText: { fontFamily: theme.fonts.m, fontSize: 15, fontWeight: '700' },
+    atRiskName: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink },
+    atRiskSub: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 },
+    atRiskGradeBox: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, alignItems: 'center' },
+    atRiskGradeText: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '700' },
 
     successCard: {
-        padding: 24, alignItems: 'center', gap: 12,
+        padding: 24, alignItems: 'center', gap: 10,
         backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        borderWidth: 2, borderColor: theme.colors.border,
-        shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
+        borderWidth: 1, borderColor: theme.colors.border,
+        ...theme.shadows.sm,
     },
-    successText: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink3, textAlign: 'center' },
+    successText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, textAlign: 'center' },
 
     // Overview
     overviewContainer: {
         backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        padding: 20, borderWidth: 2, borderColor: theme.colors.border,
-        shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4
+        padding: 18, borderWidth: 1, borderColor: theme.colors.border,
+        ...theme.shadows.sm,
     },
-    overviewRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
-    overviewLabel: { flex: 1, fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink2 },
+    overviewRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+    overviewLabel: { flex: 1, fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2 },
     progressBarBg: { flex: 2, height: 6, backgroundColor: theme.colors.surface2, borderRadius: 3, overflow: 'hidden' },
     progressBarFill: { height: '100%', borderRadius: 3 },
-    overviewValue: { width: 32, fontFamily: theme.fonts.m, fontSize: 10, fontWeight: '700', textAlign: 'right', color: theme.colors.ink },
+    overviewValue: { width: 36, fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', textAlign: 'right', color: theme.colors.ink },
 
-    emptyCard: { padding: 32, alignItems: 'center', backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, borderWidth: 2, borderColor: theme.colors.border, shadowColor: theme.colors.border, shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, elevation: 4 },
-    emptyText: { fontFamily: theme.fonts.s, fontSize: 14, color: theme.colors.ink3 }
+    emptyCard: { padding: 32, alignItems: 'center', backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border, ...theme.shadows.sm },
+    emptyText: { fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink3 }
 });

@@ -357,11 +357,12 @@ const renderSparkBars = (grades, theme) => {
 const getStyles = (theme) => StyleSheet.create({
     card: {
         backgroundColor: theme.colors.surface,
-        borderWidth: 3,
+        borderWidth: 1,
         borderColor: theme.colors.border,
-        borderRadius: theme.radii?.lg || 16,
+        borderRadius: theme.radii?.lg || 14,
         padding: 20,
         marginBottom: 16,
+        ...(theme.shadows?.sm || {}),
     },
     // Empty state
     emptyTitle: {
@@ -395,15 +396,15 @@ const getStyles = (theme) => StyleSheet.create({
     },
     gpaValue: {
         fontFamily: theme.fonts.d,
-        fontSize: 42,
+        fontSize: 32,
         color: theme.colors.ink,
-        lineHeight: 48,
+        lineHeight: 38,
     },
     trendBadge: {
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderRadius: 8,
-        borderWidth: 2,
+        borderWidth: 1,
         borderColor: theme.colors.border,
     },
     trendArrow: {
@@ -420,7 +421,7 @@ const getStyles = (theme) => StyleSheet.create({
         paddingHorizontal: 14,
         paddingVertical: 6,
         borderRadius: 8,
-        borderWidth: 2,
+        borderWidth: 1,
         borderColor: theme.colors.border,
         backgroundColor: theme.colors.surface,
     },
@@ -439,7 +440,7 @@ const getStyles = (theme) => StyleSheet.create({
     chartWrap: {
         alignItems: 'center',
         marginBottom: 16,
-        borderWidth: 2,
+        borderWidth: 1,
         borderColor: theme.colors.border,
         borderRadius: 10,
         overflow: 'hidden',
@@ -451,7 +452,7 @@ const getStyles = (theme) => StyleSheet.create({
         height: 100,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 2,
+        borderWidth: 1,
         borderColor: theme.colors.border,
         borderRadius: 10,
         borderStyle: 'dashed',

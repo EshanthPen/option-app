@@ -100,7 +100,7 @@ const OnboardingScreen = ({ onComplete }) => {
             <View key={slide.key} style={isWeb ? s.slideWeb : s.slide}>
                 <View style={s.iconWrapper}>
                     <View style={s.iconBox}>
-                        <Icon size={48} color={theme.colors.bg} strokeWidth={1.8} />
+                        <Icon size={36} color={theme.colors.ink} strokeWidth={1.8} />
                     </View>
                     <View style={s.iconShadow} />
                 </View>
@@ -196,56 +196,50 @@ const styles = (theme) =>
             marginBottom: 36,
         },
         iconBox: {
-            width: 100,
-            height: 100,
-            borderRadius: theme.radii.lg,
-            backgroundColor: theme.colors.ink,
-            borderWidth: 3,
+            width: 80,
+            height: 80,
+            borderRadius: 20,
+            backgroundColor: theme.colors.surface,
+            borderWidth: 1,
             borderColor: theme.colors.border,
             justifyContent: 'center',
             alignItems: 'center',
             zIndex: 2,
+            ...(theme.shadows?.md || {}),
         },
         iconShadow: {
-            position: 'absolute',
-            top: 6,
-            left: 6,
-            width: 100,
-            height: 100,
-            borderRadius: theme.radii.lg,
-            backgroundColor: theme.colors.border,
-            zIndex: 1,
+            display: 'none',
         },
         // --- Text ---
         title: {
             fontFamily: theme.fonts.d,
-            fontSize: 42,
+            fontSize: 28,
             color: theme.colors.ink,
             textAlign: 'center',
-            marginBottom: 8,
-            letterSpacing: -0.5,
+            marginBottom: 6,
+            letterSpacing: -0.3,
         },
         subtitle: {
-            fontFamily: theme.fonts.s,
-            fontSize: 20,
+            fontFamily: theme.fonts.m,
+            fontSize: 16,
             color: theme.colors.ink2,
             textAlign: 'center',
             marginBottom: 20,
         },
         divider: {
-            width: 40,
-            height: 3,
+            width: 32,
+            height: 2,
             backgroundColor: theme.colors.border,
-            borderRadius: 2,
+            borderRadius: 1,
             marginBottom: 20,
         },
         description: {
             fontFamily: theme.fonts.m,
-            fontSize: 18,
+            fontSize: 15,
             color: theme.colors.ink3,
             textAlign: 'center',
-            lineHeight: 26,
-            maxWidth: 300,
+            lineHeight: 24,
+            maxWidth: 320,
         },
         // --- Footer ---
         footer: {
@@ -264,48 +258,37 @@ const styles = (theme) =>
             gap: 10,
         },
         dot: {
-            width: 10,
-            height: 10,
-            borderRadius: 5,
-            borderWidth: 2,
-            borderColor: theme.colors.border,
-            backgroundColor: 'transparent',
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            backgroundColor: theme.colors.border,
         },
         dotActive: {
             backgroundColor: theme.colors.ink,
+            width: 24,
         },
         // --- Button ---
         button: {
-            position: 'relative',
             alignSelf: 'stretch',
         },
         buttonInner: {
-            height: 58,
+            height: 52,
             borderRadius: theme.radii.r,
             backgroundColor: theme.colors.ink,
-            borderWidth: 3,
-            borderColor: theme.colors.border,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 10,
-            zIndex: 2,
+            gap: 8,
+            ...(theme.shadows?.md || {}),
         },
         buttonShadow: {
-            position: 'absolute',
-            top: 5,
-            left: 5,
-            right: -5,
-            bottom: -5,
-            borderRadius: theme.radii.r,
-            backgroundColor: theme.colors.border,
-            zIndex: 1,
+            display: 'none',
         },
         buttonText: {
-            fontFamily: theme.fonts.b,
-            fontSize: 20,
+            fontFamily: theme.fonts.s,
+            fontSize: 16,
             color: theme.colors.bg,
-            letterSpacing: 0.5,
+            letterSpacing: 0.3,
         },
     });
 
