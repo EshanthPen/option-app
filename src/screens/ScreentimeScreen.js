@@ -271,22 +271,6 @@ export default function ScreentimeScreen() {
                 />
             </View>
 
-            {/* Tips */}
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>Study Tips</Text>
-                {[
-                    { emoji: '⏱', tip: 'Work in 25-minute focused sprints with 5-minute breaks.' },
-                    { emoji: '📵', tip: 'Put your phone on Do Not Disturb during work sessions.' },
-                    { emoji: '🌿', tip: 'Take a short walk during breaks — it boosts recall.' },
-                    { emoji: '💧', tip: 'Stay hydrated. Even mild dehydration impairs focus.' },
-                ].map((item, i) => (
-                    <View key={i} style={styles.tipRow}>
-                        <Text style={styles.tipEmoji}>{item.emoji}</Text>
-                        <Text style={styles.tipText}>{item.tip}</Text>
-                    </View>
-                ))}
-            </View>
-
             <View style={{ height: 60 }} />
         </ScrollView>
     );

@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Moon, Sun, Palette } from 'lucide-react-native';
+import { Moon, Sun } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import WorkingHoursGraph from '../components/WorkingHoursGraph';
-import { THEME_PRESETS } from '../utils/theme';
 
 export default function SettingsScreen() {
-    const { theme, toggleTheme, isDarkMode, themePreset, changePreset } = useTheme();
+    const { theme, toggleTheme, isDarkMode } = useTheme();
     const styles = getStyles(theme);
     const [userName, setUserName] = useState('');
 
@@ -92,40 +91,6 @@ export default function SettingsScreen() {
                 </View>
             </TouchableOpacity>
 
-            {/* Theme Presets */}
-            {changePreset && (
-                <View style={[styles.card, { marginTop: 12 }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                        <Palette size={18} color={theme.colors.ink2} />
-                        <Text style={styles.cardTitle}>Theme</Text>
-                    </View>
-                    <View style={styles.themeGrid}>
-                        {Object.entries(THEME_PRESETS).map(([key, preset]) => {
-                            const isActive = themePreset === key;
-                            const previewColors = isDarkMode ? preset.dark : preset.light;
-                            return (
-                                <TouchableOpacity
-                                    key={key}
-                                    style={[styles.themeChip, isActive && { borderColor: theme.colors.ink, borderWidth: 2 }]}
-                                    onPress={() => changePreset(key)}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={styles.themePreview}>
-                                        <View style={[styles.themeSwatchRow]}>
-                                            <View style={[styles.themeSwatch, { backgroundColor: previewColors.ink }]} />
-                                            <View style={[styles.themeSwatch, { backgroundColor: previewColors.accent }]} />
-                                            <View style={[styles.themeSwatch, { backgroundColor: previewColors.surface2 }]} />
-                                        </View>
-                                    </View>
-                                    <Text style={[styles.themeChipName, isActive && { color: theme.colors.ink, fontWeight: '700' }]}>{preset.name}</Text>
-                                    <Text style={styles.themeChipDesc}>{preset.description}</Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
-                </View>
-            )}
-
             {/* Smart Scheduling */}
             <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Smart Scheduling</Text>
             <View style={styles.card}>
@@ -174,14 +139,6 @@ const getStyles = (theme) => StyleSheet.create({
     settingSub: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginTop: 2 },
     toggleContainer: { width: 44, height: 24, borderRadius: 12, backgroundColor: theme.colors.surface2, padding: 2, justifyContent: 'center' },
     toggleCircle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
-
-    themeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    themeChip: { width: '30%', backgroundColor: theme.colors.surface2, borderRadius: theme.radii.r, padding: 10, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center' },
-    themePreview: { marginBottom: 8 },
-    themeSwatchRow: { flexDirection: 'row', gap: 4 },
-    themeSwatch: { width: 16, height: 16, borderRadius: 8 },
-    themeChipName: { fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink2 },
-    themeChipDesc: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, marginTop: 2, textAlign: 'center' },
 
     legendText: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 },
 
