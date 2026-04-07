@@ -16,17 +16,29 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  // Debug: check which env vars are set (only shows key names, not values)
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
+      hasMonthlyPrice: !!process.env.STRIPE_MONTHLY_PRICE_ID,
+      hasYearlyPrice: !!process.env.STRIPE_YEARLY_PRICE_ID,
+      hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+      keyPrefix: process.env.STRIPE_SECRET_KEY ? process.env.STRIPE_SECRET_KEY.substring(0, 8) + '...' : 'NOT SET',
+    });
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  if (!process.env.STRIPE_SECRET_KEY) {
-    return res.status(500).json({ error: 'Stripe not configured' });
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeKey) {
+    return res.status(500).json({ error: 'Stripe not configured', debug: 'STRIPE_SECRET_KEY is empty' });
   }
 
   try {
     const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripe = new Stripe(stripeKey);
 
     const PRICE_MAP = {
       pro_monthly: process.env.STRIPE_MONTHLY_PRICE_ID,
@@ -41,7 +53,7 @@ export default async function handler(req, res) {
 
     const priceId = PRICE_MAP[planId];
     if (!priceId) {
-      return res.status(400).json({ error: 'Invalid plan' });
+      return res.status(400).json({ error: 'Invalid plan', debug: `planId=${planId}, available=${Object.keys(PRICE_MAP).join(',')}` });
     }
 
     // Create Stripe Checkout Session
@@ -54,15 +66,12 @@ export default async function handler(req, res) {
           quantity: 1,
         },
       ],
-      // Pass user info so webhook can link subscription to Supabase user
       metadata: {
         supabase_user_id: userId,
         plan_id: planId,
       },
       customer_email: email || undefined,
-      // Allow promotion codes for discounts
       allow_promotion_codes: true,
-      // 7-day free trial
       subscription_data: {
         trial_period_days: 7,
         metadata: {
@@ -70,7 +79,6 @@ export default async function handler(req, res) {
           plan_id: planId,
         },
       },
-      // Redirect URLs
       success_url: `${req.headers.origin || 'https://optionapp.online'}/premium?success=true`,
       cancel_url: `${req.headers.origin || 'https://optionapp.online'}/premium?canceled=true`,
     });
