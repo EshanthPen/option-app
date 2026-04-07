@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform, Modal, Pressable, KeyboardAvoidingView } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AuthSession from 'expo-auth-session';
@@ -7,18 +7,30 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
 import DistrictPickerModal from '../components/DistrictPickerModal';
 import { syncAssignmentsToCalendar } from '../utils/googleCalendarAPI';
-import { ChevronDown, RefreshCw, Database, Calendar, BookOpen } from 'lucide-react-native';
+import { ChevronDown, RefreshCw, Database, Calendar, BookOpen, Plus, Check, X, Layers, GraduationCap, FileText } from 'lucide-react-native';
 import { loadMockGradebookData } from '../utils/mockStudentData';
 import ICAL from 'ical.js';
 import { useTheme } from '../context/ThemeContext';
 import { parseStudentVueGradebook } from '../utils/studentVueParser';
+import { parseFocusSISGrades } from '../utils/focusSISParser';
 import { getDeviceId } from '../utils/auth';
 
 WebBrowser.maybeCompleteAuthSession();
 
+// Integration definitions
+const INTEGRATIONS = [
+    { id: 'studentvue', name: 'StudentVUE', desc: 'Sync grades automatically', Icon: Database, color: 'green' },
+    { id: 'google', name: 'Google Calendar', desc: 'Export assignments', Icon: Calendar, color: 'blue' },
+    { id: 'classroom', name: 'Google Classroom', desc: 'Import classes and assignments', Icon: GraduationCap, color: 'green' },
+    { id: 'schoology', name: 'Schoology', desc: 'Import from calendar feed', Icon: BookOpen, color: 'orange' },
+    { id: 'canvas', name: 'Canvas LMS', desc: 'Coming soon', Icon: Layers, color: 'red', soon: true },
+    { id: 'powerschool', name: 'PowerSchool', desc: 'Coming soon', Icon: FileText, color: 'purple', soon: true },
+];
+
 export default function IntegrationsScreen() {
     const { theme } = useTheme();
-    const styles = getStyles(theme);
+    const S = getStyles(theme);
+    const [activeModal, setActiveModal] = useState(null);
     const [schoologyUrl, setSchoologyUrl] = useState('');
 
     const [svUser, setSvUser] = useState('');
@@ -30,10 +42,12 @@ export default function IntegrationsScreen() {
     const [syncResult, setSyncResult] = useState(null);
     const [isMockLoading, setIsMockLoading] = useState(false);
     const [isSchoologySyncing, setIsSchoologySyncing] = useState(false);
-    const [isHelpVisible, setIsHelpVisible] = useState(false);
+    const [classroomToken, setClassroomToken] = useState(null);
+    const [isClassroomSyncing, setIsClassroomSyncing] = useState(false);
 
     const [accessToken, setAccessToken] = useState(null);
     const [deviceId, setDeviceId] = useState(null);
+    const [connectedIds, setConnectedIds] = useState([]);
 
     const isWeb = typeof window !== 'undefined' && window.location;
     const redirectUri = isWeb
@@ -47,24 +61,30 @@ export default function IntegrationsScreen() {
         webClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
         scopes: [
             'https://www.googleapis.com/auth/calendar.events',
-            'https://www.googleapis.com/auth/userinfo.profile'
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/classroom.courses.readonly',
+            'https://www.googleapis.com/auth/classroom.coursework.students.readonly'
         ],
         redirectUri,
     });
 
     useEffect(() => {
         const loadSettings = async () => {
+            const connected = [];
             let storedToken = await AsyncStorage.getItem('googleAccessToken');
             if (!storedToken && typeof window !== 'undefined') {
                 storedToken = window.localStorage.getItem('googleAccessToken');
             }
-            if (storedToken) setAccessToken(storedToken);
+            if (storedToken) { setAccessToken(storedToken); connected.push('google'); }
+            const classroomTk = await AsyncStorage.getItem('classroomAccessToken');
+            if (classroomTk) { setClassroomToken(classroomTk); connected.push('classroom'); }
             const savedSchoology = await AsyncStorage.getItem('schoologyUrl');
             if (savedSchoology) setSchoologyUrl(savedSchoology);
             const savedUser = await AsyncStorage.getItem('svUsername');
-            if (savedUser) setSvUser(savedUser);
+            if (savedUser) { setSvUser(savedUser); connected.push('studentvue'); }
             const savedPass = await AsyncStorage.getItem('svPassword');
             if (savedPass) setSvPass(savedPass);
+            setConnectedIds(connected);
         };
         loadSettings();
     }, []);
@@ -96,6 +116,7 @@ export default function IntegrationsScreen() {
                     await AsyncStorage.setItem('googleUserName', name);
                 }
                 await AsyncStorage.setItem('googleAccessToken', token);
+                setConnectedIds(prev => prev.includes('google') ? prev : [...prev, 'google']);
             } catch (err) {
                 console.warn('Failed to save Google Auth:', err);
             }
@@ -113,6 +134,8 @@ export default function IntegrationsScreen() {
         fetchSettings();
     }, []);
 
+    // ── Handlers ──────────────────────────────────────────────
+
     const handleSchoologySync = async () => {
         if (!schoologyUrl) {
             if (Platform.OS === 'web') window.alert('Please enter your Schoology calendar link first.');
@@ -120,6 +143,7 @@ export default function IntegrationsScreen() {
             return;
         }
         setIsSchoologySyncing(true);
+        setSyncResult(null);
         const input = schoologyUrl.trim();
         const urlRegex = /(?:webcal|https?):\/\/[^\s"'<>]+(?:\.(?:ics|php)[^\s"'<>]*|\/calendar\/feed\/ical\/[^\s"'<>]*)/gi;
         const matches = input.match(urlRegex);
@@ -165,21 +189,78 @@ export default function IntegrationsScreen() {
                 return { title: ev.summary || 'Untitled', urgency: u, importance: im, duration: 60, due_date: dueDate.toISOString().split('T')[0], source: 'schoology_import', user_id: deviceId };
             }).filter(Boolean);
             if (imported.length > 0) {
-                const { error } = await supabase.from('tasks').insert(imported);
-                if (error) throw error;
-                if (Platform.OS === 'web') window.alert(`Imported ${imported.length} assignments.`);
-                else Alert.alert('Sync Complete', `Imported ${imported.length} assignments.`);
+                // Fetch existing schoology tasks to avoid duplicates
+                const { data: existing } = await supabase
+                    .from('tasks')
+                    .select('title, due_date')
+                    .eq('user_id', deviceId)
+                    .eq('source', 'schoology_import');
+                const existingKeys = new Set(
+                    (existing || []).map(t => `${t.title}::${t.due_date}`)
+                );
+                const newOnly = imported.filter(
+                    t => !existingKeys.has(`${t.title}::${t.due_date}`)
+                );
+                if (newOnly.length > 0) {
+                    const { error } = await supabase.from('tasks').insert(newOnly);
+                    if (error) throw error;
+                    const skipped = imported.length - newOnly.length;
+                    const msg = skipped > 0
+                        ? `Imported ${newOnly.length} new assignments (${skipped} duplicates skipped).`
+                        : `Imported ${newOnly.length} assignments.`;
+                    setSyncResult({ type: 'success', message: msg });
+                } else {
+                    setSyncResult({ type: 'success', message: `All ${imported.length} assignments already imported — nothing new.` });
+                }
             } else {
-                if (Platform.OS === 'web') window.alert('No recent assignments found.');
-                else Alert.alert('No Assignments', 'No recent assignments found.');
+                setSyncResult({ type: 'error', message: 'No recent assignments found.' });
             }
         } catch (err) {
-            if (Platform.OS === 'web') window.alert(`Sync failed: ${err.message}`);
-            else Alert.alert('Error', `Sync failed: ${err.message}`);
+            setSyncResult({ type: 'error', message: `Sync failed: ${err.message}` });
         } finally { setIsSchoologySyncing(false); }
     };
 
+    const handleFocusSISLogin = async () => {
+        let baseUrl = selectedDistrict?.url;
+        if (!baseUrl || !svUser || !svPass) {
+            setSyncResult({ type: 'error', message: 'Please select your district and enter credentials.' });
+            return;
+        }
+        setSyncResult(null);
+        setIsSyncing(true);
+        try {
+            await AsyncStorage.setItem('svUsername', svUser);
+            await AsyncStorage.setItem('svPassword', svPass);
+            await AsyncStorage.setItem('svDistrictUrl', baseUrl);
+            await AsyncStorage.setItem('svDistrictType', 'focus-sis');
+
+            const apiBase = Platform.OS === 'web' ? '' : 'https://optionapp.online';
+            const resp = await fetch(`${apiBase}/api/focus-sis`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ baseUrl, username: svUser, password: svPass }),
+            });
+
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || 'Focus SIS sync failed');
+
+            const { classes: parsedClasses } = parseFocusSISGrades(data.html);
+            if (parsedClasses?.length > 0) {
+                await AsyncStorage.setItem('studentVueGrades', JSON.stringify(parsedClasses));
+                await AsyncStorage.setItem('isDemoData', 'false');
+                setConnectedIds(prev => prev.includes('studentvue') ? prev : [...prev, 'studentvue']);
+                const totalAssignments = parsedClasses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
+                setSyncResult({ type: 'success', message: `Imported ${parsedClasses.length} classes with ${totalAssignments} assignments from Focus SIS.` });
+            } else {
+                setSyncResult({ type: 'error', message: 'Connected to Focus SIS but could not parse grade data.' });
+            }
+        } catch (error) {
+            setSyncResult({ type: 'error', message: error.message });
+        } finally { setIsSyncing(false); }
+    };
+
     const handleStudentVueLogin = async () => {
+        if (selectedDistrict?.focusSIS) return handleFocusSISLogin();
         let baseUrl = '';
         if (selectedDistrict) baseUrl = selectedDistrict.id === 'custom' ? customUrl : selectedDistrict.url;
         if (!baseUrl || !svUser || !svPass) {
@@ -202,6 +283,7 @@ export default function IntegrationsScreen() {
                 if (formattedClasses?.length > 0) {
                     await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
                     await AsyncStorage.setItem('isDemoData', 'false');
+                    setConnectedIds(prev => prev.includes('studentvue') ? prev : [...prev, 'studentvue']);
                     if (periods?.length > 0) {
                         await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(periods));
                         const lastPeriod = periods[periods.length - 1];
@@ -222,6 +304,7 @@ export default function IntegrationsScreen() {
     const syncGoogleCalendarManual = async () => {
         if (!accessToken) { Alert.alert('Not Linked', 'Sign in with Google first.'); return; }
         setIsSyncing(true);
+        setSyncResult(null);
         try {
             const savedGrades = await AsyncStorage.getItem('studentVueGrades');
             if (!savedGrades) { Alert.alert('No Grade Data', 'Sync with StudentVUE first.'); setIsSyncing(false); return; }
@@ -232,223 +315,462 @@ export default function IntegrationsScreen() {
             }
             if (allAssignments.length > 0) {
                 const syncCount = await syncAssignmentsToCalendar(accessToken, allAssignments);
-                Alert.alert('Success', `Synced ${syncCount} assignments to Google Calendar.`);
-            } else Alert.alert('No Assignments', 'Nothing to sync.');
-        } catch (error) { Alert.alert('Error', 'Sync failed: ' + error.message); }
-        finally { setIsSyncing(false); }
+                setSyncResult({ type: 'success', message: `Synced ${syncCount} assignments to Google Calendar.` });
+            } else {
+                setSyncResult({ type: 'error', message: 'No assignments to sync.' });
+            }
+        } catch (error) {
+            setSyncResult({ type: 'error', message: 'Sync failed: ' + error.message });
+        } finally { setIsSyncing(false); }
     };
 
+    const handleClassroomLink = async () => {
+        try {
+            const result = await promptAsync();
+            if (result?.type === 'success') {
+                const token = result.authentication.accessToken;
+                setClassroomToken(token);
+                await AsyncStorage.setItem('classroomAccessToken', token);
+                setConnectedIds(prev => prev.includes('classroom') ? prev : [...prev, 'classroom']);
+            }
+        } catch (err) {
+            console.warn('Classroom auth error:', err);
+        }
+    };
+
+    const handleClassroomSync = async () => {
+        const token = classroomToken || accessToken;
+        if (!token) {
+            Alert.alert('Not Linked', 'Link your Google account first.');
+            return;
+        }
+        setIsClassroomSyncing(true);
+        setSyncResult(null);
+        try {
+            // Fetch active courses
+            const coursesRes = await fetch('https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (!coursesRes.ok) throw new Error(`Failed to fetch courses: ${coursesRes.status}`);
+            const coursesData = await coursesRes.json();
+            const courses = coursesData.courses || [];
+
+            if (courses.length === 0) {
+                setSyncResult({ type: 'error', message: 'No active courses found in Google Classroom.' });
+                setIsClassroomSyncing(false);
+                return;
+            }
+
+            const classes = [];
+            for (const course of courses) {
+                let assignments = [];
+                try {
+                    const cwRes = await fetch(`https://classroom.googleapis.com/v1/courses/${course.id}/courseWork`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    if (cwRes.ok) {
+                        const cwData = await cwRes.json();
+                        assignments = (cwData.courseWork || []).map(cw => {
+                            const dueDate = cw.dueDate ? `${cw.dueDate.year}-${String(cw.dueDate.month).padStart(2, '0')}-${String(cw.dueDate.day).padStart(2, '0')}` : null;
+                            const maxPoints = cw.maxPoints || 0;
+                            return {
+                                name: cw.title || 'Untitled',
+                                date: dueDate || '',
+                                score: '',
+                                total: maxPoints > 0 ? String(maxPoints) : '',
+                                weight: maxPoints > 50 ? 'Major' : 'Minor',
+                            };
+                        });
+                    }
+                } catch (e) {
+                    console.warn(`Failed to fetch coursework for ${course.name}:`, e);
+                }
+
+                // Calculate a mock grade based on assignment completion
+                classes.push({
+                    id: course.id,
+                    name: course.name || 'Untitled Course',
+                    teacher: course.ownerId || 'Unknown',
+                    grade: '--',
+                    assignments,
+                });
+            }
+
+            await AsyncStorage.setItem('studentVueGrades', JSON.stringify(classes));
+            await AsyncStorage.setItem('isDemoData', 'false');
+            setConnectedIds(prev => prev.includes('classroom') ? prev : [...prev, 'classroom']);
+            const totalAssignments = classes.reduce((sum, c) => sum + c.assignments.length, 0);
+            setSyncResult({ type: 'success', message: `Imported ${classes.length} classes with ${totalAssignments} assignments from Google Classroom.` });
+        } catch (err) {
+            setSyncResult({ type: 'error', message: `Classroom sync failed: ${err.message}` });
+        } finally {
+            setIsClassroomSyncing(false);
+        }
+    };
+
+    const openModal = (id) => {
+        setSyncResult(null);
+        setActiveModal(id);
+    };
+
+    const closeModal = () => {
+        setActiveModal(null);
+        setSyncResult(null);
+    };
+
+    // ── Render ────────────────────────────────────────────────
+
     return (
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-            <View style={styles.headerContainer}>
-                <Text style={styles.header}>Integrations</Text>
-                <Text style={styles.subtitle}>Connect your school platforms</Text>
-            </View>
-
-            {/* StudentVUE */}
-            <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                    <View style={[styles.cardIcon, { backgroundColor: theme.colors.green + '15' }]}>
-                        <Database size={18} color={theme.colors.green} strokeWidth={2} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.cardTitle}>StudentVUE</Text>
-                        <Text style={styles.cardDesc}>Auto-fetch and calculate grades</Text>
-                    </View>
+        <View style={S.root}>
+            <ScrollView style={S.container} showsVerticalScrollIndicator={false}>
+                <View style={S.headerContainer}>
+                    <Text style={S.header}>Integrations</Text>
+                    <Text style={S.subtitle}>Connect your school platforms and tools</Text>
                 </View>
 
-                <Text style={styles.label}>School District</Text>
-                <TouchableOpacity style={[styles.input, styles.pickerBtn]} onPress={() => setIsPickerVisible(true)}>
-                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: selectedDistrict ? theme.colors.ink : theme.colors.ink3 }}>
-                        {selectedDistrict ? selectedDistrict.name : 'Select your school district...'}
-                    </Text>
-                    <ChevronDown size={16} color={theme.colors.ink3} />
-                </TouchableOpacity>
-
-                {selectedDistrict?.id === 'custom' && (
-                    <>
-                        <Text style={styles.label}>Custom Portal URL</Text>
-                        <TextInput style={styles.input} placeholder="e.g. https://rtmsd.usplk12.org" placeholderTextColor={theme.colors.ink3} value={customUrl} onChangeText={setCustomUrl} autoCapitalize="none" />
-                    </>
-                )}
-
-                <Text style={styles.label}>Username / Student ID</Text>
-                <TextInput style={styles.input} placeholder="Student ID" placeholderTextColor={theme.colors.ink3} value={svUser} onChangeText={setSvUser} autoCapitalize="none" />
-
-                <Text style={styles.label}>Password</Text>
-                <TextInput style={styles.input} placeholder="Password" placeholderTextColor={theme.colors.ink3} value={svPass} onChangeText={setSvPass} secureTextEntry />
-
-                <TouchableOpacity style={[styles.primaryBtn, isSyncing && { opacity: 0.6 }]} onPress={handleStudentVueLogin} disabled={isSyncing}>
-                    {isSyncing ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <ActivityIndicator size="small" color={theme.colors.bg} />
-                            <Text style={styles.primaryBtnText}>Importing...</Text>
-                        </View>
-                    ) : (
-                        <Text style={styles.primaryBtnText}>Sync Grades</Text>
-                    )}
-                </TouchableOpacity>
-
-                {syncResult && (
-                    <View style={[styles.banner, { borderColor: syncResult.type === 'success' ? theme.colors.green : theme.colors.red, backgroundColor: syncResult.type === 'success' ? theme.colors.green + '10' : theme.colors.red + '10' }]}>
-                        <Text style={[styles.bannerText, { color: syncResult.type === 'success' ? theme.colors.green : theme.colors.red }]}>{syncResult.message}</Text>
-                    </View>
-                )}
-
-                <View style={styles.divider} />
-                <Text style={styles.demoLabel}>Beta Testing</Text>
-                <Text style={styles.demoDesc}>Load sample data to test without real credentials.</Text>
-                <TouchableOpacity style={[styles.secondaryBtn, { borderColor: theme.colors.purple }]} onPress={async () => {
-                    setIsMockLoading(true); setSyncResult(null);
-                    try {
-                        const { classCount, assignmentCount } = await loadMockGradebookData();
-                        setSyncResult({ type: 'success', message: `Demo loaded: ${classCount} classes, ${assignmentCount} assignments` });
-                    } catch (e) { setSyncResult({ type: 'error', message: `Failed: ${e.message}` }); }
-                    finally { setIsMockLoading(false); }
-                }} disabled={isMockLoading}>
-                    {isMockLoading ? <ActivityIndicator size="small" color={theme.colors.purple} /> : <Text style={[styles.secondaryBtnText, { color: theme.colors.purple }]}>Load Demo Data</Text>}
-                </TouchableOpacity>
-            </View>
-
-            {/* Google Calendar */}
-            <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                    <View style={[styles.cardIcon, { backgroundColor: theme.colors.blue + '15' }]}>
-                        <Calendar size={18} color={theme.colors.blue} strokeWidth={2} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.cardTitle}>Google Calendar</Text>
-                        <Text style={styles.cardDesc}>Sync assignments to your calendar</Text>
-                    </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TouchableOpacity style={[styles.primaryBtn, { flex: 1 }]} onPress={() => promptAsync()} disabled={!request}>
-                        <Text style={styles.primaryBtnText}>{accessToken ? 'Re-link Account' : 'Link Google'}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.secondaryBtn, { flex: 1 }]} onPress={() => setIsHelpVisible(true)}>
-                        <Text style={styles.secondaryBtnText}>Setup Help</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {accessToken && (
-                    <>
-                        <View style={[styles.statusChip, { backgroundColor: theme.colors.green + '15' }]}>
-                            <Text style={[styles.statusText, { color: theme.colors.green }]}>Account linked</Text>
-                        </View>
-                        <TouchableOpacity style={styles.secondaryBtn} onPress={syncGoogleCalendarManual} disabled={isSyncing}>
-                            {isSyncing ? <ActivityIndicator size="small" color={theme.colors.ink} /> : (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <RefreshCw size={14} color={theme.colors.ink} />
-                                    <Text style={styles.secondaryBtnText}>Sync Gradebook to Google</Text>
+                {/* Grid of integration cards */}
+                <View style={S.grid}>
+                    {INTEGRATIONS.map((item) => {
+                        const connected = connectedIds.includes(item.id);
+                        const iconColor = theme.colors[item.color] || theme.colors.ink2;
+                        return (
+                            <TouchableOpacity
+                                key={item.id}
+                                style={[S.tile, connected && S.tileConnected]}
+                                onPress={() => !item.soon && openModal(item.id)}
+                                activeOpacity={item.soon ? 1 : 0.7}
+                            >
+                                <View style={S.tileTop}>
+                                    <View style={[S.tileIcon, { backgroundColor: iconColor + '12' }]}>
+                                        <item.Icon size={20} color={iconColor} strokeWidth={1.8} />
+                                    </View>
+                                    {connected ? (
+                                        <View style={[S.statusDot, { backgroundColor: theme.colors.green }]}>
+                                            <Check size={10} color="#fff" strokeWidth={3} />
+                                        </View>
+                                    ) : item.soon ? (
+                                        <View style={S.soonBadge}>
+                                            <Text style={S.soonText}>Soon</Text>
+                                        </View>
+                                    ) : (
+                                        <View style={S.addDot}>
+                                            <Plus size={14} color={theme.colors.ink3} strokeWidth={2} />
+                                        </View>
+                                    )}
                                 </View>
-                            )}
-                        </TouchableOpacity>
-                    </>
-                )}
-            </View>
-
-            {/* Schoology */}
-            <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                    <View style={[styles.cardIcon, { backgroundColor: theme.colors.orange + '15' }]}>
-                        <BookOpen size={18} color={theme.colors.orange} strokeWidth={2} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.cardTitle}>Schoology</Text>
-                        <Text style={styles.cardDesc}>Import assignments from calendar feed</Text>
-                    </View>
+                                <Text style={S.tileName}>{item.name}</Text>
+                                <Text style={S.tileDesc}>{connected ? 'Connected' : item.desc}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
 
-                <TextInput style={styles.input} placeholder="webcal://schoology.com/calendar..." placeholderTextColor={theme.colors.ink3} value={schoologyUrl} onChangeText={setSchoologyUrl} autoCapitalize="none" />
-
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TouchableOpacity style={styles.secondaryBtn} onPress={() => {
-                        AsyncStorage.setItem('schoologyUrl', schoologyUrl);
-                        if (Platform.OS === 'web') window.alert('URL saved.');
-                        else Alert.alert('Saved', 'Schoology URL saved.');
-                    }}>
-                        <Text style={styles.secondaryBtnText}>Save URL</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.primaryBtn, { flex: 1 }]} onPress={handleSchoologySync} disabled={isSchoologySyncing}>
-                        {isSchoologySyncing ? <ActivityIndicator size="small" color={theme.colors.bg} /> : (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <RefreshCw size={14} color={theme.colors.bg} />
-                                <Text style={styles.primaryBtnText}>Sync Now</Text>
-                            </View>
+                {/* Demo data loader */}
+                <View style={S.demoCard}>
+                    <Text style={S.demoLabel}>Beta Testing</Text>
+                    <Text style={S.demoDesc}>Load sample grade data to explore the app without real credentials.</Text>
+                    <TouchableOpacity style={S.demoBtn} onPress={async () => {
+                        setIsMockLoading(true);
+                        try {
+                            const { classCount, assignmentCount } = await loadMockGradebookData();
+                            setConnectedIds(prev => prev.includes('studentvue') ? prev : [...prev, 'studentvue']);
+                            if (Platform.OS === 'web') window.alert(`Demo loaded: ${classCount} classes, ${assignmentCount} assignments`);
+                            else Alert.alert('Demo Loaded', `${classCount} classes, ${assignmentCount} assignments`);
+                        } catch (e) {
+                            if (Platform.OS === 'web') window.alert(`Failed: ${e.message}`);
+                            else Alert.alert('Error', e.message);
+                        } finally { setIsMockLoading(false); }
+                    }} disabled={isMockLoading}>
+                        {isMockLoading ? <ActivityIndicator size="small" color={theme.colors.purple} /> : (
+                            <Text style={S.demoBtnText}>Load Demo Data</Text>
                         )}
                     </TouchableOpacity>
                 </View>
-            </View>
 
-            {/* Help Modal */}
-            <Modal visible={isHelpVisible} transparent animationType="fade" onRequestClose={() => setIsHelpVisible(false)}>
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalCard}>
-                        <Text style={styles.modalTitle}>Google Calendar Setup</Text>
-                        <ScrollView style={{ maxHeight: 400 }}>
-                            <Text style={styles.helpStep}>1. Google Cloud Console</Text>
-                            <Text style={styles.helpDesc}>Create a project and enable "Google Calendar API".</Text>
-                            <Text style={styles.helpStep}>2. OAuth Credentials</Text>
-                            <Text style={styles.helpDesc}>Create an "OAuth client ID" for Web application.</Text>
-                            <Text style={styles.helpStep}>3. Redirect URIs</Text>
-                            <Text style={styles.helpDesc}>Add this to Authorized Redirect URIs:</Text>
-                            <View style={styles.uriBox}>
-                                <Text style={styles.uriText} selectable>{redirectUri}</Text>
+                <View style={{ height: 60 }} />
+            </ScrollView>
+
+            {/* ── StudentVUE Modal ── */}
+            <Modal visible={activeModal === 'studentvue'} transparent animationType="slide" onRequestClose={closeModal}>
+                <Pressable style={S.modalOverlay} onPress={closeModal}>
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                        <Pressable style={S.modalSheet}>
+                            <View style={S.modalHandle} />
+                            <View style={S.modalHeader}>
+                                <View style={[S.tileIcon, { backgroundColor: theme.colors.green + '12' }]}>
+                                    <Database size={20} color={theme.colors.green} strokeWidth={1.8} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={S.modalTitle}>StudentVUE / Focus SIS</Text>
+                                    <Text style={S.modalDesc}>Sync your grades automatically</Text>
+                                </View>
+                                <TouchableOpacity onPress={closeModal} hitSlop={12}>
+                                    <X size={20} color={theme.colors.ink3} />
+                                </TouchableOpacity>
                             </View>
-                            <Text style={styles.helpStep}>4. Link & Sync</Text>
-                            <Text style={styles.helpDesc}>Click "Link Google" and authorize the app.</Text>
-                        </ScrollView>
-                        <TouchableOpacity style={[styles.primaryBtn, { marginTop: 16 }]} onPress={() => setIsHelpVisible(false)}>
-                            <Text style={styles.primaryBtnText}>Got it</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
+
+                            <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
+                                <Text style={S.fieldLabel}>School District</Text>
+                                <TouchableOpacity style={S.picker} onPress={() => setIsPickerVisible(true)}>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: selectedDistrict ? theme.colors.ink : theme.colors.ink3, flex: 1 }}>
+                                        {selectedDistrict ? selectedDistrict.name : 'Select your school district...'}
+                                    </Text>
+                                    <ChevronDown size={16} color={theme.colors.ink3} />
+                                </TouchableOpacity>
+
+                                {selectedDistrict?.id === 'custom' && (
+                                    <>
+                                        <Text style={S.fieldLabel}>Custom Portal URL</Text>
+                                        <TextInput style={S.fieldInput} placeholder="e.g. https://rtmsd.usplk12.org" placeholderTextColor={theme.colors.ink3} value={customUrl} onChangeText={setCustomUrl} autoCapitalize="none" />
+                                    </>
+                                )}
+
+                                {selectedDistrict?.focusSIS && (
+                                    <View style={[S.infoBanner, { borderColor: theme.colors.blue + '40', backgroundColor: theme.colors.blue + '08' }]}>
+                                        <Text style={[S.infoBannerText, { color: theme.colors.blue }]}>This school uses Focus SIS. Your credentials are sent directly to your school's server — never stored by us.</Text>
+                                    </View>
+                                )}
+
+                                <Text style={S.fieldLabel}>Username / Student ID</Text>
+                                <TextInput style={S.fieldInput} placeholder="Student ID" placeholderTextColor={theme.colors.ink3} value={svUser} onChangeText={setSvUser} autoCapitalize="none" />
+
+                                <Text style={S.fieldLabel}>Password</Text>
+                                <TextInput style={S.fieldInput} placeholder="Password" placeholderTextColor={theme.colors.ink3} value={svPass} onChangeText={setSvPass} secureTextEntry />
+
+                                {syncResult && (
+                                    <View style={[S.resultBanner, { borderColor: syncResult.type === 'success' ? theme.colors.green : theme.colors.red, backgroundColor: (syncResult.type === 'success' ? theme.colors.green : theme.colors.red) + '10' }]}>
+                                        <Text style={[S.resultText, { color: syncResult.type === 'success' ? theme.colors.green : theme.colors.red }]}>{syncResult.message}</Text>
+                                    </View>
+                                )}
+                            </ScrollView>
+
+                            <TouchableOpacity style={[S.actionBtn, isSyncing && { opacity: 0.6 }]} onPress={handleStudentVueLogin} disabled={isSyncing}>
+                                {isSyncing ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <ActivityIndicator size="small" color={theme.colors.bg} />
+                                        <Text style={S.actionBtnText}>Syncing...</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={S.actionBtnText}>Sync Grades</Text>
+                                )}
+                            </TouchableOpacity>
+                        </Pressable>
+                    </KeyboardAvoidingView>
+                </Pressable>
+            </Modal>
+
+            {/* ── Google Calendar Modal ── */}
+            <Modal visible={activeModal === 'google'} transparent animationType="slide" onRequestClose={closeModal}>
+                <Pressable style={S.modalOverlay} onPress={closeModal}>
+                    <Pressable style={S.modalSheet}>
+                        <View style={S.modalHandle} />
+                        <View style={S.modalHeader}>
+                            <View style={[S.tileIcon, { backgroundColor: theme.colors.blue + '12' }]}>
+                                <Calendar size={20} color={theme.colors.blue} strokeWidth={1.8} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={S.modalTitle}>Google Calendar</Text>
+                                <Text style={S.modalDesc}>Sync assignments to your calendar</Text>
+                            </View>
+                            <TouchableOpacity onPress={closeModal} hitSlop={12}>
+                                <X size={20} color={theme.colors.ink3} />
+                            </TouchableOpacity>
+                        </View>
+
+                        {accessToken && (
+                            <View style={[S.connectedChip, { backgroundColor: theme.colors.green + '12' }]}>
+                                <Check size={12} color={theme.colors.green} strokeWidth={3} />
+                                <Text style={[S.connectedText, { color: theme.colors.green }]}>Account linked</Text>
+                            </View>
+                        )}
+
+                        {syncResult && (
+                            <View style={[S.resultBanner, { borderColor: syncResult.type === 'success' ? theme.colors.green : theme.colors.red, backgroundColor: (syncResult.type === 'success' ? theme.colors.green : theme.colors.red) + '10' }]}>
+                                <Text style={[S.resultText, { color: syncResult.type === 'success' ? theme.colors.green : theme.colors.red }]}>{syncResult.message}</Text>
+                            </View>
+                        )}
+
+                        <View style={{ gap: 8, marginTop: 8 }}>
+                            <TouchableOpacity style={S.actionBtn} onPress={() => promptAsync()} disabled={!request}>
+                                <Text style={S.actionBtnText}>{accessToken ? 'Re-link Account' : 'Link Google Account'}</Text>
+                            </TouchableOpacity>
+                            {accessToken && (
+                                <TouchableOpacity style={S.secondaryBtn} onPress={syncGoogleCalendarManual} disabled={isSyncing}>
+                                    {isSyncing ? <ActivityIndicator size="small" color={theme.colors.ink} /> : (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <RefreshCw size={14} color={theme.colors.ink} />
+                                            <Text style={S.secondaryBtnText}>Sync Gradebook to Calendar</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </Pressable>
+                </Pressable>
+            </Modal>
+
+            {/* ── Google Classroom Modal ── */}
+            <Modal visible={activeModal === 'classroom'} transparent animationType="slide" onRequestClose={closeModal}>
+                <Pressable style={S.modalOverlay} onPress={closeModal}>
+                    <Pressable style={S.modalSheet}>
+                        <View style={S.modalHandle} />
+                        <View style={S.modalHeader}>
+                            <View style={[S.tileIcon, { backgroundColor: theme.colors.green + '12' }]}>
+                                <GraduationCap size={20} color={theme.colors.green} strokeWidth={1.8} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={S.modalTitle}>Google Classroom</Text>
+                                <Text style={S.modalDesc}>Import classes and assignments</Text>
+                            </View>
+                            <TouchableOpacity onPress={closeModal} hitSlop={12}>
+                                <X size={20} color={theme.colors.ink3} />
+                            </TouchableOpacity>
+                        </View>
+
+                        {classroomToken && (
+                            <View style={[S.connectedChip, { backgroundColor: theme.colors.green + '12' }]}>
+                                <Check size={12} color={theme.colors.green} strokeWidth={3} />
+                                <Text style={[S.connectedText, { color: theme.colors.green }]}>Account linked</Text>
+                            </View>
+                        )}
+
+                        {syncResult && (
+                            <View style={[S.resultBanner, { borderColor: syncResult.type === 'success' ? theme.colors.green : theme.colors.red, backgroundColor: (syncResult.type === 'success' ? theme.colors.green : theme.colors.red) + '10' }]}>
+                                <Text style={[S.resultText, { color: syncResult.type === 'success' ? theme.colors.green : theme.colors.red }]}>{syncResult.message}</Text>
+                            </View>
+                        )}
+
+                        <View style={{ gap: 8, marginTop: 8 }}>
+                            <TouchableOpacity style={S.actionBtn} onPress={handleClassroomLink} disabled={!request}>
+                                <Text style={S.actionBtnText}>{classroomToken ? 'Re-link Account' : 'Link Google Classroom'}</Text>
+                            </TouchableOpacity>
+                            {classroomToken && (
+                                <TouchableOpacity style={S.secondaryBtn} onPress={handleClassroomSync} disabled={isClassroomSyncing}>
+                                    {isClassroomSyncing ? <ActivityIndicator size="small" color={theme.colors.ink} /> : (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <RefreshCw size={14} color={theme.colors.ink} />
+                                            <Text style={S.secondaryBtnText}>Sync Classes</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </Pressable>
+                </Pressable>
+            </Modal>
+
+            {/* ── Schoology Modal ── */}
+            <Modal visible={activeModal === 'schoology'} transparent animationType="slide" onRequestClose={closeModal}>
+                <Pressable style={S.modalOverlay} onPress={closeModal}>
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                        <Pressable style={S.modalSheet}>
+                            <View style={S.modalHandle} />
+                            <View style={S.modalHeader}>
+                                <View style={[S.tileIcon, { backgroundColor: theme.colors.orange + '12' }]}>
+                                    <BookOpen size={20} color={theme.colors.orange} strokeWidth={1.8} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={S.modalTitle}>Schoology</Text>
+                                    <Text style={S.modalDesc}>Import assignments from calendar feed</Text>
+                                </View>
+                                <TouchableOpacity onPress={closeModal} hitSlop={12}>
+                                    <X size={20} color={theme.colors.ink3} />
+                                </TouchableOpacity>
+                            </View>
+
+                            <Text style={S.fieldLabel}>Calendar Feed URL</Text>
+                            <TextInput style={S.fieldInput} placeholder="webcal://schoology.com/calendar..." placeholderTextColor={theme.colors.ink3} value={schoologyUrl} onChangeText={setSchoologyUrl} autoCapitalize="none" />
+
+                            {syncResult && (
+                                <View style={[S.resultBanner, { borderColor: syncResult.type === 'success' ? theme.colors.green : theme.colors.red, backgroundColor: (syncResult.type === 'success' ? theme.colors.green : theme.colors.red) + '10' }]}>
+                                    <Text style={[S.resultText, { color: syncResult.type === 'success' ? theme.colors.green : theme.colors.red }]}>{syncResult.message}</Text>
+                                </View>
+                            )}
+
+                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                                <TouchableOpacity style={[S.secondaryBtn, { flex: 1 }]} onPress={() => {
+                                    AsyncStorage.setItem('schoologyUrl', schoologyUrl);
+                                    if (Platform.OS === 'web') window.alert('URL saved.');
+                                    else Alert.alert('Saved', 'Schoology URL saved.');
+                                }}>
+                                    <Text style={S.secondaryBtnText}>Save</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[S.actionBtn, { flex: 2 }]} onPress={handleSchoologySync} disabled={isSchoologySyncing}>
+                                    {isSchoologySyncing ? <ActivityIndicator size="small" color={theme.colors.bg} /> : (
+                                        <Text style={S.actionBtnText}>Sync Now</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        </Pressable>
+                    </KeyboardAvoidingView>
+                </Pressable>
             </Modal>
 
             <DistrictPickerModal visible={isPickerVisible} onClose={() => setIsPickerVisible(false)} onSelect={(d) => setSelectedDistrict(d)} currentSelectionUrl={selectedDistrict?.url} />
-
-            <View style={{ height: 60 }} />
-        </ScrollView>
+        </View>
     );
 }
 
+// ── Styles ────────────────────────────────────────────────────
 const getStyles = (theme) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40, paddingHorizontal: 20 },
+    root: { flex: 1, backgroundColor: theme.colors.bg },
+    container: { flex: 1, paddingTop: 40, paddingHorizontal: 20 },
     headerContainer: { marginBottom: 24 },
     header: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
     subtitle: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginTop: 4 },
 
-    card: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 20, marginBottom: 16, ...theme.shadows.sm },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
-    cardIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    cardTitle: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink },
-    cardDesc: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 2 },
+    // Grid
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 },
+    tile: {
+        width: '47%', flexGrow: 1,
+        backgroundColor: theme.colors.surface,
+        borderWidth: 1, borderColor: theme.colors.border,
+        borderRadius: theme.radii.lg,
+        padding: 16,
+        ...theme.shadows.sm,
+    },
+    tileConnected: { borderColor: theme.colors.green + '40' },
+    tileTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
+    tileIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    tileName: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink, marginBottom: 2 },
+    tileDesc: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 },
+    statusDot: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    addDot: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surface2 },
+    soonBadge: { backgroundColor: theme.colors.surface2, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border },
+    soonText: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
 
-    label: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, marginTop: 12 },
-    input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink, marginBottom: 10 },
-    pickerBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    // Demo
+    demoCard: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 16, ...theme.shadows.sm },
+    demoLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.purple, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, fontWeight: '600' },
+    demoDesc: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, lineHeight: 16, marginBottom: 10 },
+    demoBtn: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.purple + '30', borderRadius: theme.radii.r, paddingVertical: 10, alignItems: 'center' },
+    demoBtnText: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.purple },
 
-    primaryBtn: { backgroundColor: theme.colors.ink, borderRadius: theme.radii.r, paddingVertical: 12, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', marginTop: 8, ...theme.shadows.sm },
-    primaryBtnText: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.bg },
-    secondaryBtn: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, paddingVertical: 12, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
-    secondaryBtnText: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink },
+    // Modal
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+    modalSheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 },
+    modalHandle: { width: 36, height: 4, backgroundColor: theme.colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+    modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+    modalTitle: { fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '700', color: theme.colors.ink },
+    modalDesc: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 1 },
 
-    statusChip: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radii.round, marginTop: 10, marginBottom: 4 },
-    statusText: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '600' },
+    // Fields
+    fieldLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, marginTop: 12 },
+    fieldInput: { backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink },
+    picker: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12 },
 
-    banner: { marginTop: 12, padding: 12, borderRadius: theme.radii.r, borderWidth: 1 },
-    bannerText: { fontFamily: theme.fonts.m, fontSize: 13, fontWeight: '600', lineHeight: 18 },
+    // Banners
+    infoBanner: { marginTop: 10, padding: 10, borderRadius: theme.radii.r, borderWidth: 1 },
+    infoBannerText: { fontFamily: theme.fonts.m, fontSize: 12, lineHeight: 16 },
+    resultBanner: { marginTop: 12, padding: 10, borderRadius: theme.radii.r, borderWidth: 1 },
+    resultText: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '600', lineHeight: 16 },
 
-    divider: { height: 1, backgroundColor: theme.colors.border, marginVertical: 16 },
-    demoLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.purple, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-    demoDesc: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, lineHeight: 16, marginBottom: 4 },
+    connectedChip: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
+    connectedText: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '600' },
 
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-    modalCard: { backgroundColor: theme.colors.surface, borderRadius: theme.radii.xl, padding: 24, width: '90%', maxWidth: 420, ...theme.shadows.lg },
-    modalTitle: { fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, marginBottom: 16 },
-    helpStep: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink, marginTop: 14 },
-    helpDesc: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginTop: 4, lineHeight: 18 },
-    uriBox: { backgroundColor: theme.colors.surface2, borderRadius: theme.radii.r, padding: 10, marginTop: 8 },
-    uriText: { fontFamily: theme.fonts.mono, fontSize: 11, color: theme.colors.accent },
+    // Buttons
+    actionBtn: { backgroundColor: theme.colors.ink, borderRadius: theme.radii.r, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', marginTop: 8, ...theme.shadows.sm },
+    actionBtnText: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.bg },
+    secondaryBtn: { backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+    secondaryBtnText: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink },
 });

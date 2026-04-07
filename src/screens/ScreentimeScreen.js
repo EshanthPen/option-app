@@ -3,12 +3,12 @@ import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { LineChart } from 'react-native-chart-kit';
+import { LineChart, BarChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
-import { Play, Pause, RotateCcw, Coffee, BookOpen } from 'lucide-react-native';
-import { recordPomodoroSession, getWeeklyPomodoroData, computeFocusScore, getScoreLabel } from '../utils/focusScoreEngine';
+import { Play, Pause, RotateCcw, Coffee, BookOpen, Flame, Clock, TrendingUp } from 'lucide-react-native';
+import { recordPomodoroSession, getWeeklyPomodoroData, computeFocusScore, getScoreLabel, getStreak } from '../utils/focusScoreEngine';
 import BlacklistManager from '../components/BlacklistManager';
 
 const screenWidth = Dimensions.get('window').width;
@@ -28,6 +28,10 @@ export default function ScreentimeScreen() {
     const [score, setScore] = useState(0);
     const [scoreText, setScoreText] = useState('');
     const [blacklist, setBlacklist] = useState([]);
+    const [streak, setStreak] = useState(0);
+    const [weeklyTotalMin, setWeeklyTotalMin] = useState(0);
+    const [monthlyMinutes, setMonthlyMinutes] = useState(0);
+    const [lastMonthMinutes, setLastMonthMinutes] = useState(0);
     
     // Load Blacklist
     useEffect(() => {
@@ -80,10 +84,33 @@ export default function ScreentimeScreen() {
                 try {
                     const pomData = await getWeeklyPomodoroData();
                     setWeeklyHours(pomData.dailyHours);
+                    setWeeklyTotalMin(pomData.totalMinutes);
 
                     const { score: focusScore } = await computeFocusScore();
                     setScore(focusScore);
                     setScoreText(getScoreLabel(focusScore));
+
+                    // Load streak
+                    const streakData = await getStreak();
+                    setStreak(streakData.currentStreak || 0);
+
+                    // Load monthly pomodoro data
+                    const raw = await AsyncStorage.getItem('@pomodoro_sessions');
+                    const sessions = raw ? JSON.parse(raw) : [];
+                    const now = new Date();
+                    const thisMonthStr = now.toISOString().slice(0, 7); // "YYYY-MM"
+                    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    const lastMonthStr = lastMonth.toISOString().slice(0, 7);
+
+                    const thisMonthMin = sessions
+                        .filter(s => s.date.startsWith(thisMonthStr))
+                        .reduce((sum, s) => sum + s.minutes, 0);
+                    const lastMonthMin = sessions
+                        .filter(s => s.date.startsWith(lastMonthStr))
+                        .reduce((sum, s) => sum + s.minutes, 0);
+
+                    setMonthlyMinutes(thisMonthMin);
+                    setLastMonthMinutes(lastMonthMin);
                 } catch (err) {
                     console.error('ScreentimeScreen load error:', err);
                 }
@@ -236,11 +263,82 @@ export default function ScreentimeScreen() {
                 </View>
             </View>
 
+            {/* Weekly Stats Card */}
+            <View style={styles.card}>
+                <Text style={styles.cardTitle}>Weekly Stats</Text>
+                <View style={styles.statsRow}>
+                    <View style={styles.statItem}>
+                        <Clock size={16} color={theme.colors.blue} />
+                        <Text style={styles.statValue}>
+                            {Math.floor(weeklyTotalMin / 60)}h {weeklyTotalMin % 60}m
+                        </Text>
+                        <Text style={styles.statLabel}>Total Focus</Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statItem}>
+                        <TrendingUp size={16} color={theme.colors.green} />
+                        <Text style={styles.statValue}>
+                            {(weeklyTotalMin / 7 / 60).toFixed(1)}h
+                        </Text>
+                        <Text style={styles.statLabel}>Daily Avg</Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statItem}>
+                        <Flame size={16} color={theme.colors.orange} />
+                        <Text style={styles.statValue}>{streak}</Text>
+                        <Text style={styles.statLabel}>{streak === 1 ? 'Day Streak' : 'Day Streak'}</Text>
+                    </View>
+                </View>
+                <BarChart
+                    data={{
+                        labels: DAY_LABELS,
+                        datasets: [{ data: weeklyHours.some(h => h > 0) ? weeklyHours : [0, 0, 0, 0, 0, 0, 0.1] }],
+                    }}
+                    width={screenWidth - 100}
+                    height={160}
+                    yAxisSuffix="h"
+                    withInnerLines={false}
+                    showValuesOnTopOfBars={false}
+                    fromZero
+                    chartConfig={{
+                        backgroundColor: theme.colors.surface,
+                        backgroundGradientFrom: theme.colors.surface,
+                        backgroundGradientTo: theme.colors.surface,
+                        decimalPlaces: 1,
+                        color: (o = 1) => theme.colors.accent,
+                        labelColor: () => theme.colors.ink3,
+                        barPercentage: 0.5,
+                        propsForBackgroundLines: { stroke: theme.colors.border },
+                    }}
+                    style={{ borderRadius: 8, marginTop: 12 }}
+                />
+            </View>
+
+            {/* Monthly Overview */}
+            <View style={styles.card}>
+                <Text style={styles.cardTitle}>Monthly Overview</Text>
+                <Text style={styles.monthlyValue}>
+                    {(monthlyMinutes / 60).toFixed(1)} hours
+                </Text>
+                <Text style={styles.monthlyLabel}>this month</Text>
+                {lastMonthMinutes > 0 ? (
+                    <Text style={[styles.monthlyCompare, {
+                        color: monthlyMinutes >= lastMonthMinutes ? theme.colors.green : theme.colors.orange,
+                    }]}>
+                        {monthlyMinutes >= lastMonthMinutes
+                            ? `+${((monthlyMinutes - lastMonthMinutes) / 60).toFixed(1)}h from last month`
+                            : `${((monthlyMinutes - lastMonthMinutes) / 60).toFixed(1)}h from last month`}
+                    </Text>
+                ) : (
+                    <Text style={styles.monthlyCompare}>No data from last month</Text>
+                )}
+            </View>
+
             {/* Website Blocker Manager */}
-            <BlacklistManager 
-                blacklist={blacklist} 
-                onAdd={handleAddDomain} 
-                onRemove={handleRemoveDomain} 
+            <BlacklistManager
+                blacklist={blacklist}
+                onAdd={handleAddDomain}
+                onRemove={handleRemoveDomain}
             />
 
             {/* Weekly chart */}
@@ -322,4 +420,16 @@ const getStyles = (theme) => StyleSheet.create({
     tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 10 },
     tipEmoji: { fontSize: 16, width: 22 },
     tipText: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, flex: 1, lineHeight: 20 },
+
+    // Weekly Stats
+    statsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
+    statItem: { flex: 1, alignItems: 'center', gap: 4 },
+    statValue: { fontFamily: theme.fonts.d, fontSize: 20, fontWeight: '700', color: theme.colors.ink },
+    statLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.8 },
+    statDivider: { width: 1, height: 36, backgroundColor: theme.colors.border },
+
+    // Monthly Overview
+    monthlyValue: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, marginTop: 8 },
+    monthlyLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 },
+    monthlyCompare: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink3, marginTop: 8 },
 });

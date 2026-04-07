@@ -30,6 +30,7 @@ import {
   CormorantGaramond_700Bold,
 } from '@expo-google-fonts/cormorant-garamond';
 import { ThemeProvider } from './src/context/ThemeContext';
+import { PremiumProvider } from './src/context/PremiumContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './src/supabaseClient';
 import WelcomeScreen from './src/screens/WelcomeScreen';
@@ -91,21 +92,7 @@ export default function App() {
     return () => clearTimeout(timeout);
   }, [isAuthenticating, session]);
 
-  React.useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const handleBeforeUnload = () => {
-        // Clear sensitive data on tab close for privacy
-        // We use synchronous localStorage for reliability during unload if possible,
-        // but AsyncStorage is the standard here.
-        const keysToClear = ['svUsername', 'svPassword', 'svDistrictUrl', 'studentVueGrades'];
-        keysToClear.forEach(key => {
-          localStorage.removeItem(key);
-        });
-      };
-      window.addEventListener('beforeunload', handleBeforeUnload);
-      return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-    }
-  }, []);
+  // beforeunload handler removed — session and grade data should persist across tab closes
 
   const [fontsLoaded] = useFonts({
     'Playfair Display': PlayfairDisplay_400Regular,
@@ -144,10 +131,13 @@ export default function App() {
     config: {
       screens: {
         Home: '',
+        AI: 'ai',
         Calendar: 'calendar',
         Gradebook: 'gradebook',
         Focus: 'focus',
         Leaderboard: 'leaderboard',
+        Integrations: 'integrations',
+        Premium: 'premium',
         Settings: 'settings',
       },
     },
@@ -166,6 +156,7 @@ export default function App() {
 
   return (
     <ThemeProvider>
+      <PremiumProvider>
       <NavigationContainer linking={linking}>
         {(session || guestMode) ? (
           <TabNavigator isGuest={guestMode && !session} onSignOut={handleSignOut} />
@@ -199,6 +190,7 @@ export default function App() {
               </View>
           </View>
       </Modal>
+    </PremiumProvider>
     </ThemeProvider>
   );
 }
@@ -212,46 +204,49 @@ const styles = StyleSheet.create({
         padding: 24,
     },
     successPopup: {
-        backgroundColor: '#fff',
-        borderRadius: 24,
-        padding: 32,
+        backgroundColor: '#1a1a1a',
+        borderRadius: 20,
+        padding: 28,
         alignItems: 'center',
-        borderWidth: 3,
-        borderColor: '#0d0c0a',
+        borderWidth: 1,
+        borderColor: '#2a2a2a',
         width: '100%',
         maxWidth: 400,
-        // Neo-Brutalism Shadow
         shadowColor: '#000',
-        shadowOffset: { width: 8, height: 8 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
         elevation: 10,
     },
     successTitle: {
-        fontSize: 28,
-        fontWeight: '900',
-        color: '#0d0c0a',
-        marginBottom: 12,
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#F5F3E9',
+        marginBottom: 10,
         textAlign: 'center',
     },
     successText: {
-        fontSize: 16,
-        color: '#444',
+        fontSize: 14,
+        color: '#999',
         textAlign: 'center',
-        lineHeight: 24,
-        marginBottom: 28,
+        lineHeight: 22,
+        marginBottom: 24,
     },
     successBtn: {
-        backgroundColor: '#0d0c0a',
-        paddingVertical: 16,
-        paddingHorizontal: 32,
+        backgroundColor: '#F5F3E9',
+        paddingVertical: 14,
         borderRadius: 12,
         width: '100%',
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 3,
     },
     successBtnText: {
-        color: '#fff',
-        fontSize: 18,
+        color: '#121212',
+        fontSize: 16,
         fontWeight: '700',
     },
 });

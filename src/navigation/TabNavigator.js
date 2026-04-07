@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, CalendarDays, BookOpen, Settings, Timer, Trophy, Plug } from 'lucide-react-native';
+import { Home, CalendarDays, BookOpen, Settings, Timer, Trophy, Plug, Crown, Sparkles } from 'lucide-react-native';
 import DashboardScreen from '../screens/DashboardScreen';
 import MatrixScreen from '../screens/MatrixScreen';
 import GradebookScreen from '../screens/GradebookScreen';
@@ -9,6 +9,8 @@ import SettingsScreen from '../screens/SettingsScreen';
 import ScreentimeScreen from '../screens/ScreentimeScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import IntegrationsScreen from '../screens/IntegrationsScreen';
+import PremiumScreen from '../screens/PremiumScreen';
+import AIAssistantScreen from '../screens/AIAssistantScreen';
 import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
 
@@ -19,11 +21,13 @@ const SIDEBAR_WIDTH = isWeb ? 220 : 72;
 
 const NAV_ITEMS = [
     { name: 'Home', label: 'Dashboard', Icon: Home },
+    { name: 'AI', label: 'AI Assistant', Icon: Sparkles, highlight: true },
     { name: 'Calendar', label: 'Calendar', Icon: CalendarDays },
     { name: 'Gradebook', label: 'Gradebook', Icon: BookOpen },
     { name: 'Focus', label: 'Focus', Icon: Timer },
     { name: 'Leaderboard', label: 'Leaderboard', Icon: Trophy },
     { name: 'Integrations', label: 'Integrations', Icon: Plug },
+    { name: 'Premium', label: 'Upgrade', Icon: Crown, highlight: true },
     { name: 'Settings', label: 'Settings', Icon: Settings },
 ];
 
@@ -49,15 +53,18 @@ function CustomSidebar({ state, descriptors, navigation }) {
                         if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
                     };
 
+                    const isHighlight = nav.highlight;
+                    const iconColor = isHighlight ? '#FFB800' : (isFocused ? theme.colors.ink : theme.colors.ink3);
+
                     return (
                         <TouchableOpacity
                             key={route.key}
                             onPress={onPress}
                             style={[styles.navItem, isFocused && styles.navItemFocused, !isWeb && { justifyContent: 'center' }]}
                         >
-                            <Icon size={20} color={isFocused ? theme.colors.ink : theme.colors.ink3} strokeWidth={isFocused ? 2.5 : 2} />
+                            <Icon size={20} color={iconColor} strokeWidth={isFocused ? 2.5 : 2} />
                             {isWeb && (
-                                <Text style={[styles.navLabel, isFocused && styles.navLabelFocused]}>{label}</Text>
+                                <Text style={[styles.navLabel, isFocused && styles.navLabelFocused, isHighlight && { color: '#FFB800' }]}>{label}</Text>
                             )}
                         </TouchableOpacity>
                     );
@@ -79,11 +86,13 @@ export default function TabNavigator({ isGuest, onSignOut }) {
             }}
         >
             <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: 'Dashboard' }} />
+            <Tab.Screen name="AI" component={AIAssistantScreen} options={{ tabBarLabel: 'AI Assistant' }} />
             <Tab.Screen name="Calendar" component={MatrixScreen} options={{ tabBarLabel: 'Calendar' }} />
             <Tab.Screen name="Gradebook" component={GradebookScreen} options={{ tabBarLabel: 'Gradebook' }} />
             <Tab.Screen name="Focus" component={ScreentimeScreen} options={{ tabBarLabel: 'Focus' }} />
             <Tab.Screen name="Leaderboard" component={LeaderboardScreen} options={{ tabBarLabel: 'Leaderboard' }} />
             <Tab.Screen name="Integrations" component={IntegrationsScreen} options={{ tabBarLabel: 'Integrations' }} />
+            <Tab.Screen name="Premium" component={PremiumScreen} options={{ tabBarLabel: 'Upgrade' }} />
             <Tab.Screen name="Settings">
                 {(props) => <SettingsScreen {...props} isGuest={isGuest} onSignOut={onSignOut} />}
             </Tab.Screen>

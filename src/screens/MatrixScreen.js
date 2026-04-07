@@ -9,7 +9,7 @@ import ICAL from 'ical.js';
 import { supabase } from '../supabaseClient';
 import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
-import { ChevronLeft, ChevronRight, Plus, Download, CalendarDays, Zap } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Download, CalendarDays, Zap, Sparkles } from 'lucide-react-native';
 import { fetchFreeBusy, createGoogleCalendarEvent } from '../utils/googleCalendarAPI';
 import { performSmartScheduling } from '../utils/schedulerAssistant';
 import { getUserId } from '../utils/auth';
@@ -433,6 +433,86 @@ export default function MatrixScreen() {
         }
     };
 
+    const handleAutoPrioritize = () => {
+        const confirmMsg = 'Auto-sort will recalculate urgency based on due dates and boost importance for exams/projects. Continue?';
+        const runAutoPrioritize = async () => {
+            setSaving(true);
+            try {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const updates = [];
+
+                for (const task of tasks) {
+                    if (task.type === 'worktime' || String(task.id).startsWith('wt_')) continue;
+                    let newUrgency = task.urgency;
+                    let newImportance = task.importance;
+                    let changed = false;
+
+                    // Recalculate urgency based on due_date
+                    if (task.due_date) {
+                        const due = new Date(task.due_date + 'T23:59:59');
+                        const diffMs = due - today;
+                        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+                        if (diffDays <= 0) newUrgency = 10;
+                        else if (diffDays === 1) newUrgency = 9;
+                        else if (diffDays <= 3) newUrgency = 8;
+                        else if (diffDays <= 7) newUrgency = 6;
+                        else if (diffDays <= 14) newUrgency = 4;
+                        else newUrgency = 2;
+
+                        if (newUrgency !== task.urgency) changed = true;
+                    }
+
+                    // Boost importance based on task_type
+                    const tt = (task.task_type || '').toLowerCase();
+                    if (tt === 'exam' || tt === 'test' || tt === 'exam study') {
+                        if (newImportance < 9) { newImportance = 9; changed = true; }
+                    } else if (tt === 'project' || tt === 'essay') {
+                        if (newImportance < 8) { newImportance = 8; changed = true; }
+                    }
+
+                    if (changed) {
+                        updates.push({ id: task.id, urgency: newUrgency, importance: newImportance });
+                    }
+                }
+
+                if (updates.length === 0) {
+                    if (Platform.OS === 'web') window.alert('All tasks are already optimally prioritized.');
+                    else Alert.alert('Up to Date', 'All tasks are already optimally prioritized.');
+                    setSaving(false);
+                    return;
+                }
+
+                // Update each modified task in Supabase
+                for (const u of updates) {
+                    await supabase.from('tasks').update({ urgency: u.urgency, importance: u.importance }).eq('id', u.id);
+                }
+
+                // Reload tasks
+                await fetchTasks();
+
+                if (Platform.OS === 'web') window.alert(`Auto-sorted ${updates.length} tasks based on due dates and types.`);
+                else Alert.alert('Auto-Sort Complete', `Updated priorities for ${updates.length} tasks.`);
+            } catch (err) {
+                console.error('Auto-prioritize error:', err);
+                if (Platform.OS === 'web') window.alert('Failed to auto-sort tasks.');
+                else Alert.alert('Error', 'Failed to auto-sort tasks.');
+            } finally {
+                setSaving(false);
+            }
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(confirmMsg)) runAutoPrioritize();
+        } else {
+            Alert.alert('Auto-Sort Tasks', confirmMsg, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Auto-Sort', onPress: runAutoPrioritize },
+            ]);
+        }
+    };
+
     const toggleTaskSelection = (id) => {
         setSelectedTaskIds(prev =>
             prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -504,6 +584,10 @@ export default function MatrixScreen() {
                             <Text style={styles.subtitle}>{MN[month]} {year} · {tasks.length} tasks</Text>
                         </View>
                         <View style={styles.btnRow}>
+                            <TouchableOpacity style={[styles.btnDark, { backgroundColor: theme.colors.orange }]} onPress={handleAutoPrioritize} disabled={saving}>
+                                <Sparkles color="#fff" size={16} />
+                                <Text style={styles.btnDarkText}>Auto-Sort</Text>
+                            </TouchableOpacity>
                             <TouchableOpacity style={[styles.btnDark, { backgroundColor: theme.colors.purple }]} onPress={handleSmartSchedule} disabled={saving}>
                                 {saving ? <ActivityIndicator size="small" color="#fff" /> : <Zap color="#fff" size={16} />}
                                 <Text style={styles.btnDarkText}>Auto-Schedule</Text>

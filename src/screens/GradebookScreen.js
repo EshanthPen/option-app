@@ -2,14 +2,19 @@ import React, { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, TextInput,
     Alert, ScrollView, Modal, ActivityIndicator, Platform,
-    KeyboardAvoidingView, Pressable
+    KeyboardAvoidingView, Pressable, Dimensions
 } from 'react-native';
+import { LineChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { ChevronLeft, RefreshCw, Plus, BookOpen, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, RefreshCw, Plus, BookOpen, Trash2, Bell, FileText } from 'lucide-react-native';
+import * as Notifications from 'expo-notifications';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { useTheme } from '../context/ThemeContext';
 import { parseStudentVueGradebook } from '../utils/studentVueParser';
 import { getRecentGradeChanges, dismissGradeChanges, isAssignmentNew, isClassGradeChanged, saveGradeSnapshot, checkForGradeChanges, formatChangeMessage } from '../utils/gradeNotifications';
+import { scheduleGradeChangeNotification } from '../utils/notificationService';
 
 // ── Helpers ───────────────────────────────────────────────────
 const gradeColor = (pct, theme) => {
@@ -200,6 +205,14 @@ export default function GradebookScreen() {
                     : `${changes.length} grade updates detected`;
                 if (Platform.OS === 'web') window.alert(`Grade Update: ${msg}`);
                 else Alert.alert('Grade Update', msg);
+                // Fire push notifications for grade changes
+                if (Platform.OS !== 'web') {
+                    for (const change of changes) {
+                        if (change.type === 'grade_changed' && typeof change.oldGrade === 'number' && typeof change.newGrade === 'number') {
+                            scheduleGradeChangeNotification(change.className, change.oldGrade, change.newGrade).catch(() => {});
+                        }
+                    }
+                }
             }
         }
     };
@@ -219,7 +232,6 @@ export default function GradebookScreen() {
         setShowAddClass(false);
         setNewClassName(''); setNewClassTeacher(''); setNewClassType('ST');
         setSelectedClass(cls);
-        setViewMode('assignments');
     };
 
     const deleteManualClass = async (id) => {
@@ -271,6 +283,60 @@ export default function GradebookScreen() {
             return s + wGP;
         }, 0);
         return (pts / allClasses.length).toFixed(2);
+    };
+
+    // ── Share Report Card (PDF) ────────────────────────────
+    const shareReportCard = async () => {
+        try {
+            const rows = allClasses.map(c => {
+                const g = parseFloat(c.grade) || 0;
+                const letter = gradeLetter(g);
+                const { wGP, uGP } = buildGP(g, c.type);
+                const color = g >= 90 ? '#22c55e' : g >= 80 ? '#3b82f6' : g >= 70 ? '#f59e0b' : '#ef4444';
+                return `<tr>
+                    <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-weight:500;">${c.name}</td>
+                    <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${c.type || 'ST'}</td>
+                    <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:${color};font-weight:700;">${letter}</td>
+                    <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:${color};font-weight:600;">${g.toFixed(1)}%</td>
+                    <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${wGP}</td>
+                    <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${uGP}</td>
+                </tr>`;
+            }).join('');
+
+            const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+                body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:32px;color:#1a1a2e;background:#fff}
+                h1{font-size:24px;margin:0 0 4px}
+                .sub{font-size:12px;color:#6b7280;margin-bottom:24px}
+                .gpa-box{background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:16px 24px;margin-bottom:24px;display:inline-block}
+                .gpa-label{font-size:10px;color:#6b7280;letter-spacing:2px;text-transform:uppercase}
+                .gpa-val{font-size:28px;font-weight:700;color:#1a1a2e}
+                table{width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
+                th{background:#f1f5f9;padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#6b7280;text-align:left;border-bottom:2px solid #e5e7eb}
+                td{font-size:14px}
+                .footer{margin-top:24px;font-size:10px;color:#9ca3af;text-align:center}
+            </style></head><body>
+                <h1>Report Card</h1>
+                <p class="sub">${curPeriodName || 'Current Period'} &middot; Generated ${new Date().toLocaleDateString()}</p>
+                <div class="gpa-box"><div class="gpa-label">WEIGHTED GPA</div><div class="gpa-val">${overallGPA()}</div></div>
+                <table>
+                    <thead><tr><th>Class</th><th style="text-align:center">Type</th><th style="text-align:center">Grade</th><th style="text-align:center">Pct</th><th style="text-align:center">W.GPA</th><th style="text-align:center">U.GPA</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <p class="footer">Generated by Option App</p>
+            </body></html>`;
+
+            if (Platform.OS === 'web') {
+                const w = window.open('', '_blank');
+                if (w) { w.document.write(html); w.document.close(); w.print(); }
+                return;
+            }
+
+            const { uri } = await Print.printToFileAsync({ html });
+            await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
+        } catch (err) {
+            console.error('Share report error:', err);
+            Alert.alert('Error', 'Could not generate report card.');
+        }
     };
 
     // ── Hypothetical grade calc ──────────────────────────────
@@ -363,6 +429,18 @@ export default function GradebookScreen() {
                         </View>
                     )}
 
+                    {/* Share Report Button */}
+                    {allClasses.length > 0 && (
+                        <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, padding: 12, marginBottom: 16, ...theme.shadows.sm }}
+                            onPress={shareReportCard}
+                            activeOpacity={0.75}
+                        >
+                            <FileText size={16} color={theme.colors.accent} />
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, fontWeight: '600', color: theme.colors.accent }}>Share Report Card</Text>
+                        </TouchableOpacity>
+                    )}
+
                     {/* No data state */}
                     {allClasses.length === 0 && (
                         <View style={S.emptyState}>
@@ -429,6 +507,68 @@ export default function GradebookScreen() {
                             )}
                         </View>
                     </View>
+
+                    {/* Grade Trend Chart */}
+                    {(() => {
+                        const graded = (cls.assignments || []).filter(a => {
+                            const s = parseFloat(a.score), t = parseFloat(a.total);
+                            return !isNaN(s) && !isNaN(t) && t > 0;
+                        });
+                        if (graded.length < 2) return null;
+                        const sorted = [...graded].sort((a, b) => {
+                            const da = a.date ? new Date(a.date) : 0;
+                            const db = b.date ? new Date(b.date) : 0;
+                            return da - db;
+                        });
+                        const runningGrades = [];
+                        for (let i = 1; i <= sorted.length; i++) {
+                            const slice = sorted.slice(0, i);
+                            const g = calcGrade(slice);
+                            runningGrades.push(g !== null ? Math.round(g * 10) / 10 : 0);
+                        }
+                        const labels = sorted.map((a, i) =>
+                            i === 0 || i === sorted.length - 1
+                                ? (a.date ? a.date.replace(/\/\d{4}$/, '') : `${i + 1}`)
+                                : ''
+                        );
+                        const chartWidth = Dimensions.get('window').width - 56;
+                        return (
+                            <View style={S.gradeTrendCard}>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 }}>
+                                    GRADE TREND
+                                </Text>
+                                <LineChart
+                                    data={{
+                                        labels,
+                                        datasets: [{ data: runningGrades, strokeWidth: 2 }],
+                                    }}
+                                    width={chartWidth}
+                                    height={140}
+                                    yAxisSuffix="%"
+                                    fromZero={false}
+                                    withInnerLines={false}
+                                    withOuterLines={false}
+                                    withDots={runningGrades.length <= 15}
+                                    chartConfig={{
+                                        backgroundColor: 'transparent',
+                                        backgroundGradientFrom: theme.colors.surface,
+                                        backgroundGradientTo: theme.colors.surface,
+                                        decimalPlaces: 0,
+                                        color: () => gColor,
+                                        labelColor: () => theme.colors.ink3,
+                                        propsForLabels: { fontFamily: theme.fonts.m, fontSize: 10 },
+                                        propsForDots: { r: '3', strokeWidth: '0', fill: gColor },
+                                        fillShadowGradientFrom: gColor,
+                                        fillShadowGradientFromOpacity: 0.15,
+                                        fillShadowGradientTo: gColor,
+                                        fillShadowGradientToOpacity: 0,
+                                    }}
+                                    bezier
+                                    style={{ borderRadius: 8, marginLeft: -8 }}
+                                />
+                            </View>
+                        );
+                    })()}
 
                     {/* Controls row: Hypothetical + Category filter */}
                     <View style={S.controlsBar}>
@@ -531,6 +671,39 @@ export default function GradebookScreen() {
                                             ) : (
                                                 <Text style={[S.asgnScore, { color: theme.colors.ink4, fontSize: 16 }]}>{t > 0 ? t : '—'}</Text>
                                             )}
+                                            {/* Assignment reminder bell */}
+                                            {(() => {
+                                                const dateStr = a.due_date || a.date;
+                                                if (!dateStr || Platform.OS === 'web') return null;
+                                                const parsed = new Date(dateStr);
+                                                if (isNaN(parsed.getTime()) || parsed <= new Date()) return null;
+                                                return (
+                                                    <TouchableOpacity
+                                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                        style={{ marginTop: 4 }}
+                                                        onPress={async () => {
+                                                            try {
+                                                                const reminderDate = new Date(parsed.getTime() - 2 * 24 * 60 * 60 * 1000);
+                                                                const now = new Date();
+                                                                if (reminderDate <= now) {
+                                                                    Alert.alert('Too Soon', 'This assignment is due in less than 2 days.');
+                                                                    return;
+                                                                }
+                                                                await Notifications.scheduleNotificationAsync({
+                                                                    content: { title: 'Assignment Due Soon', body: `"${a.name || a.title}" is due in 2 days` },
+                                                                    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminderDate },
+                                                                });
+                                                                Alert.alert('Reminder Set', `Reminder set for ${reminderDate.toLocaleDateString()}`);
+                                                            } catch (err) {
+                                                                console.warn('Failed to schedule reminder:', err);
+                                                                Alert.alert('Error', 'Could not schedule reminder.');
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Bell size={13} color={theme.colors.blue} />
+                                                    </TouchableOpacity>
+                                                );
+                                            })()}
                                             {cls.isManual && (
                                                 <TouchableOpacity onPress={() => deleteAssignment(a.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginTop: 4 }}>
                                                     <Trash2 size={13} color={theme.colors.red} />
@@ -544,7 +717,7 @@ export default function GradebookScreen() {
                     </ScrollView>
 
                     {/* Delete manual class */}
-                    {cls.isManual && viewMode === 'assignments' && (
+                    {cls.isManual && (
                         <TouchableOpacity style={S.deleteClassBtn} onPress={() => Alert.alert('Delete class?', `Remove "${cls.name}"?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => deleteManualClass(cls.id) }])}>
                             <Trash2 size={14} color={theme.colors.red} />
                             <Text style={[S.deleteClassTxt]}>Delete Class</Text>
@@ -561,7 +734,7 @@ export default function GradebookScreen() {
             )}
 
             {/* FAB: Add assignment */}
-            {cls?.isManual && viewMode === 'assignments' && (
+            {cls?.isManual && (
                 <TouchableOpacity style={S.fab} onPress={() => setShowAddAsgn(true)} activeOpacity={0.85}>
                     <Plus size={22} color="#fff" />
                 </TouchableOpacity>
@@ -680,6 +853,9 @@ const getStyles = (theme) => StyleSheet.create({
     detailName: { fontFamily: theme.fonts.d, fontSize: 24, fontWeight: '700', color: theme.colors.ink, marginBottom: 4, lineHeight: 28 },
     detailMeta: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginBottom: 8 },
     detailTags: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+
+    // Grade trend card
+    gradeTrendCard: { marginHorizontal: 20, marginBottom: 12, backgroundColor: theme.colors.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, padding: 14, ...theme.shadows.sm },
 
     // Controls bar
     controlsBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 20, marginBottom: 8 },

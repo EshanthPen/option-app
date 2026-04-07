@@ -1,0 +1,42 @@
+<!-- Supabase Auth: Invite User Email Template -->
+<!-- Paste this into Supabase Dashboard > Authentication > Email Templates > Invite user -->
+<!-- Subject: You're invited to Option -->
+
+<div style="max-width: 480px; margin: 0 auto; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #111118; border-radius: 16px; overflow: hidden;">
+  <!-- Header -->
+  <div style="background-color: #1C1C26; padding: 32px 24px; text-align: center; border-bottom: 1px solid #2E2E42;">
+    <div style="display: inline-block; width: 48px; height: 48px; background-color: #EEEEF2; border-radius: 14px; line-height: 48px; font-size: 24px; font-weight: 800; color: #111118; margin-bottom: 12px;">O</div>
+    <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #EEEEF2; letter-spacing: -0.3px;">You're Invited!</h1>
+    <p style="margin: 6px 0 0; font-size: 14px; color: #8888A0;">Join Option and optimize your academic life</p>
+  </div>
+
+  <!-- Body -->
+  <div style="padding: 32px 24px;">
+    <p style="margin: 0 0 20px; font-size: 15px; color: #C8C8D4; line-height: 24px;">
+      You've been invited to join Option &mdash; the app that automates and optimizes your academic life. Click below to accept and create your account.
+    </p>
+
+    <!-- CTA Button -->
+    <div style="text-align: center; margin: 28px 0;">
+      <a href="{{ .ConfirmationURL }}" style="display: inline-block; background-color: #EEEEF2; color: #111118; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 12px;">
+        Accept Invitation
+      </a>
+    </div>
+
+    <!-- Divider -->
+    <div style="border-top: 1px solid #2E2E42; margin: 28px 0;"></div>
+
+    <!-- Link fallback -->
+    <p style="margin: 0; font-size: 12px; color: #55556A; line-height: 18px;">
+      Button not working? Copy and paste this link:<br>
+      <a href="{{ .ConfirmationURL }}" style="color: #8888A0; word-break: break-all;">{{ .ConfirmationURL }}</a>
+    </p>
+  </div>
+
+  <!-- Footer -->
+  <div style="padding: 20px 24px; text-align: center; border-top: 1px solid #2E2E42;">
+    <p style="margin: 0; font-size: 11px; color: #55556A;">
+      Option &mdash; Your academic life, automated & optimized.
+    </p>
+  </div>
+</div>

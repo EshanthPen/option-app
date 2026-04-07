@@ -12,7 +12,7 @@ export const KNOWN_DISTRICTS = [
     { id: 'aps', name: 'Albuquerque Public Schools (NM)', url: 'https://mystudent.aps.edu' },
     { id: 'cps', name: 'Chesapeake Public Schools (VA)', url: 'https://siscps.cpschools.com' },
     { id: 'rcps', name: 'Roanoke County Public Schools (VA)', url: 'https://synergy.rcps.us' },
-    { id: 'nysmith', name: 'Nysmith School (VA)', url: 'https://sis.nysmith.com' },
+    { id: 'nysmith', name: 'Nysmith School (VA) — Focus SIS', url: 'https://sis.nysmith.com', focusSIS: true },
     { id: 'custom', name: 'Other (Enter Custom URL)', url: 'custom' },
 ];
 

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Moon, Sun } from 'lucide-react-native';
+import { Moon, Sun, Crown, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
+import { usePremium } from '../context/PremiumContext';
 import WorkingHoursGraph from '../components/WorkingHoursGraph';
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ navigation }) {
     const { theme, toggleTheme, isDarkMode } = useTheme();
+    const { isPro } = usePremium();
     const styles = getStyles(theme);
     const [userName, setUserName] = useState('');
 
@@ -60,6 +62,56 @@ export default function SettingsScreen() {
                 <Text style={styles.header}>Settings</Text>
                 <Text style={styles.subtitle}>Preferences & configuration</Text>
             </View>
+
+            {/* Premium Upgrade Card */}
+            {!isPro && (
+                <TouchableOpacity
+                    style={{
+                        backgroundColor: 'rgba(255, 184, 0, 0.08)',
+                        borderRadius: 14,
+                        padding: 16,
+                        marginBottom: 20,
+                        borderWidth: 1,
+                        borderColor: 'rgba(255, 184, 0, 0.2)',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                    }}
+                    onPress={() => navigation?.navigate('Premium')}
+                    activeOpacity={0.7}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={{
+                            width: 40, height: 40, borderRadius: 12,
+                            backgroundColor: 'rgba(255, 184, 0, 0.15)',
+                            justifyContent: 'center', alignItems: 'center',
+                        }}>
+                            <Crown size={20} color="#FFB800" />
+                        </View>
+                        <View>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.ink, fontFamily: theme.fonts.s }}>
+                                Upgrade to Pro
+                            </Text>
+                            <Text style={{ fontSize: 12, color: theme.colors.ink3, fontFamily: theme.fonts.m, marginTop: 2 }}>
+                                Unlock all features · 7-day free trial
+                            </Text>
+                        </View>
+                    </View>
+                    <ChevronRight size={18} color="#FFB800" />
+                </TouchableOpacity>
+            )}
+
+            {isPro && (
+                <View style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 8,
+                    marginBottom: 20, paddingHorizontal: 4,
+                }}>
+                    <Crown size={16} color="#FFB800" />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#FFB800', fontFamily: theme.fonts.s }}>
+                        Option Pro Active
+                    </Text>
+                </View>
+            )}
 
             {/* Profile */}
             <Text style={styles.sectionTitle}>Profile</Text>
