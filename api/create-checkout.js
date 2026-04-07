@@ -16,14 +16,21 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Debug: check which env vars are set (only shows key names, not values)
+  // Debug: check which env vars are set
   if (req.method === 'GET') {
+    // List all env var names that contain STRIPE or SUPABASE (values hidden)
+    const allEnvKeys = Object.keys(process.env).filter(k =>
+      k.includes('STRIPE') || k.includes('SUPABASE') || k.includes('VERCEL')
+    );
     return res.status(200).json({
       hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
       hasMonthlyPrice: !!process.env.STRIPE_MONTHLY_PRICE_ID,
       hasYearlyPrice: !!process.env.STRIPE_YEARLY_PRICE_ID,
       hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
       keyPrefix: process.env.STRIPE_SECRET_KEY ? process.env.STRIPE_SECRET_KEY.substring(0, 8) + '...' : 'NOT SET',
+      relevantEnvKeys: allEnvKeys,
+      vercelEnv: process.env.VERCEL_ENV || 'unknown',
+      vercelProject: process.env.VERCEL_PROJECT_PRODUCTION_URL || 'unknown',
     });
   }
 
