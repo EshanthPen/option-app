@@ -103,6 +103,7 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                     email: trimmedEmail,
                     password: trimmedPassword,
                     options: {
+                        emailRedirectTo: 'https://optionapp.online',
                         data: {
                             full_name: fullName.trim(),
                             app_name: 'Option Dashboard',
