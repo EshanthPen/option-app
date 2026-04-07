@@ -5,13 +5,6 @@
  * Called from PremiumScreen when user taps "Start Pro" on web.
  */
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-
-const PRICE_MAP = {
-  pro_monthly: process.env.STRIPE_MONTHLY_PRICE_ID,
-  pro_yearly: process.env.STRIPE_YEARLY_PRICE_ID,
-};
-
 export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -32,6 +25,14 @@ export default async function handler(req, res) {
   }
 
   try {
+    const Stripe = (await import('stripe')).default;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+    const PRICE_MAP = {
+      pro_monthly: process.env.STRIPE_MONTHLY_PRICE_ID,
+      pro_yearly: process.env.STRIPE_YEARLY_PRICE_ID,
+    };
+
     const { planId, userId, email } = req.body;
 
     if (!planId || !userId) {

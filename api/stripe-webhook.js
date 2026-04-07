@@ -6,15 +6,6 @@
  *          customer.subscription.deleted
  */
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { createClient } = require('@supabase/supabase-js');
-
-// Use Supabase service role key to write subscriptions (bypasses RLS)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -27,19 +18,20 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing webhook secret or signature' });
   }
 
-  let event;
-
   try {
+    const Stripe = (await import('stripe')).default;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://cmrirqwntwgmxignbrvj.supabase.co',
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
     // Verify the webhook signature
-    // Note: Vercel gives us the raw body as a buffer when we disable bodyParser
     const rawBody = req.body;
-    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
-    return res.status(400).json({ error: `Webhook Error: ${err.message}` });
-  }
+    const event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
 
-  try {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
@@ -66,16 +58,15 @@ export default async function handler(req, res) {
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
 
-        console.log(`✅ Subscription activated for user ${userId}`);
+        console.log(`Subscription activated for user ${userId}`);
         break;
       }
 
       case 'customer.subscription.updated': {
         const subscription = event.data.object;
-        const userId = subscription.metadata?.supabase_user_id;
+        let userId = subscription.metadata?.supabase_user_id;
 
         if (!userId) {
-          // Try to find user by stripe_customer_id
           const { data } = await supabase
             .from('subscriptions')
             .select('user_id')
@@ -86,18 +77,28 @@ export default async function handler(req, res) {
             console.error('Could not find user for subscription update');
             break;
           }
-
-          await updateSubscription(data.user_id, subscription);
-        } else {
-          await updateSubscription(userId, subscription);
+          userId = data.user_id;
         }
+
+        const status = subscription.status === 'active' || subscription.status === 'trialing'
+          ? 'active'
+          : subscription.status;
+
+        await supabase.from('subscriptions').update({
+          status,
+          current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+          current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+          cancel_at_period_end: subscription.cancel_at_period_end || false,
+          updated_at: new Date().toISOString(),
+        }).eq('user_id', userId);
+
+        console.log(`Subscription updated for user ${userId}: ${status}`);
         break;
       }
 
       case 'customer.subscription.deleted': {
         const subscription = event.data.object;
 
-        // Find the user and cancel their subscription
         const { data } = await supabase
           .from('subscriptions')
           .select('user_id')
@@ -111,7 +112,7 @@ export default async function handler(req, res) {
             updated_at: new Date().toISOString(),
           }).eq('user_id', data.user_id);
 
-          console.log(`❌ Subscription canceled for user ${data.user_id}`);
+          console.log(`Subscription canceled for user ${data.user_id}`);
         }
         break;
       }
@@ -122,25 +123,9 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ received: true });
   } catch (err) {
-    console.error('Webhook processing error:', err);
-    return res.status(500).json({ error: 'Webhook processing failed' });
+    console.error('Webhook error:', err.message);
+    return res.status(400).json({ error: err.message });
   }
-}
-
-async function updateSubscription(userId, subscription) {
-  const status = subscription.status === 'active' || subscription.status === 'trialing'
-    ? 'active'
-    : subscription.status;
-
-  await supabase.from('subscriptions').update({
-    status,
-    current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-    current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-    cancel_at_period_end: subscription.cancel_at_period_end || false,
-    updated_at: new Date().toISOString(),
-  }).eq('user_id', userId);
-
-  console.log(`🔄 Subscription updated for user ${userId}: ${status}`);
 }
 
 // Disable Vercel's default body parsing so we get the raw body for signature verification
