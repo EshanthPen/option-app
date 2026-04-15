@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 /**
- * Post-build script that injects SEO meta tags into dist/index.html.
+ * Post-build script that injects SEO meta tags into dist/index.html
+ * and copies public/ files into dist/.
  * Runs after `expo export -p web` during Vercel deployment.
  */
 
 const fs = require('fs');
 const path = require('path');
 
-const DIST_INDEX = path.join(__dirname, '..', 'dist', 'index.html');
+const DIST_DIR = path.join(__dirname, '..', 'dist');
+const DIST_INDEX = path.join(DIST_DIR, 'index.html');
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const SEO_META = `
     <title>Option — Your Academic Life, Automated & Optimized</title>
@@ -63,7 +66,29 @@ const SEO_META = `
     </script>
 `;
 
+function copyDirRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
+  if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+      console.log(`[inject-seo] Copied ${path.relative(path.join(__dirname, '..'), srcPath)} -> dist/`);
+    }
+  }
+}
+
 function inject() {
+  console.log('[inject-seo] Starting post-build SEO injection...');
+  console.log('[inject-seo] cwd:', process.cwd());
+  console.log('[inject-seo] DIST_DIR exists:', fs.existsSync(DIST_DIR));
+  console.log('[inject-seo] PUBLIC_DIR exists:', fs.existsSync(PUBLIC_DIR));
+
   if (!fs.existsSync(DIST_INDEX)) {
     console.error('[inject-seo] dist/index.html not found. Did expo export run?');
     process.exit(0); // Don't fail the build
@@ -83,6 +108,14 @@ function inject() {
     fs.writeFileSync(DIST_INDEX, html, 'utf8');
     console.log('[inject-seo] Injected SEO meta tags before </head>');
   }
+
+  // Copy public/ files into dist/ (robots.txt, sitemap.xml, etc)
+  if (fs.existsSync(PUBLIC_DIR)) {
+    copyDirRecursive(PUBLIC_DIR, DIST_DIR);
+    console.log('[inject-seo] Copied public/ files to dist/');
+  }
+
+  console.log('[inject-seo] Done.');
 }
 
 inject();

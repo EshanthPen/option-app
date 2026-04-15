@@ -6,7 +6,9 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build": "expo export -p web && node scripts/inject-seo.js",
+    "vercel-build": "expo export -p web && node scripts/inject-seo.js"
   },
   "dependencies": {
     "@expo-google-fonts/chewy": "^0.4.0",
