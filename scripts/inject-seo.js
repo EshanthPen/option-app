@@ -15,6 +15,7 @@ const SEO_META = `
     <meta name="keywords" content="student app, academic planner, homework tracker, grade tracker, study app, AI study assistant, StudentVUE app, Schoology planner, Google Classroom, focus timer, productivity app for students" />
     <meta name="author" content="Option App" />
     <meta name="robots" content="index, follow" />
+    <meta name="google-site-verification" content="Fb3etBqUSjq4Bu4XOQbCpZUY6AEVsDVD5njdFT1R1n0" />
     <link rel="canonical" href="https://optionapp.online/" />
 
     <!-- Open Graph / Facebook -->
