@@ -54,19 +54,39 @@ export default function IntegrationsScreen() {
         ? window.location.origin
         : AuthSession.makeRedirectUri({ useProxy: true });
 
+    const GOOGLE_CLIENT_ID = '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com';
+    const GOOGLE_SCOPES = [
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/userinfo.profile',
+        'https://www.googleapis.com/auth/classroom.courses.readonly',
+        'https://www.googleapis.com/auth/classroom.coursework.students.readonly',
+    ].join(' ');
+
     const [request, response, promptAsync] = Google.useAuthRequest({
-        expoClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
-        iosClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
-        androidClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
-        webClientId: '983893359997-769avb68kb7a0ieduackj8u393kp8c4k.apps.googleusercontent.com',
-        scopes: [
-            'https://www.googleapis.com/auth/calendar.events',
-            'https://www.googleapis.com/auth/userinfo.profile',
-            'https://www.googleapis.com/auth/classroom.courses.readonly',
-            'https://www.googleapis.com/auth/classroom.coursework.students.readonly'
-        ],
+        expoClientId: GOOGLE_CLIENT_ID,
+        iosClientId: GOOGLE_CLIENT_ID,
+        androidClientId: GOOGLE_CLIENT_ID,
+        webClientId: GOOGLE_CLIENT_ID,
+        scopes: GOOGLE_SCOPES.split(' '),
         redirectUri,
     });
+
+    // Reliable web OAuth: redirects directly to Google's OAuth endpoint using implicit flow.
+    // Bypasses expo-auth-session which can fail silently on web.
+    const startGoogleOAuthWeb = (integrationType = 'calendar') => {
+        if (typeof window === 'undefined') return;
+        const redirect = window.location.origin;
+        const state = integrationType; // Track which integration was linked
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+            `client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}` +
+            `&redirect_uri=${encodeURIComponent(redirect)}` +
+            `&response_type=token` +
+            `&scope=${encodeURIComponent(GOOGLE_SCOPES)}` +
+            `&include_granted_scopes=true` +
+            `&state=${encodeURIComponent(state)}` +
+            `&prompt=consent`;
+        window.location.href = authUrl;
+    };
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -93,10 +113,45 @@ export default function IntegrationsScreen() {
         if (typeof window !== 'undefined' && window.location.hash) {
             const hashParams = new URLSearchParams(window.location.hash.substring(1));
             const token = hashParams.get('access_token');
+            const state = hashParams.get('state') || 'calendar';
+            const error = hashParams.get('error');
+
+            if (error) {
+                console.error('Google OAuth error:', error);
+                if (Platform.OS === 'web') window.alert('Google sign-in failed: ' + error);
+                window.history.replaceState(null, '', window.location.pathname);
+                return;
+            }
+
             if (token) {
                 setAccessToken(token);
                 window.localStorage.setItem('googleAccessToken', token);
                 AsyncStorage.setItem('googleAccessToken', token);
+
+                // If this was a Classroom link, also save it as the classroom token
+                if (state === 'classroom') {
+                    setClassroomToken(token);
+                    AsyncStorage.setItem('classroomAccessToken', token);
+                    setConnectedIds(prev => {
+                        const next = [...prev];
+                        if (!next.includes('google')) next.push('google');
+                        if (!next.includes('classroom')) next.push('classroom');
+                        return next;
+                    });
+                } else {
+                    setConnectedIds(prev => prev.includes('google') ? prev : [...prev, 'google']);
+                }
+
+                // Fetch user profile to save the name
+                fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                    headers: { Authorization: `Bearer ${token}` }
+                }).then(r => r.ok ? r.json() : null).then(profile => {
+                    if (profile) {
+                        const name = profile.given_name || profile.name || 'User';
+                        AsyncStorage.setItem('googleUserName', name);
+                    }
+                }).catch(() => {});
+
                 window.history.replaceState(null, '', window.location.pathname);
             }
         }
@@ -591,7 +646,13 @@ export default function IntegrationsScreen() {
                         )}
 
                         <View style={{ gap: 8, marginTop: 8 }}>
-                            <TouchableOpacity style={S.actionBtn} onPress={() => promptAsync()} disabled={!request}>
+                            <TouchableOpacity style={S.actionBtn} onPress={() => {
+                                if (Platform.OS === 'web') {
+                                    startGoogleOAuthWeb('calendar');
+                                } else {
+                                    promptAsync();
+                                }
+                            }}>
                                 <Text style={S.actionBtnText}>{accessToken ? 'Re-link Account' : 'Link Google Account'}</Text>
                             </TouchableOpacity>
                             {accessToken && (
@@ -641,7 +702,13 @@ export default function IntegrationsScreen() {
                         )}
 
                         <View style={{ gap: 8, marginTop: 8 }}>
-                            <TouchableOpacity style={S.actionBtn} onPress={handleClassroomLink} disabled={!request}>
+                            <TouchableOpacity style={S.actionBtn} onPress={() => {
+                                if (Platform.OS === 'web') {
+                                    startGoogleOAuthWeb('classroom');
+                                } else {
+                                    handleClassroomLink();
+                                }
+                            }}>
                                 <Text style={S.actionBtnText}>{classroomToken ? 'Re-link Account' : 'Link Google Classroom'}</Text>
                             </TouchableOpacity>
                             {classroomToken && (

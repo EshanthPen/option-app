@@ -1,6 +1,6 @@
 {
     "version": 2,
-    "buildCommand": "npx expo export -p web && cp -r public/* dist/ 2>/dev/null || true",
+    "buildCommand": "npx expo export -p web && node scripts/inject-seo.js && cp -r public/* dist/ 2>/dev/null || true",
     "outputDirectory": "dist",
     "rewrites": [
         {

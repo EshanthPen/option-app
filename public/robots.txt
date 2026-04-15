@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Disallow API routes
+Disallow: /api/
+
+Sitemap: https://optionapp.online/sitemap.xml
