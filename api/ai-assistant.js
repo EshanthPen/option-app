@@ -20,6 +20,16 @@ export default async function handler(req, res) {
     return;
   }
 
+  // Temporary debug endpoint — GET returns env diagnostics (remove after confirming)
+  if (req.method === 'GET') {
+    const key = process.env.GEMINI_API_KEY || '';
+    return res.status(200).json({
+      hasGeminiKey: !!key,
+      keyPrefix: key ? key.slice(0, 6) + '...' : 'MISSING',
+      envKeys: Object.keys(process.env).filter(k => k.includes('GEMINI') || k.includes('OPENAI') || k.includes('STRIPE') || k.includes('SUPA')),
+    });
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
