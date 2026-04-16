@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       hasGeminiKey: !!key,
       keyPrefix: key ? key.slice(0, 6) + '...' : 'MISSING',
-      envKeys: Object.keys(process.env).filter(k => k.includes('GEMINI') || k.includes('OPENAI') || k.includes('STRIPE') || k.includes('SUPA')),
+      envKeys: Object.keys(process.env).filter(k => !k.startsWith('npm_') && !k.startsWith('NODE_') && !k.startsWith('__') && k !== 'PATH' && k !== 'HOME' && k !== 'LANG' && k !== 'SHELL'),
     });
   }
 
