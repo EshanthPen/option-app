@@ -315,6 +315,49 @@ export default function GradebookScreen() {
         }));
     };
 
+    // Patch a single fake hypothetical assignment in place (used by inline editing).
+    const updateHypoAssignment = (asgnId, patch) => {
+        if (!selectedClass) return;
+        setHypoAssignments(prev => ({
+            ...prev,
+            [selectedClass.id]: (prev[selectedClass.id] || []).map(a =>
+                a.id === asgnId ? { ...a, ...patch } : a
+            ),
+        }));
+    };
+
+    // Add a blank fake hypothetical assignment directly to the top of the list,
+    // so the student can edit its fields inline rather than filling out a modal.
+    const addBlankHypoAssignment = () => {
+        if (!selectedClass) return;
+        const asgn = {
+            id: uid(),
+            name: '',
+            title: '',
+            // Stored as strings so TextInputs can bind directly without blowing up NaN.
+            score: '',
+            total: '100',
+            category: 'Summative',
+            date: new Date().toLocaleDateString(),
+            isHypothetical: true,
+            isGraded: false,
+        };
+        setHypoAssignments(prev => ({
+            ...prev,
+            // New items go to the top so they're immediately visible.
+            [selectedClass.id]: [asgn, ...(prev[selectedClass.id] || [])],
+        }));
+        if (!hypothetical) setHypothetical(true);
+    };
+
+    // Cycle category on tap: Summative → Formative → Final → Summative
+    const cycleHypoCategory = (asgnId, currentCat) => {
+        const order = ['Summative', 'Formative', 'Final'];
+        const idx = order.indexOf(currentCat);
+        const next = order[(idx + 1) % order.length];
+        updateHypoAssignment(asgnId, { category: next });
+    };
+
     // ── GPA calc ─────────────────────────────────────────────
     const overallGPA = () => {
         if (!allClasses.length) return '—';
@@ -431,11 +474,11 @@ export default function GradebookScreen() {
     const clsHypoAssignments = cls ? (hypoAssignments[cls.id] || []) : [];
 
     // The list of assignments to RENDER in detail view:
-    //  - In hypothetical mode, always show real assignments + fake hypo assignments
-    //  - Outside hypo mode, just real assignments
+    //  - In hypothetical mode: fake hypo assignments FIRST (newest on top), then real
+    //  - Outside hypo mode: just real assignments
     const renderAssignments = cls
         ? (hypothetical
-            ? [...(cls.assignments || []), ...clsHypoAssignments]
+            ? [...clsHypoAssignments, ...(cls.assignments || [])]
             : (cls.assignments || []))
         : [];
 
@@ -707,11 +750,27 @@ export default function GradebookScreen() {
                                 const isNew = isAssignmentNew(gradeChanges, cls.name, a.name || a.title);
                                 const isFakeHypo = !!a.isHypothetical;
 
+                                // Color helpers for category badge (used in both Text and Pressable branches)
+                                const catColor = a.category === 'Summative' ? theme.colors.blue
+                                    : a.category === 'Final' ? theme.colors.purple
+                                    : a.category === 'Formative' ? theme.colors.orange
+                                    : theme.colors.ink3;
+
                                 return (
                                     <View key={a.id || i} style={[S.asgnCard, { borderLeftColor: ac }]}>
                                         <View style={{ flex: 1 }}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
-                                                <Text style={S.asgnName} numberOfLines={2}>{a.name || a.title}</Text>
+                                                {isFakeHypo ? (
+                                                    <TextInput
+                                                        style={S.hypoNameInput}
+                                                        placeholder="Assignment name"
+                                                        placeholderTextColor={theme.colors.ink3}
+                                                        value={a.name || ''}
+                                                        onChangeText={(v) => updateHypoAssignment(a.id, { name: v, title: v })}
+                                                    />
+                                                ) : (
+                                                    <Text style={S.asgnName} numberOfLines={2}>{a.name || a.title}</Text>
+                                                )}
                                                 {isNew && (
                                                     <View style={{ backgroundColor: theme.colors.green + '20', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
                                                         <Text style={{ fontFamily: theme.fonts.m, fontSize: 8, fontWeight: '700', color: theme.colors.green, letterSpacing: 0.5 }}>New</Text>
@@ -725,10 +784,21 @@ export default function GradebookScreen() {
                                                 )}
                                             </View>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                                <View style={[S.catBadge, { backgroundColor: (a.category === 'Summative' ? theme.colors.blue : a.category === 'Final' ? theme.colors.purple : theme.colors.orange) + '15' }]}>
-                                                    <Text style={[S.catBadgeTxt, { color: a.category === 'Summative' ? theme.colors.blue : a.category === 'Final' ? theme.colors.purple : theme.colors.orange }]}>{a.category || 'Other'}</Text>
-                                                </View>
-                                                {a.date ? <Text style={S.asgnDate}>{a.date}</Text> : null}
+                                                {isFakeHypo ? (
+                                                    <TouchableOpacity
+                                                        onPress={() => cycleHypoCategory(a.id, a.category)}
+                                                        style={[S.catBadge, { backgroundColor: catColor + '15', flexDirection: 'row', alignItems: 'center', gap: 3 }]}
+                                                        activeOpacity={0.7}
+                                                    >
+                                                        <Text style={[S.catBadgeTxt, { color: catColor }]}>{a.category || 'Summative'}</Text>
+                                                        <Text style={{ fontSize: 8, color: catColor }}>▾</Text>
+                                                    </TouchableOpacity>
+                                                ) : (
+                                                    <View style={[S.catBadge, { backgroundColor: catColor + '15' }]}>
+                                                        <Text style={[S.catBadgeTxt, { color: catColor }]}>{a.category || 'Other'}</Text>
+                                                    </View>
+                                                )}
+                                                {a.date && !isFakeHypo ? <Text style={S.asgnDate}>{a.date}</Text> : null}
                                                 {!hasPts && !hypothetical && <Text style={[S.catBadgeTxt, { color: theme.colors.ink3 }]}>Not Graded</Text>}
                                             </View>
                                             {hasPts && (
@@ -740,27 +810,35 @@ export default function GradebookScreen() {
                                         <View style={{ alignItems: 'flex-end', minWidth: 90 }}>
                                             {hypothetical ? (
                                                 <>
-                                                    {/* Hypothetical mode: always show editable score/total, even for ungraded */}
+                                                    {/* Hypothetical mode: always show editable score/total. Fake hypos
+                                                        write directly into hypoAssignments; real assignments write to hypoEdits overrides. */}
                                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                                                         <TextInput
                                                             style={S.hypoInput}
                                                             placeholder="—"
                                                             placeholderTextColor={theme.colors.ink3}
                                                             value={
-                                                                edit && edit.score !== undefined
-                                                                    ? String(edit.score)
-                                                                    : (isNaN(realS) ? '' : String(realS))
+                                                                isFakeHypo
+                                                                    ? String(a.score ?? '')
+                                                                    : (edit && edit.score !== undefined
+                                                                        ? String(edit.score)
+                                                                        : (isNaN(realS) ? '' : String(realS)))
                                                             }
-                                                            onChangeText={(v) => setHypoEdits(prev => ({
-                                                                ...prev,
-                                                                [a.id]: {
-                                                                    score: v,
-                                                                    total: prev[a.id]?.total ?? (isNaN(realT) ? '' : String(realT)),
-                                                                },
-                                                            }))}
+                                                            onChangeText={(v) => {
+                                                                if (isFakeHypo) {
+                                                                    updateHypoAssignment(a.id, { score: v, isGraded: v !== '' });
+                                                                } else {
+                                                                    setHypoEdits(prev => ({
+                                                                        ...prev,
+                                                                        [a.id]: {
+                                                                            score: v,
+                                                                            total: prev[a.id]?.total ?? (isNaN(realT) ? '' : String(realT)),
+                                                                        },
+                                                                    }));
+                                                                }
+                                                            }}
                                                             keyboardType="numeric"
                                                             selectTextOnFocus
-                                                            editable={!isFakeHypo}
                                                         />
                                                         <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 }}>/</Text>
                                                         <TextInput
@@ -768,20 +846,27 @@ export default function GradebookScreen() {
                                                             placeholder="—"
                                                             placeholderTextColor={theme.colors.ink3}
                                                             value={
-                                                                edit && edit.total !== undefined
-                                                                    ? String(edit.total)
-                                                                    : (isNaN(realT) || realT === 0 ? '' : String(realT))
+                                                                isFakeHypo
+                                                                    ? String(a.total ?? '')
+                                                                    : (edit && edit.total !== undefined
+                                                                        ? String(edit.total)
+                                                                        : (isNaN(realT) || realT === 0 ? '' : String(realT)))
                                                             }
-                                                            onChangeText={(v) => setHypoEdits(prev => ({
-                                                                ...prev,
-                                                                [a.id]: {
-                                                                    score: prev[a.id]?.score ?? (isNaN(realS) ? '' : String(realS)),
-                                                                    total: v,
-                                                                },
-                                                            }))}
+                                                            onChangeText={(v) => {
+                                                                if (isFakeHypo) {
+                                                                    updateHypoAssignment(a.id, { total: v });
+                                                                } else {
+                                                                    setHypoEdits(prev => ({
+                                                                        ...prev,
+                                                                        [a.id]: {
+                                                                            score: prev[a.id]?.score ?? (isNaN(realS) ? '' : String(realS)),
+                                                                            total: v,
+                                                                        },
+                                                                    }));
+                                                                }
+                                                            }}
                                                             keyboardType="numeric"
                                                             selectTextOnFocus
-                                                            editable={!isFakeHypo}
                                                         />
                                                     </View>
                                                     {hasPts && <Text style={[S.asgnPct, { color: ac }]}>{Math.round(pct)}%</Text>}
@@ -867,9 +952,21 @@ export default function GradebookScreen() {
                 </TouchableOpacity>
             )}
 
-            {/* FAB: Add assignment — available on manual classes always, OR on any class in hypothetical mode */}
+            {/* FAB: Add assignment
+                - In hypothetical mode on ANY class → spawn a blank hypo assignment inline (no modal)
+                - On a manual class (not in hypo mode) → open the modal for a real, persistent assignment */}
             {cls && (cls.isManual || hypothetical) && (
-                <TouchableOpacity style={S.fab} onPress={() => setShowAddAsgn(true)} activeOpacity={0.85}>
+                <TouchableOpacity
+                    style={S.fab}
+                    onPress={() => {
+                        if (hypothetical) {
+                            addBlankHypoAssignment();
+                        } else {
+                            setShowAddAsgn(true);
+                        }
+                    }}
+                    activeOpacity={0.85}
+                >
                     <Plus size={22} color="#fff" />
                 </TouchableOpacity>
             )}
@@ -1015,6 +1112,7 @@ const getStyles = (theme) => StyleSheet.create({
     progressTrack: { height: 4, backgroundColor: theme.colors.surface2, borderRadius: 2, marginTop: 8, overflow: 'hidden' },
     progressFill: { height: 4, borderRadius: 2 },
     hypoInput: { backgroundColor: theme.colors.blue + '10', borderWidth: 1, borderColor: theme.colors.blue, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.blue, textAlign: 'center', minWidth: 40, width: 44 },
+    hypoNameInput: { flex: 1, minWidth: 140, fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '500', color: theme.colors.ink, backgroundColor: theme.colors.blue + '08', borderBottomWidth: 1, borderBottomColor: theme.colors.blue + '40', paddingVertical: 2, paddingHorizontal: 4, borderRadius: 4 },
 
     inputLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8, marginTop: 14, paddingHorizontal: 20 },
     input: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, padding: 13, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, marginHorizontal: 20, marginBottom: 0 },
