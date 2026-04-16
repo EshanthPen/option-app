@@ -13,8 +13,9 @@ const STORAGE_KEY = '@OptionApp_Premium';
 // To end the beta early, set BETA_ACCESS_UNTIL to a past date.
 // Case-insensitive match — comparison is done on the lowercased email.
 const BETA_TESTERS = [
-  // 'student1@example.com',
-  // 'student2@example.com',
+  'eshanthpenumatsa@gmail.com',
+  'joshua.umapathi@gmail.com',
+  'ramineni.aarav@gmail.com',
 ];
 const BETA_ACCESS_UNTIL = '2026-09-01T00:00:00Z'; // ISO date when beta access expires
 
