@@ -2,8 +2,9 @@
  * AI Assistant API Endpoint
  *
  * Receives student context (tasks, grades, focus data) and uses
- * OpenAI GPT-4o-mini to generate personalized academic coaching.
+ * Google Gemini 2.0 Flash to generate personalized academic coaching.
  *
+ * Free tier: 1,500 requests/day — perfect for beta.
  * PRO feature — caller must send a valid Supabase auth token.
  */
 
@@ -23,8 +24,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-  if (!OPENAI_API_KEY) {
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  if (!GEMINI_API_KEY) {
     return res.status(500).json({ error: 'AI service not configured' });
   }
 
@@ -35,7 +36,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing studentContext' });
     }
 
-    // Build the system prompt
+    // Build the system instruction
     const systemPrompt = `You are Option AI — a smart, friendly academic coach built into the Option student productivity app. You speak directly to the student in a supportive, concise tone. You're data-driven but encouraging.
 
 RULES:
@@ -45,7 +46,8 @@ RULES:
 - If grades are dropping, be honest but supportive. Never shame.
 - Prioritize what matters most TODAY.
 - When suggesting study blocks, be specific about times and durations.
-- Format your response as valid JSON matching the requested schema.`;
+- Format your response as valid JSON matching the requested schema.
+- ONLY output the JSON object — no markdown fences, no explanation, just the JSON.`;
 
     let userPrompt;
     let responseSchema;
@@ -76,51 +78,67 @@ RULES:
         responseSchema = 'daily_briefing';
     }
 
-    // Call OpenAI
-    const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Call Google Gemini 2.0 Flash
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+    const geminiRes = await fetch(geminiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
+        system_instruction: {
+          parts: [{ text: systemPrompt }],
+        },
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: userPrompt }],
+          },
         ],
-        temperature: 0.7,
-        max_tokens: 1500,
-        response_format: { type: 'json_object' },
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+          responseMimeType: 'application/json',
+        },
       }),
     });
 
-    if (!openaiRes.ok) {
-      const errBody = await openaiRes.text();
-      console.error('OpenAI error:', openaiRes.status, errBody);
-      return res.status(502).json({ error: 'AI service error', details: openaiRes.status });
+    if (!geminiRes.ok) {
+      const errBody = await geminiRes.text();
+      console.error('Gemini error:', geminiRes.status, errBody);
+      return res.status(502).json({ error: 'AI service error', details: geminiRes.status });
     }
 
-    const data = await openaiRes.json();
-    const aiMessage = data.choices?.[0]?.message?.content;
+    const data = await geminiRes.json();
+
+    // Extract the text from Gemini's response structure
+    const aiMessage = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!aiMessage) {
+      console.error('Empty Gemini response:', JSON.stringify(data));
       return res.status(502).json({ error: 'Empty AI response' });
     }
 
-    // Parse JSON response
+    // Parse JSON response — strip markdown fences if present
     let parsed;
     try {
-      parsed = JSON.parse(aiMessage);
+      const cleaned = aiMessage.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+      parsed = JSON.parse(cleaned);
     } catch {
       parsed = { raw: aiMessage };
     }
+
+    // Map Gemini usage metadata to a familiar shape
+    const usage = data.usageMetadata ? {
+      prompt_tokens: data.usageMetadata.promptTokenCount,
+      completion_tokens: data.usageMetadata.candidatesTokenCount,
+      total_tokens: data.usageMetadata.totalTokenCount,
+    } : null;
 
     return res.status(200).json({
       success: true,
       type: responseSchema,
       data: parsed,
-      usage: data.usage,
+      usage,
     });
 
   } catch (err) {
