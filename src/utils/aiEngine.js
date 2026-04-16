@@ -21,8 +21,8 @@ const getApiBaseUrl = () => {
   if (Platform.OS === 'web') {
     return window.location.origin;
   }
-  // For native, point to your deployed Vercel URL
-  return 'https://option-app.vercel.app';
+  // For native, point to your deployed production URL
+  return 'https://optionapp.online';
 };
 
 /**

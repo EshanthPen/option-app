@@ -7,6 +7,27 @@ const PremiumContext = createContext();
 
 const STORAGE_KEY = '@OptionApp_Premium';
 
+// ── Beta Tester Program ──────────────────────────────────────────
+// Emails listed here get free temporary Pro access until BETA_ACCESS_UNTIL.
+// To add a beta tester, add their email (lowercase, trimmed) to the array.
+// To end the beta early, set BETA_ACCESS_UNTIL to a past date.
+// Case-insensitive match — comparison is done on the lowercased email.
+const BETA_TESTERS = [
+  // 'student1@example.com',
+  // 'student2@example.com',
+];
+const BETA_ACCESS_UNTIL = '2026-09-01T00:00:00Z'; // ISO date when beta access expires
+
+const isBetaTester = (email) => {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  return BETA_TESTERS.includes(normalized);
+};
+
+const betaAccessActive = () => {
+  return new Date(BETA_ACCESS_UNTIL) > new Date();
+};
+
 export const PremiumProvider = ({ children }) => {
   const [isPro, setIsPro] = useState(false);
   const [subscription, setSubscription] = useState(null);
@@ -33,6 +54,29 @@ export const PremiumProvider = ({ children }) => {
       // Verify with Supabase
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        // ── Beta tester override ─────────────────────────────────
+        // If the signed-in email is in the beta tester list and the
+        // program hasn't ended, grant Pro for free. Runs BEFORE the
+        // subscriptions query so a tester never hits the DB check.
+        if (isBetaTester(session.user.email) && betaAccessActive()) {
+          const betaSub = {
+            user_id: session.user.id,
+            plan_id: 'beta',
+            status: 'active',
+            isBeta: true,
+            current_period_start: new Date().toISOString(),
+            current_period_end: BETA_ACCESS_UNTIL,
+          };
+          setIsPro(true);
+          setSubscription(betaSub);
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
+            ...betaSub,
+            expiresAt: BETA_ACCESS_UNTIL,
+          }));
+          setLoading(false);
+          return;
+        }
+
         const { data, error } = await supabase
           .from('subscriptions')
           .select('*')
