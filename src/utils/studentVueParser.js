@@ -164,28 +164,69 @@ export const parseStudentVueGradebook = (xmlString) => {
                     if (!Array.isArray(assignments)) assignments = [assignments];
 
                     assignments.forEach((asm, index) => {
-                        const pointsStr = asm['@_Points']; // e.g., "45.00 / 50.0000"
+                        // StudentVUE sends points in several shapes depending on the district:
+                        //   "45.00 / 50.0000"   → graded (45 earned, 50 possible)
+                        //   "0 / 50.0000"       → zero grade (still valid, must show up)
+                        //   "50.0000"           → not yet graded, but max points is 50
+                        //   ""  /  missing      → nothing known
+                        // We also fall back to @_PointsPossible for total and @_Score for earned.
+                        const pointsStr = asm['@_Points'];
+                        const pointsPossibleStr = asm['@_PointsPossible'] || asm['@_Points_Possible'];
+                        const scoreStr = asm['@_Score'];
+                        const scoreTypeStr = asm['@_ScoreType']; // e.g., "Raw Score", "Percentage"
 
-                        let percentage = 0;
-                        let earned = 0;
-                        let total = 0;
-                        if (pointsStr && pointsStr.includes('/')) {
+                        let earned = NaN;
+                        let total = NaN;
+                        let isGraded = false;
+
+                        if (pointsStr && typeof pointsStr === 'string' && pointsStr.includes('/')) {
                             const parts = pointsStr.split('/');
-                            earned = parseFloat(parts[0]);
-                            total = parseFloat(parts[1]);
-                            if (total > 0 && !isNaN(earned)) {
-                                percentage = (earned / total) * 100;
+                            const e = parseFloat(parts[0]);
+                            const t = parseFloat(parts[1]);
+                            if (!isNaN(t)) total = t;
+                            if (!isNaN(e)) { earned = e; isGraded = true; }
+                        } else if (pointsStr && !isNaN(parseFloat(pointsStr))) {
+                            // Single number — treat as total points possible only
+                            total = parseFloat(pointsStr);
+                        }
+
+                        if (isNaN(total) && pointsPossibleStr && !isNaN(parseFloat(pointsPossibleStr))) {
+                            total = parseFloat(pointsPossibleStr);
+                        }
+
+                        // @_Score fallback — may be "45", "45%", or "Not Graded"
+                        if (!isGraded && scoreStr && typeof scoreStr === 'string') {
+                            const cleanScore = scoreStr.replace('%', '').trim();
+                            const scoreNum = parseFloat(cleanScore);
+                            if (!isNaN(scoreNum) && cleanScore.toLowerCase() !== 'not graded') {
+                                if (scoreTypeStr === 'Percentage' && !isNaN(total) && total > 0) {
+                                    earned = (scoreNum / 100) * total;
+                                } else {
+                                    earned = scoreNum;
+                                }
+                                isGraded = true;
                             }
+                        }
+
+                        // Compute percentage only when we have a valid graded assignment.
+                        // A zero grade (0/50) IS valid and must be preserved — do not skip it.
+                        let percentage = 0;
+                        if (isGraded && !isNaN(earned) && !isNaN(total) && total > 0) {
+                            percentage = (earned / total) * 100;
                         }
 
                         formattedAssignments.push({
                             id: asm['@_GradebookID'] || `${courseTitle}-asm-${index}`,
                             title: asm['@_Measure'] || asm['@_Type'] || 'Assignment',
-                            score: earned,
-                            total: total,
+                            // Use null (not 0) for score when assignment has no grade yet —
+                            // this lets the UI distinguish "ungraded" from "scored 0".
+                            score: isGraded ? earned : null,
+                            total: isNaN(total) ? 0 : total,
                             percentage: parseFloat(percentage.toFixed(1)),
                             date: asm['@_Date'] || '',
-                            category: asm['@_Type'] || 'Other'
+                            due_date: asm['@_DueDate'] || '',
+                            category: asm['@_Type'] || 'Other',
+                            isGraded,
                         });
                     });
                 }

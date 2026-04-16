@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Home, CalendarDays, BookOpen, Settings, Timer, Trophy, Plug, Crown, Sparkles } from 'lucide-react-native';
 import DashboardScreen from '../screens/DashboardScreen';
 import MatrixScreen from '../screens/MatrixScreen';
+import GradebookScreen from '../screens/GradebookScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ScreentimeScreen from '../screens/ScreentimeScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
     { name: 'Home', label: 'Dashboard', Icon: Home },
     { name: 'AI', label: 'AI Assistant', Icon: Sparkles, highlight: true },
     { name: 'Calendar', label: 'Calendar', Icon: CalendarDays },
+    { name: 'Gradebook', label: 'Gradebook', Icon: BookOpen },
     { name: 'Focus', label: 'Focus', Icon: Timer },
     { name: 'Leaderboard', label: 'Leaderboard', Icon: Trophy },
     { name: 'Integrations', label: 'Integrations', Icon: Plug },
@@ -86,6 +88,7 @@ export default function TabNavigator({ isGuest, onSignOut }) {
             <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: 'Dashboard' }} />
             <Tab.Screen name="AI" component={AIAssistantScreen} options={{ tabBarLabel: 'AI Assistant' }} />
             <Tab.Screen name="Calendar" component={MatrixScreen} options={{ tabBarLabel: 'Calendar' }} />
+            <Tab.Screen name="Gradebook" component={GradebookScreen} options={{ tabBarLabel: 'Gradebook' }} />
             <Tab.Screen name="Focus" component={ScreentimeScreen} options={{ tabBarLabel: 'Focus' }} />
             <Tab.Screen name="Leaderboard" component={LeaderboardScreen} options={{ tabBarLabel: 'Leaderboard' }} />
             <Tab.Screen name="Integrations" component={IntegrationsScreen} options={{ tabBarLabel: 'Integrations' }} />
