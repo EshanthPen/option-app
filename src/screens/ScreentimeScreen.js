@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated
+    View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated, Platform
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { LineChart, BarChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
-import { Play, Pause, RotateCcw, Coffee, BookOpen, Flame, Clock, TrendingUp } from 'lucide-react-native';
+import { Play, Pause, RotateCcw, Coffee, BookOpen, Flame, Clock, TrendingUp, Download, X } from 'lucide-react-native';
 import { recordPomodoroSession, getWeeklyPomodoroData, computeFocusScore, getScoreLabel, getStreak } from '../utils/focusScoreEngine';
 import BlacklistManager from '../components/BlacklistManager';
+import { supabase } from '../utils/auth';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -32,6 +33,7 @@ export default function ScreentimeScreen() {
     const [weeklyTotalMin, setWeeklyTotalMin] = useState(0);
     const [monthlyMinutes, setMonthlyMinutes] = useState(0);
     const [lastMonthMinutes, setLastMonthMinutes] = useState(0);
+    const [showBanner, setShowBanner] = useState(Platform.OS === 'web');
     
     // Load Blacklist
     useEffect(() => {
@@ -43,9 +45,9 @@ export default function ScreentimeScreen() {
         };
         loadBlacklist();
         // Ensure unblocked on mount
-        unblockWebsites();
+        syncToDB(false);
         
-        return () => { unblockWebsites(); }; // cleanup
+        return () => { syncToDB(false); }; // cleanup
     }, []);
 
     const saveBlacklist = async (newList) => {
@@ -58,22 +60,28 @@ export default function ScreentimeScreen() {
     const handleAddDomain = (domain) => saveBlacklist([...blacklist, domain]);
     const handleRemoveDomain = (domain) => saveBlacklist(blacklist.filter(d => d !== domain));
 
-    const blockWebsites = async () => {
-        if (blacklist.length === 0) return;
+    const syncToDB = async (focusedState) => {
         try {
-            await fetch('http://localhost:3000/block', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ domains: blacklist })
-            });
-        } catch (e) { console.error('Failed to trigger blocker api:', e); }
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return; // not logged in
+
+            const { error } = await supabase
+                .from('profiles')
+                .update({ 
+                     is_focused: focusedState, 
+                     blacklist: blacklist 
+                })
+                .eq('id', user.id);
+            
+            if (error) console.error('Error syncing focus state:', error);
+
+            // If we're on the web, also dispatch a window event so the Chrome Extension can catch it immediately
+            if (Platform.OS === 'web' && window) {
+                window.postMessage({ type: 'SYNC_BLOCKER', payload: { isFocused: focusedState, blacklist } }, '*');
+            }
+        } catch (e) { console.error('Failed db sync:', e); }
     };
 
-    const unblockWebsites = async () => {
-        try {
-            await fetch('http://localhost:3000/unblock', { method: 'POST' });
-        } catch (e) { console.error('Failed to trigger unblocker api:', e); }
-    };
 
     const ringAnim = useRef(new Animated.Value(0)).current;
 
@@ -187,6 +195,21 @@ export default function ScreentimeScreen() {
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+            {showBanner && (
+                <View style={styles.banner}>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={styles.bannerIcon}><Download size={18} color="#fff" /></View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.bannerTitle}>Get the Chrome Extension</Text>
+                            <Text style={styles.bannerDesc}>The actual website blocker requires our official Chrome Extension to safely lock your browser.</Text>
+                        </View>
+                    </View>
+                    <TouchableOpacity style={styles.bannerClose} onPress={() => setShowBanner(false)}>
+                        <X size={16} color={theme.colors.ink3} />
+                    </TouchableOpacity>
+                </View>
+            )}
+
             <View style={styles.headerContainer}>
                 <Text style={styles.header}>Focus</Text>
                 <Text style={styles.subtitle}>Study time & productivity tracking</Text>
@@ -432,4 +455,10 @@ const getStyles = (theme) => StyleSheet.create({
     monthlyValue: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, marginTop: 8 },
     monthlyLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 },
     monthlyCompare: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink3, marginTop: 8 },
+
+    banner: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border, borderRadius: theme.radii.m, padding: 16, marginBottom: 20, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, elevation: 3 },
+    bannerIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.colors.ink, alignItems: 'center', justifyContent: 'center' },
+    bannerTitle: { fontFamily: theme.fonts.b, fontSize: 15, color: theme.colors.ink, marginBottom: 2 },
+    bannerDesc: { fontFamily: theme.fonts.s, fontSize: 12, color: theme.colors.ink2, lineHeight: 18 },
+    bannerClose: { padding: 4, marginLeft: 8 },
 });

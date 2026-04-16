@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Option App Blocker",
+  "description": "Companion website blocker for Option App focus sessions.",
+  "version": "1.0",
+  "permissions": [
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "*://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Option App Blocker"
+  },
+  "icons": {
+    "128": "icon.png"
+  }
+}
