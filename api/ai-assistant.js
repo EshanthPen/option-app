@@ -20,13 +20,16 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Temporary debug endpoint — GET returns env diagnostics (remove after confirming)
+  // Temporary debug endpoint
   if (req.method === 'GET') {
-    const key = process.env.GEMINI_API_KEY || '';
+    const k1 = process.env.GEMINI_API_KEY || '';
+    const k2 = process.env.GEMINI_KEY || '';
+    const k3 = process.env.AI_API_KEY || '';
     return res.status(200).json({
-      hasGeminiKey: !!key,
-      keyPrefix: key ? key.slice(0, 6) + '...' : 'MISSING',
-      envKeys: Object.keys(process.env).filter(k => !k.startsWith('npm_') && !k.startsWith('NODE_') && !k.startsWith('__') && k !== 'PATH' && k !== 'HOME' && k !== 'LANG' && k !== 'SHELL'),
+      GEMINI_API_KEY: k1 ? k1.slice(0, 6) + '...' : 'MISSING',
+      GEMINI_KEY: k2 ? k2.slice(0, 6) + '...' : 'MISSING',
+      AI_API_KEY: k3 ? k3.slice(0, 6) + '...' : 'MISSING',
+      allCustomKeys: Object.keys(process.env).filter(k => k.includes('GEMINI') || k.includes('OPENAI') || k.includes('STRIPE') || k.includes('SUPA') || k.includes('AI_')),
     });
   }
 
@@ -34,7 +37,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  // Accept key under any of these names in case of Vercel env var quirks
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY || process.env.AI_API_KEY;
   if (!GEMINI_API_KEY) {
     return res.status(500).json({ error: 'AI service not configured' });
   }
