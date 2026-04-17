@@ -25,10 +25,12 @@ export default async function handler(req, res) {
     const k1 = process.env.GEMINI_API_KEY || '';
     const k2 = process.env.GEMINI_KEY || '';
     const k3 = process.env.AI_API_KEY || '';
+    const k4 = process.env.GEMINI_KEY_B64 || '';
     return res.status(200).json({
       GEMINI_API_KEY: k1 ? k1.slice(0, 6) + '...' : 'MISSING',
       GEMINI_KEY: k2 ? k2.slice(0, 6) + '...' : 'MISSING',
       AI_API_KEY: k3 ? k3.slice(0, 6) + '...' : 'MISSING',
+      GEMINI_KEY_B64: k4 ? k4.slice(0, 6) + '...' : 'MISSING',
       allCustomKeys: Object.keys(process.env).filter(k => k.includes('GEMINI') || k.includes('OPENAI') || k.includes('STRIPE') || k.includes('SUPA') || k.includes('AI_')),
     });
   }
@@ -37,8 +39,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // Accept key under any of these names in case of Vercel env var quirks
-  const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY || process.env.AI_API_KEY;
+  // Try plain value first, then base64-decoded fallback (workaround for Vercel
+  // not injecting values that contain dots, e.g. the AQ. prefix in new Gemini keys)
+  let GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY || process.env.AI_API_KEY;
+  const GEMINI_KEY_B64 = process.env.GEMINI_KEY_B64;
+  if (!GEMINI_API_KEY && GEMINI_KEY_B64) {
+    try {
+      GEMINI_API_KEY = Buffer.from(GEMINI_KEY_B64, 'base64').toString('utf8');
+    } catch {}
+  }
   if (!GEMINI_API_KEY) {
     return res.status(500).json({ error: 'AI service not configured' });
   }
