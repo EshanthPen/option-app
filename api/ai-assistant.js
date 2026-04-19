@@ -2,9 +2,9 @@
  * AI Assistant API Endpoint
  *
  * Receives student context (tasks, grades, focus data) and uses
- * Google Gemini 2.0 Flash to generate personalized academic coaching.
+ * Groq (Llama 3.1 70B) to generate personalized academic coaching.
  *
- * Free tier: 1,500 requests/day — perfect for beta.
+ * Free tier: 6,000 requests/day — no billing required.
  * PRO feature — caller must send a valid Supabase auth token.
  */
 
@@ -39,16 +39,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // Try plain value first, then base64-decoded fallback (workaround for Vercel
-  // not injecting values that contain dots, e.g. the AQ. prefix in new Gemini keys)
-  let GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY || process.env.AI_API_KEY;
-  const GEMINI_KEY_B64 = process.env.GEMINI_KEY_B64;
-  if (!GEMINI_API_KEY && GEMINI_KEY_B64) {
-    try {
-      GEMINI_API_KEY = Buffer.from(GEMINI_KEY_B64, 'base64').toString('utf8');
-    } catch {}
-  }
-  if (!GEMINI_API_KEY) {
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+  if (!GROQ_API_KEY) {
     return res.status(500).json({ error: 'AI service not configured' });
   }
 
@@ -101,43 +93,36 @@ RULES:
         responseSchema = 'daily_briefing';
     }
 
-    // Call Google Gemini 2.0 Flash
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-    const geminiRes = await fetch(geminiUrl, {
+    // Call Groq (OpenAI-compatible API, Llama 3.1 70B)
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+      },
       body: JSON.stringify({
-        system_instruction: {
-          parts: [{ text: systemPrompt }],
-        },
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: userPrompt }],
-          },
+        model: 'llama-3.1-70b-versatile',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
         ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048,
-          responseMimeType: 'application/json',
-        },
+        temperature: 0.7,
+        max_tokens: 2048,
+        response_format: { type: 'json_object' },
       }),
     });
 
-    if (!geminiRes.ok) {
-      const errBody = await geminiRes.text();
-      console.error('Gemini error:', geminiRes.status, errBody);
-      return res.status(502).json({ error: 'AI service error', details: geminiRes.status, geminiError: errBody });
+    if (!groqRes.ok) {
+      const errBody = await groqRes.text();
+      console.error('Groq error:', groqRes.status, errBody);
+      return res.status(502).json({ error: 'AI service error', details: groqRes.status });
     }
 
-    const data = await geminiRes.json();
-
-    // Extract the text from Gemini's response structure
-    const aiMessage = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const data = await groqRes.json();
+    const aiMessage = data.choices?.[0]?.message?.content;
 
     if (!aiMessage) {
-      console.error('Empty Gemini response:', JSON.stringify(data));
+      console.error('Empty Groq response:', JSON.stringify(data));
       return res.status(502).json({ error: 'Empty AI response' });
     }
 
@@ -150,12 +135,7 @@ RULES:
       parsed = { raw: aiMessage };
     }
 
-    // Map Gemini usage metadata to a familiar shape
-    const usage = data.usageMetadata ? {
-      prompt_tokens: data.usageMetadata.promptTokenCount,
-      completion_tokens: data.usageMetadata.candidatesTokenCount,
-      total_tokens: data.usageMetadata.totalTokenCount,
-    } : null;
+    const usage = data.usage || null;
 
     return res.status(200).json({
       success: true,
