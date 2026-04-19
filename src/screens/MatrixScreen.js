@@ -35,6 +35,7 @@ export default function MatrixScreen() {
     const { theme, isDarkMode } = useTheme();
     const styles = getStyles(theme);
     const [tasks, setTasks] = useState([]);
+    const [view, setView] = useState('week'); // 'day' | 'week' | 'month' — design default is week
     const [modalVisible, setModalVisible] = useState(false);
     const [importModalVisible, setImportModalVisible] = useState(false);
     const [schoologyUrl, setSchoologyUrl] = useState('');
@@ -590,6 +591,37 @@ export default function MatrixScreen() {
                     </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {/* Day/Week/Month view toggle (matches design) */}
+                    <View style={{
+                        flexDirection: 'row', gap: 3,
+                        backgroundColor: theme.colors.surface2,
+                        padding: 3, borderRadius: 8,
+                    }}>
+                        {['day', 'week', 'month'].map((v) => {
+                            const active = view === v;
+                            return (
+                                <TouchableOpacity
+                                    key={v}
+                                    onPress={() => setView(v)}
+                                    activeOpacity={0.85}
+                                    style={{
+                                        paddingHorizontal: 10, paddingVertical: 6,
+                                        borderRadius: 6,
+                                        backgroundColor: active ? theme.colors.surface : 'transparent',
+                                        ...(active ? theme.shadows.sm : {}),
+                                    }}
+                                >
+                                    <Text style={{
+                                        fontFamily: theme.fonts.s, fontSize: 11, fontWeight: active ? '600' : '500',
+                                        color: active ? theme.colors.ink : theme.colors.ink3,
+                                        textTransform: 'capitalize',
+                                    }}>
+                                        {v}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
                     <TouchableOpacity
                         onPress={handleAutoPrioritize}
                         disabled={saving}
@@ -655,44 +687,73 @@ export default function MatrixScreen() {
                 <View style={IS_WIDE ? { flex: 1.5 } : { width: '100%' }}>
                     {/* (Old header removed — now in TopBar above) */}
 
-                    {/* Legend */}
-                    <View style={styles.legend}>
-                        <Text style={styles.legendTitle}>KEY</Text>
-                        {[{ l: 'Do First', c: theme.colors.red }, { l: 'Schedule', c: theme.colors.orange }, { l: 'Delegate', c: theme.colors.green }, { l: 'Eliminate', c: theme.colors.blue }].map((item, i) => (
-                            <View key={i} style={styles.legendItem}>
-                                <View style={[styles.swatch, { backgroundColor: item.c + '20', borderColor: item.c }]} />
-                                <Text style={styles.legendText}>{item.l}</Text>
+                    {/* WEEK VIEW (matches design) */}
+                    {view === 'week' && (
+                        <WeekViewContent
+                            theme={theme}
+                            tasks={tasks}
+                            selectedDate={selectedDate}
+                            setSelectedDate={setSelectedDate}
+                            getPrio={getPrio}
+                            month={month}
+                            setMonth={setMonth}
+                            year={year}
+                            setYear={setYear}
+                        />
+                    )}
+
+                    {/* DAY VIEW (single day timeline) */}
+                    {view === 'day' && (
+                        <DayViewContent
+                            theme={theme}
+                            tasks={tasks}
+                            selectedDate={selectedDate}
+                            setSelectedDate={setSelectedDate}
+                            getPrio={getPrio}
+                        />
+                    )}
+
+                    {/* MONTH VIEW: Legend + nav + grid (existing) */}
+                    {view === 'month' && (
+                        <>
+                            <View style={styles.legend}>
+                                <Text style={styles.legendTitle}>KEY</Text>
+                                {[{ l: 'Do First', c: theme.colors.red }, { l: 'Schedule', c: theme.colors.orange }, { l: 'Delegate', c: theme.colors.green }, { l: 'Eliminate', c: theme.colors.blue }].map((item, i) => (
+                                    <View key={i} style={styles.legendItem}>
+                                        <View style={[styles.swatch, { backgroundColor: item.c + '20', borderColor: item.c }]} />
+                                        <Text style={styles.legendText}>{item.l}</Text>
+                                    </View>
+                                ))}
                             </View>
-                        ))}
-                    </View>
 
-                    {/* Month nav */}
-                    <View style={styles.controlsRow}>
-                        <TouchableOpacity onPress={() => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); }} style={styles.ctrlBtn}>
-                            <ChevronLeft color={theme.colors.ink2} size={16} />
-                        </TouchableOpacity>
-                        <Text style={styles.monthText}>{MN[month]} {year}</Text>
-                        <TouchableOpacity onPress={() => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); }} style={styles.ctrlBtn}>
-                            <ChevronRight color={theme.colors.ink2} size={16} />
-                        </TouchableOpacity>
-                    </View>
+                            <View style={styles.controlsRow}>
+                                <TouchableOpacity onPress={() => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); }} style={styles.ctrlBtn}>
+                                    <ChevronLeft color={theme.colors.ink2} size={16} />
+                                </TouchableOpacity>
+                                <Text style={styles.monthText}>{MN[month]} {year}</Text>
+                                <TouchableOpacity onPress={() => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); }} style={styles.ctrlBtn}>
+                                    <ChevronRight color={theme.colors.ink2} size={16} />
+                                </TouchableOpacity>
+                            </View>
 
-                    {/* Day headers */}
-                    <View style={styles.daysRow}>
-                        {DAYS.map(d => (
-                            <Text
-                                key={d}
-                                style={[
-                                    styles.dayText,
-                                    { width: '14.28%' }
-                                ]}
-                            >
-                                {d}
-                            </Text>
-                        ))}
-                    </View>
+                            <View style={styles.daysRow}>
+                                {DAYS.map(d => (
+                                    <Text
+                                        key={d}
+                                        style={[
+                                            styles.dayText,
+                                            { width: '14.28%' }
+                                        ]}
+                                    >
+                                        {d}
+                                    </Text>
+                                ))}
+                            </View>
+                        </>
+                    )}
 
-                    {/* Grid */}
+                    {/* MONTH grid */}
+                    {view === 'month' && (
                     <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
                         <View style={styles.grid}>
                             {cells.map((d, i) => {
@@ -748,6 +809,7 @@ export default function MatrixScreen() {
                         </View>
                         <View style={{ height: 80 }} />
                     </ScrollView>
+                    )}
                 </View>
 
                 {/* Right/Bottom Sidebar: Day Details */}
@@ -1181,3 +1243,335 @@ const getStyles = (theme) => StyleSheet.create({
     sidebarTaskPrio: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.5 },
     sidebarBlockBtn: { padding: 10, borderRadius: 8, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
 });
+
+// ── Week View Content (matches design's calendar week grid) ──────
+function WeekViewContent({ theme, tasks, selectedDate, setSelectedDate, getPrio, month, setMonth, year, setYear }) {
+    // Compute the week containing selectedDate (Sun→Sat)
+    const sel = new Date(selectedDate + 'T12:00:00');
+    const weekStart = new Date(sel);
+    weekStart.setDate(sel.getDate() - sel.getDay()); // back to Sunday
+
+    const weekDays = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(weekStart);
+        d.setDate(weekStart.getDate() + i);
+        return {
+            iso: d.toLocaleDateString('en-CA'),
+            d: d.getDate(),
+            w: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][i],
+            isToday: d.toDateString() === new Date().toDateString(),
+        };
+    });
+
+    // Hours shown 8am - 6pm (10 rows)
+    const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
+    const ROW_H = 56;
+
+    // Map a task to its time placement on the week grid
+    const getTaskPlacement = (t) => {
+        let dateStr = '';
+        let startHour = null;
+        let durationMin = t.duration || 60;
+
+        if (t.type === 'worktime' && t.scheduled_start) {
+            const s = new Date(t.scheduled_start);
+            dateStr = s.toLocaleDateString('en-CA');
+            startHour = s.getHours() + s.getMinutes() / 60;
+            if (t.scheduled_end) {
+                const e = new Date(t.scheduled_end);
+                durationMin = (e - s) / 60000;
+            }
+        } else {
+            dateStr = (t.due_date || t.date || '').slice(0, 10);
+            startHour = 12; // default mid-day for due-date items
+            durationMin = 30; // small bar
+        }
+        return { dateStr, startHour, durationMin };
+    };
+
+    // Now line — only when current week
+    const now = new Date();
+    const isCurrentWeek = weekDays.some(d => d.isToday);
+    const nowHour = now.getHours() + now.getMinutes() / 60;
+    const nowOffset = ((nowHour - HOURS[0]) / (HOURS.length)) * 100;
+
+    return (
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, flex: 1 }}>
+            {/* Week nav header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <TouchableOpacity
+                    onPress={() => {
+                        const d = new Date(selectedDate + 'T12:00:00');
+                        d.setDate(d.getDate() - 7);
+                        setSelectedDate(d.toLocaleDateString('en-CA'));
+                        setMonth(d.getMonth());
+                        setYear(d.getFullYear());
+                    }}
+                    style={{ padding: 6 }}
+                >
+                    <ChevronLeft size={16} color={theme.colors.ink2} />
+                </TouchableOpacity>
+                <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink }}>
+                    Week of {weekDays[0].w} {weekDays[0].d} – {weekDays[6].w} {weekDays[6].d}
+                </Text>
+                <TouchableOpacity
+                    onPress={() => {
+                        const d = new Date(selectedDate + 'T12:00:00');
+                        d.setDate(d.getDate() + 7);
+                        setSelectedDate(d.toLocaleDateString('en-CA'));
+                        setMonth(d.getMonth());
+                        setYear(d.getFullYear());
+                    }}
+                    style={{ padding: 6 }}
+                >
+                    <ChevronRight size={16} color={theme.colors.ink2} />
+                </TouchableOpacity>
+            </View>
+
+            {/* Week grid card */}
+            <View style={{
+                flex: 1,
+                backgroundColor: theme.colors.surface,
+                borderRadius: 14,
+                borderWidth: 1, borderColor: theme.colors.border,
+                overflow: 'hidden',
+            }}>
+                {/* Day headers row */}
+                <View style={{
+                    flexDirection: 'row',
+                    borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                    backgroundColor: theme.colors.surface2 + '80',
+                }}>
+                    <View style={{ width: 50 }} />
+                    {weekDays.map((d) => (
+                        <TouchableOpacity
+                            key={d.iso}
+                            onPress={() => setSelectedDate(d.iso)}
+                            style={{
+                                flex: 1,
+                                paddingVertical: 10,
+                                alignItems: 'center',
+                                borderLeftWidth: 1, borderLeftColor: theme.colors.border,
+                            }}
+                        >
+                            <Text style={{
+                                fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3,
+                                textTransform: 'uppercase', letterSpacing: 1,
+                            }}>
+                                {d.w}
+                            </Text>
+                            <View style={{
+                                width: 26, height: 26, borderRadius: 13,
+                                marginTop: 4,
+                                alignItems: 'center', justifyContent: 'center',
+                                backgroundColor: d.isToday ? theme.colors.ink : 'transparent',
+                            }}>
+                                <Text style={{
+                                    fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600',
+                                    color: d.isToday ? theme.colors.bg : theme.colors.ink,
+                                }}>
+                                    {d.d}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                {/* Time grid */}
+                <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                    <View style={{ position: 'relative' }}>
+                        {HOURS.map((h, i) => (
+                            <View key={h} style={{
+                                flexDirection: 'row',
+                                borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                                minHeight: ROW_H,
+                            }}>
+                                <View style={{ width: 50, padding: 4, alignItems: 'flex-end' }}>
+                                    <Text style={{
+                                        fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink3,
+                                    }}>
+                                        {h > 12 ? h - 12 : h}{h >= 12 ? 'p' : 'a'}
+                                    </Text>
+                                </View>
+                                {weekDays.map((day) => (
+                                    <View
+                                        key={day.iso}
+                                        style={{
+                                            flex: 1,
+                                            borderLeftWidth: 1, borderLeftColor: theme.colors.border,
+                                        }}
+                                    />
+                                ))}
+                            </View>
+                        ))}
+
+                        {/* Render task blocks absolutely positioned */}
+                        {weekDays.map((day, dayIdx) => {
+                            const dayTasks = tasks.filter(t => {
+                                const p = getTaskPlacement(t);
+                                return p.dateStr === day.iso && p.startHour !== null && p.startHour >= HOURS[0] && p.startHour < HOURS[HOURS.length - 1] + 1;
+                            });
+                            return dayTasks.map((t, ti) => {
+                                const p = getTaskPlacement(t);
+                                const top = (p.startHour - HOURS[0]) * ROW_H;
+                                const height = Math.max(20, (p.durationMin / 60) * ROW_H - 2);
+                                const c = getPrio(t.urgency, t.importance);
+                                const isWorktime = t.type === 'worktime';
+                                return (
+                                    <View
+                                        key={day.iso + '_' + ti}
+                                        style={{
+                                            position: 'absolute',
+                                            top: top + 1,
+                                            left: 50 + (dayIdx * (100 / 7)) + '%',
+                                            width: (100 / 7) + '%',
+                                            transform: [{ translateX: 0 }],
+                                            paddingHorizontal: 3,
+                                        }}
+                                    >
+                                        <View style={{
+                                            height: height,
+                                            backgroundColor: c.bg,
+                                            borderLeftWidth: 3, borderLeftColor: c.text,
+                                            borderRadius: 4,
+                                            padding: 4, paddingLeft: 6,
+                                            overflow: 'hidden',
+                                        }}>
+                                            <Text style={{
+                                                fontFamily: theme.fonts.s, fontSize: 10, fontWeight: '600',
+                                                color: c.text,
+                                            }} numberOfLines={2}>
+                                                {isWorktime ? '🎯 ' : ''}{t.title}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                );
+                            });
+                        })}
+
+                        {/* "Now" line */}
+                        {isCurrentWeek && nowHour >= HOURS[0] && nowHour < HOURS[HOURS.length - 1] + 1 && (
+                            <View style={{
+                                position: 'absolute',
+                                left: 50,
+                                right: 0,
+                                top: (nowHour - HOURS[0]) * ROW_H,
+                                borderTopWidth: 2,
+                                borderTopColor: '#E03E3E',
+                                zIndex: 5,
+                            }}>
+                                <View style={{
+                                    position: 'absolute',
+                                    left: -5, top: -5,
+                                    width: 10, height: 10, borderRadius: 5,
+                                    backgroundColor: '#E03E3E',
+                                }} />
+                            </View>
+                        )}
+                    </View>
+                </ScrollView>
+            </View>
+        </View>
+    );
+}
+
+// ── Day View Content (single-day vertical timeline) ──────────────
+function DayViewContent({ theme, tasks, selectedDate, setSelectedDate, getPrio }) {
+    const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+    const ROW_H = 64;
+
+    const dayTasks = tasks.filter(t => {
+        if (t.type === 'worktime') return t.scheduled_start && new Date(t.scheduled_start).toLocaleDateString('en-CA') === selectedDate;
+        return (t.due_date || t.date || '').slice(0, 10) === selectedDate;
+    });
+
+    const sel = new Date(selectedDate + 'T12:00:00');
+    const isToday = sel.toDateString() === new Date().toDateString();
+
+    return (
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, flex: 1 }}>
+            {/* Date nav */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <TouchableOpacity onPress={() => {
+                    const d = new Date(selectedDate + 'T12:00:00');
+                    d.setDate(d.getDate() - 1);
+                    setSelectedDate(d.toLocaleDateString('en-CA'));
+                }} style={{ padding: 6 }}>
+                    <ChevronLeft size={16} color={theme.colors.ink2} />
+                </TouchableOpacity>
+                <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '700', color: theme.colors.ink }}>
+                    {sel.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                    {isToday && <Text style={{ color: '#E03E3E', fontSize: 12, fontWeight: '600' }}>  · Today</Text>}
+                </Text>
+                <TouchableOpacity onPress={() => {
+                    const d = new Date(selectedDate + 'T12:00:00');
+                    d.setDate(d.getDate() + 1);
+                    setSelectedDate(d.toLocaleDateString('en-CA'));
+                }} style={{ padding: 6 }}>
+                    <ChevronRight size={16} color={theme.colors.ink2} />
+                </TouchableOpacity>
+            </View>
+
+            <View style={{
+                flex: 1,
+                backgroundColor: theme.colors.surface,
+                borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border,
+                overflow: 'hidden',
+            }}>
+                <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                    <View style={{ position: 'relative' }}>
+                        {HOURS.map((h) => (
+                            <View key={h} style={{
+                                flexDirection: 'row',
+                                minHeight: ROW_H,
+                                borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                            }}>
+                                <View style={{ width: 60, padding: 6, alignItems: 'flex-end' }}>
+                                    <Text style={{ fontFamily: theme.fonts.mono, fontSize: 11, color: theme.colors.ink3 }}>
+                                        {h > 12 ? h - 12 : h}{h >= 12 ? 'p' : 'a'}
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1 }} />
+                            </View>
+                        ))}
+                        {dayTasks.map((t, i) => {
+                            let startHour = 12;
+                            let durationMin = t.duration || 60;
+                            if (t.type === 'worktime' && t.scheduled_start) {
+                                const s = new Date(t.scheduled_start);
+                                startHour = s.getHours() + s.getMinutes() / 60;
+                                if (t.scheduled_end) {
+                                    durationMin = (new Date(t.scheduled_end) - s) / 60000;
+                                }
+                            }
+                            if (startHour < HOURS[0] || startHour >= HOURS[HOURS.length - 1] + 1) return null;
+                            const c = getPrio(t.urgency, t.importance);
+                            const top = (startHour - HOURS[0]) * ROW_H;
+                            const height = Math.max(28, (durationMin / 60) * ROW_H - 4);
+                            return (
+                                <View key={i} style={{
+                                    position: 'absolute',
+                                    top: top + 2, left: 64, right: 8,
+                                    backgroundColor: c.bg,
+                                    borderLeftWidth: 4, borderLeftColor: c.text,
+                                    borderRadius: 6,
+                                    padding: 8, paddingLeft: 12,
+                                    height: height,
+                                    overflow: 'hidden',
+                                }}>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: c.text }} numberOfLines={2}>
+                                        {t.type === 'worktime' ? '🎯 ' : ''}{t.title}
+                                    </Text>
+                                    {t.duration && (
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: c.text, opacity: 0.7, marginTop: 2 }}>
+                                            {Math.round(durationMin)} min
+                                        </Text>
+                                    )}
+                                </View>
+                            );
+                        })}
+                    </View>
+                </ScrollView>
+            </View>
+        </View>
+    );
+}

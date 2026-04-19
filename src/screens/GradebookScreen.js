@@ -649,25 +649,159 @@ export default function GradebookScreen() {
             {/* CLASS DETAIL */}
             {cls && (
                 <View style={{ flex: 1 }}>
-                    <View style={[S.detailHeader, { borderLeftColor: gColor }]}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={S.detailName} numberOfLines={2}>{cls.name}</Text>
-                            {cls.teacher ? <Text style={S.detailMeta}>{cls.teacher}{cls.period ? ` · Period ${cls.period}` : ''}</Text> : null}
-                            <View style={S.detailTags}>
-                                <View style={[S.tag, cls.type === 'AP' && S.tagAP, cls.type === 'HN' && S.tagHN]}>
-                                    <Text style={[S.tagTxt, (cls.type === 'AP' || cls.type === 'HN') && { color: '#fff' }]}>{cls.type || 'ST'}</Text>
+                    {/* Detail header (matches design): color dot + type badge + title + teacher | actions */}
+                    <View style={{
+                        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+                        padding: 24, paddingBottom: 18,
+                    }}>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: gColor }} />
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1 }}>
+                                    {cls.type || 'ST'}{cls.period ? ` · Period ${cls.period}` : ''}{cls.isManual ? ' · Manual' : ''}
+                                </Text>
+                            </View>
+                            <Text style={{
+                                fontFamily: theme.fonts.d, fontSize: 26, fontWeight: '700',
+                                color: theme.colors.ink, letterSpacing: -0.5,
+                            }} numberOfLines={2}>
+                                {cls.name}
+                            </Text>
+                            {cls.teacher ? (
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginTop: 4 }}>
+                                    {cls.teacher} · W{cls.wGP || '—'} / U{cls.uGP || '—'}
+                                </Text>
+                            ) : null}
+                        </View>
+                        <TouchableOpacity
+                            style={{
+                                flexDirection: 'row', alignItems: 'center', gap: 6,
+                                paddingHorizontal: 12, paddingVertical: 8,
+                                backgroundColor: hypothetical ? theme.colors.blue + '18' : theme.colors.surface,
+                                borderWidth: 1, borderColor: hypothetical ? theme.colors.blue : theme.colors.border2,
+                                borderRadius: 10,
+                            }}
+                            onPress={() => {
+                                const next = !hypothetical;
+                                setHypothetical(next);
+                                if (!next) {
+                                    setHypoEdits({});
+                                    setHypoAssignments(prev => ({ ...prev, [cls.id]: [] }));
+                                }
+                            }}
+                        >
+                            <Sparkles size={14} color={hypothetical ? theme.colors.blue : theme.colors.ink2} />
+                            <Text style={{
+                                fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600',
+                                color: hypothetical ? theme.colors.blue : theme.colors.ink2,
+                            }}>
+                                {hypothetical ? 'Exit hypothetical' : 'What-if mode'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* 3-card stat row (matches design) */}
+                    <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 24, marginBottom: 18 }}>
+                        {/* Letter + percent + bar */}
+                        <View style={{
+                            flex: 1.3,
+                            backgroundColor: theme.colors.surface,
+                            borderRadius: theme.radii.lg,
+                            borderWidth: 1, borderColor: theme.colors.border,
+                            padding: 18,
+                            flexDirection: 'row', alignItems: 'center', gap: 18,
+                            ...theme.shadows.sm,
+                        }}>
+                            <Text style={{
+                                fontFamily: theme.fonts.d, fontSize: 52, fontWeight: '700',
+                                color: gColor, letterSpacing: -2, lineHeight: 56,
+                            }}>
+                                {gradeLetter(parseFloat(cls.grade) || 0)}
+                            </Text>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontFamily: theme.fonts.mono, fontSize: 26, fontWeight: '500', color: theme.colors.ink }}>
+                                    {(parseFloat(cls.grade) || 0).toFixed(1)}%
+                                </Text>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>
+                                    Current grade
+                                </Text>
+                                <View style={{ height: 6, backgroundColor: theme.colors.surface2, borderRadius: 3, overflow: 'hidden', marginTop: 10 }}>
+                                    <View style={{ width: `${Math.min(100, parseFloat(cls.grade) || 0)}%`, height: '100%', backgroundColor: gColor, borderRadius: 3 }} />
                                 </View>
-                                <View style={S.tag}><Text style={S.tagTxt}>W{cls.wGP || '—'} / U{cls.uGP || '—'}</Text></View>
+                                {hypothetical && getHypoGrade(cls) !== null && (
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: theme.colors.blue, fontWeight: '600', marginTop: 6 }}>
+                                        With what-ifs: {getHypoGrade(cls).toFixed(1)}%
+                                    </Text>
+                                )}
                             </View>
                         </View>
-                        <View style={S.gradeBlock}>
-                            <Text style={[S.gradeLetterBig, { color: gColor, fontSize: 42 }]}>{gradeLetter(parseFloat(cls.grade) || 0)}</Text>
-                            <Text style={[S.gradePctSmall, { color: gColor, fontSize: 14 }]}>{(parseFloat(cls.grade) || 0).toFixed(1)}%</Text>
-                            {hypothetical && getHypoGrade(cls) !== null && (
-                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.blue, marginTop: 2 }}>
-                                    Hypo: {getHypoGrade(cls).toFixed(1)}%
+
+                        {/* Trend (mini sparkline) */}
+                        {(() => {
+                            const graded = (cls.assignments || []).filter(a => {
+                                const s = numScore(a.score), t = parseFloat(a.total);
+                                return !isNaN(s) && !isNaN(t) && t > 0;
+                            });
+                            const trendVal = graded.length >= 2
+                                ? +(graded[graded.length - 1].score / graded[graded.length - 1].total * 100 - graded[0].score / graded[0].total * 100).toFixed(1)
+                                : 0;
+                            const trendColor = trendVal >= 0 ? theme.colors.green : theme.colors.red;
+                            return (
+                                <View style={{
+                                    flex: 1,
+                                    backgroundColor: theme.colors.surface,
+                                    borderRadius: theme.radii.lg,
+                                    borderWidth: 1, borderColor: theme.colors.border,
+                                    padding: 18,
+                                    ...theme.shadows.sm,
+                                }}>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1 }}>
+                                        Trend
+                                    </Text>
+                                    <Text style={{
+                                        fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700',
+                                        color: trendColor, marginTop: 8,
+                                    }}>
+                                        {trendVal >= 0 ? '+' : ''}{trendVal}%
+                                    </Text>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 4 }}>
+                                        First → latest
+                                    </Text>
+                                </View>
+                            );
+                        })()}
+
+                        {/* Assignment count */}
+                        <View style={{
+                            flex: 1,
+                            backgroundColor: theme.colors.surface,
+                            borderRadius: theme.radii.lg,
+                            borderWidth: 1, borderColor: theme.colors.border,
+                            padding: 18,
+                            ...theme.shadows.sm,
+                        }}>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1 }}>
+                                Assignments
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
+                                <Text style={{ fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink }}>
+                                    {(cls.assignments || []).length}
                                 </Text>
-                            )}
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 }}>
+                                    · {(cls.assignments || []).filter(a => isNaN(numScore(a.score))).length} pending
+                                </Text>
+                            </View>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 8 }}>
+                                {(() => {
+                                    const graded = (cls.assignments || []).filter(a => {
+                                        const s = numScore(a.score), t = parseFloat(a.total);
+                                        return !isNaN(s) && !isNaN(t) && t > 0;
+                                    });
+                                    if (graded.length === 0) return 'No grades yet';
+                                    const avg = Math.round(graded.reduce((sum, a) => sum + a.score / a.total * 100, 0) / graded.length);
+                                    return `Avg: ${avg}%`;
+                                })()}
+                            </Text>
                         </View>
                     </View>
 
@@ -733,25 +867,16 @@ export default function GradebookScreen() {
                         );
                     })()}
 
-                    {/* Controls: Hypothetical toggle */}
-                    <View style={S.controlsBar}>
-                        <TouchableOpacity
-                            style={[S.hypoToggle, hypothetical && S.hypoToggleActive]}
-                            onPress={() => {
-                                const next = !hypothetical;
-                                setHypothetical(next);
-                                if (!next) {
-                                    // Turning off — clear all hypothetical state for this class
-                                    setHypoEdits({});
-                                    setHypoAssignments(prev => ({ ...prev, [cls.id]: [] }));
-                                }
-                            }}
-                        >
-                            <View style={[S.hypoCheckbox, hypothetical && { backgroundColor: theme.colors.blue, borderColor: theme.colors.blue }]}>
-                                {hypothetical && <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>✓</Text>}
-                            </View>
-                            <Text style={[S.hypoLabel, hypothetical && { color: theme.colors.blue }]}>Hypothetical Mode</Text>
-                        </TouchableOpacity>
+                    {/* (Hypothetical toggle moved to header above) */}
+
+                    {/* Section heading + filter pills (matches design) */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 24, marginBottom: 14 }}>
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>
+                            Assignments
+                        </Text>
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 }}>
+                            ({(cls.assignments || []).length})
+                        </Text>
                     </View>
 
                     {/* Category filter tabs */}
@@ -783,7 +908,171 @@ export default function GradebookScreen() {
                                 {(cls.isManual || hypothetical) && <Text style={S.emptySub}>Tap + to add an assignment</Text>}
                             </View>
                         )}
-                        {renderAssignments
+                        {/* TABLE VIEW (matches design) — non-hypothetical mode only */}
+                        {!hypothetical && renderAssignments.length > 0 && (
+                            <View style={{
+                                marginHorizontal: 24, marginBottom: 14,
+                                backgroundColor: theme.colors.surface,
+                                borderRadius: theme.radii.lg,
+                                borderWidth: 1, borderColor: theme.colors.border,
+                                overflow: 'hidden',
+                                ...theme.shadows.sm,
+                            }}>
+                                {/* Table header */}
+                                <View style={{
+                                    flexDirection: 'row',
+                                    paddingVertical: 12, paddingHorizontal: 18,
+                                    backgroundColor: theme.colors.surface2 + '60',
+                                    borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                                }}>
+                                    <Text style={{ flex: 2.5, fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, fontWeight: '600' }}>
+                                        Assignment
+                                    </Text>
+                                    <Text style={{ flex: 1, fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, fontWeight: '600' }}>
+                                        Category
+                                    </Text>
+                                    <Text style={{ flex: 1, fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, fontWeight: '600' }}>
+                                        Date
+                                    </Text>
+                                    <Text style={{ flex: 1, fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, fontWeight: '600' }}>
+                                        Score
+                                    </Text>
+                                    <Text style={{ flex: 1, fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, fontWeight: '600', textAlign: 'right' }}>
+                                        Grade
+                                    </Text>
+                                </View>
+
+                                {/* Table rows */}
+                                {renderAssignments
+                                    .filter(a => catFilter === 'All' || (a.category || 'Other') === catFilter)
+                                    .map((a, i, arr) => {
+                                        const s = numScore(a.score);
+                                        const t = parseFloat(a.total);
+                                        const hasPts = !isNaN(s) && !isNaN(t) && t > 0;
+                                        const pct = hasPts ? (s / t) * 100 : null;
+                                        const ac = pct !== null ? gradeColor(pct, theme) : theme.colors.ink4;
+                                        const catColor = a.category === 'Summative' ? theme.colors.blue
+                                            : a.category === 'Final' ? theme.colors.purple
+                                            : a.category === 'Formative' ? theme.colors.orange
+                                            : theme.colors.ink3;
+                                        // Pick an icon based on category/name
+                                        const lowerName = (a.name || a.title || '').toLowerCase();
+                                        const iconChar = lowerName.includes('essay') ? '📄'
+                                            : lowerName.includes('lab') ? '🧪'
+                                            : lowerName.includes('quiz') ? '❓'
+                                            : lowerName.includes('test') || lowerName.includes('exam') ? '✅'
+                                            : '✏️';
+                                        return (
+                                            <View key={a.id || i} style={{
+                                                flexDirection: 'row', alignItems: 'center',
+                                                paddingVertical: 13, paddingHorizontal: 18,
+                                                borderBottomWidth: i < arr.length - 1 ? 1 : 0,
+                                                borderBottomColor: theme.colors.border,
+                                            }}>
+                                                <View style={{ flex: 2.5, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                    <View style={{
+                                                        width: 26, height: 26, borderRadius: 7,
+                                                        backgroundColor: catColor + '15',
+                                                        alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                                    }}>
+                                                        <Text style={{ fontSize: 13 }}>{iconChar}</Text>
+                                                    </View>
+                                                    <Text style={{ flex: 1, fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '500', color: theme.colors.ink }} numberOfLines={1}>
+                                                        {a.name || a.title}
+                                                    </Text>
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <View style={{
+                                                        alignSelf: 'flex-start',
+                                                        paddingHorizontal: 8, paddingVertical: 3,
+                                                        backgroundColor: theme.colors.surface2,
+                                                        borderRadius: 6,
+                                                    }}>
+                                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '600', color: catColor }}>
+                                                            {a.category || 'Other'}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                <Text style={{ flex: 1, fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2 }}>
+                                                    {a.date || '—'}
+                                                </Text>
+                                                <Text style={{ flex: 1, fontFamily: theme.fonts.mono, fontSize: 12, color: theme.colors.ink2 }}>
+                                                    {hasPts ? `${s % 1 === 0 ? s : s.toFixed(1)}/${t % 1 === 0 ? t : t.toFixed(1)}` : '—'}
+                                                </Text>
+                                                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                                                    {pct !== null ? (
+                                                        <View style={{
+                                                            paddingHorizontal: 8, paddingVertical: 3,
+                                                            backgroundColor: ac + '18',
+                                                            borderRadius: 6,
+                                                        }}>
+                                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '700', color: ac }}>
+                                                                {Math.round(pct)}%
+                                                            </Text>
+                                                        </View>
+                                                    ) : (
+                                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink4 }}>
+                                                            Pending
+                                                        </Text>
+                                                    )}
+                                                </View>
+                                            </View>
+                                        );
+                                    })
+                                }
+                            </View>
+                        )}
+
+                        {/* What-if calculator hint card (matches design) */}
+                        {!hypothetical && renderAssignments.length > 0 && (() => {
+                            const curG = parseFloat(cls.grade) || 0;
+                            const target = curG >= 90 ? 95 : 90;
+                            const pending = (cls.assignments || []).filter(a => isNaN(numScore(a.score))).length;
+                            return (
+                                <View style={{
+                                    marginHorizontal: 24, marginTop: 14, marginBottom: 14,
+                                    padding: 18,
+                                    borderRadius: theme.radii.lg,
+                                    borderWidth: 1, borderColor: theme.colors.purple + '30',
+                                    backgroundColor: theme.colors.purple + '06',
+                                    flexDirection: 'row', alignItems: 'center', gap: 14,
+                                }}>
+                                    <View style={{
+                                        width: 42, height: 42, borderRadius: 10,
+                                        backgroundColor: theme.colors.purple + '20',
+                                        alignItems: 'center', justifyContent: 'center',
+                                    }}>
+                                        <Sparkles size={20} color={theme.colors.purple} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink }}>
+                                            What-if calculator
+                                        </Text>
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 3 }}>
+                                            {pending > 0
+                                                ? `${pending} assignment${pending > 1 ? 's' : ''} ungraded. Try hypothetical mode to model your final grade.`
+                                                : `Test scenarios with hypothetical scores to plan ahead.`
+                                            }
+                                        </Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        onPress={() => setHypothetical(true)}
+                                        style={{
+                                            paddingHorizontal: 14, paddingVertical: 8,
+                                            backgroundColor: theme.colors.purple,
+                                            borderRadius: 10,
+                                        }}
+                                    >
+                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: '#fff' }}>
+                                            Try it →
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            );
+                        })()}
+
+                        {/* CARD VIEW (hypothetical mode only — preserves inline editing) */}
+                        {hypothetical && renderAssignments
                             .filter(a => catFilter === 'All' || (a.category || 'Other') === catFilter)
                             .map((a, i) => {
                                 // Current effective score/total in this render context
