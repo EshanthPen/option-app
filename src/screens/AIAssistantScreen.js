@@ -409,7 +409,7 @@ export default function AIAssistantScreen() {
 
                 {/* Header with mode pills + status */}
                 <View style={{
-                    padding: 16, paddingHorizontal: 28,
+                    paddingVertical: 12, paddingHorizontal: 20,
                     borderBottomWidth: 1, borderBottomColor: theme.colors.border,
                     backgroundColor: theme.colors.surface,
                     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -484,7 +484,11 @@ export default function AIAssistantScreen() {
                         {mode === 'chat' && (
                             <>
                                 {chatMessages.length === 0 && !chatLoading && (
-                                    <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                                    <View style={{
+                                        alignItems: 'center', justifyContent: 'center',
+                                        minHeight: 360,
+                                        paddingVertical: 24,
+                                    }}>
                                         <View style={{
                                             width: 56, height: 56, borderRadius: 28,
                                             backgroundColor: theme.colors.ink,

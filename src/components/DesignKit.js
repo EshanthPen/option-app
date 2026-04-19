@@ -3,11 +3,12 @@
  * (ui_kits/app/index.html). Use across all screens for visual consistency.
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Platform } from 'react-native';
 import { Search, Bell } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
+import SearchModal from './SearchModal';
 
 // ── Semantic colors (universal across themes) ────────────────────
 export const SEM = {
@@ -158,86 +159,105 @@ export function TopBar({
 }) {
     const { theme } = useTheme();
     const isWeb = Platform.OS === 'web';
+    const [searchOpen, setSearchOpen] = useState(false);
+
+    // ⌘K / Ctrl+K shortcut on web — open search globally
+    useEffect(() => {
+        if (!isWeb || !showSearch || typeof window === 'undefined') return;
+        const onKey = (e) => {
+            if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+                e.preventDefault();
+                setSearchOpen(true);
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [isWeb, showSearch]);
+
     return (
-        <View style={[{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 24, paddingTop: 22, paddingBottom: 18,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.border,
-            backgroundColor: theme.colors.surface,
-            gap: 12,
-        }, style]}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{
-                    fontFamily: theme.fonts.d,
-                    fontSize: 22, fontWeight: '700',
-                    color: theme.colors.ink,
-                    letterSpacing: -0.4,
-                }} numberOfLines={1}>
-                    {title}
-                </Text>
-                {subtitle ? (
+        <>
+            <View style={[{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 20, paddingTop: 14, paddingBottom: 14,
+                borderBottomWidth: 1,
+                borderBottomColor: theme.colors.border,
+                backgroundColor: theme.colors.surface,
+                gap: 12,
+            }, style]}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{
-                        fontFamily: theme.fonts.m,
-                        fontSize: 12, color: theme.colors.ink3,
-                        marginTop: 2,
+                        fontFamily: theme.fonts.d,
+                        fontSize: 22, fontWeight: '700',
+                        color: theme.colors.ink,
+                        letterSpacing: -0.4,
                     }} numberOfLines={1}>
-                        {subtitle}
+                        {title}
                     </Text>
-                ) : null}
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                {showSearch && isWeb && (
-                    <View style={{
-                        flexDirection: 'row', alignItems: 'center', gap: 8,
-                        paddingHorizontal: 12, paddingVertical: 8,
-                        backgroundColor: theme.colors.bg,
-                        borderWidth: 1, borderColor: theme.colors.border,
-                        borderRadius: 10, width: 240,
-                    }}>
-                        <Search size={14} color={theme.colors.ink3} />
-                        <TextInput
-                            placeholder="Search classes, assignments…"
-                            placeholderTextColor={theme.colors.ink3}
+                    {subtitle ? (
+                        <Text style={{
+                            fontFamily: theme.fonts.m,
+                            fontSize: 12, color: theme.colors.ink3,
+                            marginTop: 2,
+                        }} numberOfLines={1}>
+                            {subtitle}
+                        </Text>
+                    ) : null}
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                    {showSearch && isWeb && (
+                        <TouchableOpacity
+                            onPress={() => setSearchOpen(true)}
+                            activeOpacity={0.85}
                             style={{
+                                flexDirection: 'row', alignItems: 'center', gap: 8,
+                                paddingHorizontal: 12, paddingVertical: 8,
+                                backgroundColor: theme.colors.bg,
+                                borderWidth: 1, borderColor: theme.colors.border,
+                                borderRadius: 10, width: 240,
+                            }}
+                        >
+                            <Search size={14} color={theme.colors.ink3} />
+                            <Text style={{
                                 flex: 1, paddingVertical: 0,
                                 fontFamily: theme.fonts.m, fontSize: 13,
-                                color: theme.colors.ink,
-                                ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
-                            }}
-                        />
-                        <View style={{
-                            paddingHorizontal: 5, paddingVertical: 1,
-                            backgroundColor: theme.colors.surface2,
-                            borderRadius: 4,
-                        }}>
-                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink4 }}>
-                                ⌘K
+                                color: theme.colors.ink3,
+                            }} numberOfLines={1}>
+                                Search classes, assignments…
                             </Text>
-                        </View>
-                    </View>
-                )}
-                {showBell && (
-                    <TouchableOpacity style={{
-                        width: 36, height: 36, borderRadius: 10,
-                        backgroundColor: theme.colors.surface,
-                        borderWidth: 1, borderColor: theme.colors.border,
-                        alignItems: 'center', justifyContent: 'center', position: 'relative',
-                    }}>
-                        <Bell size={16} color={theme.colors.ink2} />
-                        <View style={{
-                            position: 'absolute', top: 8, right: 8,
-                            width: 7, height: 7, borderRadius: 4,
-                            backgroundColor: SEM.red,
-                            borderWidth: 1.5, borderColor: theme.colors.surface,
-                        }} />
-                    </TouchableOpacity>
-                )}
-                {actions}
+                            <View style={{
+                                paddingHorizontal: 5, paddingVertical: 1,
+                                backgroundColor: theme.colors.surface2,
+                                borderRadius: 4,
+                            }}>
+                                <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink4 }}>
+                                    ⌘K
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    )}
+                    {showBell && (
+                        <TouchableOpacity style={{
+                            width: 36, height: 36, borderRadius: 10,
+                            backgroundColor: theme.colors.surface,
+                            borderWidth: 1, borderColor: theme.colors.border,
+                            alignItems: 'center', justifyContent: 'center', position: 'relative',
+                        }}>
+                            <Bell size={16} color={theme.colors.ink2} />
+                            <View style={{
+                                position: 'absolute', top: 8, right: 8,
+                                width: 7, height: 7, borderRadius: 4,
+                                backgroundColor: SEM.red,
+                                borderWidth: 1.5, borderColor: theme.colors.surface,
+                            }} />
+                        </TouchableOpacity>
+                    )}
+                    {actions}
+                </View>
             </View>
-        </View>
+            <SearchModal visible={searchOpen} onClose={() => setSearchOpen(false)} />
+        </>
     );
 }
 
