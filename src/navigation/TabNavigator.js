@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, CalendarDays, BookOpen, Settings, Timer, Trophy, Plug, Crown, Sparkles } from 'lucide-react-native';
+import { Home, CalendarDays, BookOpen, Settings, Timer, Trophy, Plug, Crown, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import DashboardScreen from '../screens/DashboardScreen';
 import MatrixScreen from '../screens/MatrixScreen';
 import GradebookScreen from '../screens/GradebookScreen';
@@ -17,65 +17,165 @@ import { useTheme } from '../context/ThemeContext';
 const Tab = createBottomTabNavigator();
 
 const isWeb = typeof window !== 'undefined' && Dimensions.get('window').width > 768;
-const SIDEBAR_WIDTH = isWeb ? 220 : 72;
 
-const NAV_ITEMS = [
-    { name: 'Home', label: 'Dashboard', Icon: Home },
-    { name: 'AI', label: 'AI Assistant', Icon: Sparkles, highlight: true },
-    { name: 'Calendar', label: 'Calendar', Icon: CalendarDays },
-    { name: 'Gradebook', label: 'Gradebook', Icon: BookOpen },
-    { name: 'Focus', label: 'Focus', Icon: Timer },
-    { name: 'Leaderboard', label: 'Leaderboard', Icon: Trophy },
-    { name: 'Integrations', label: 'Integrations', Icon: Plug },
-    { name: 'Premium', label: 'Upgrade', Icon: Crown, highlight: true },
-    { name: 'Settings', label: 'Settings', Icon: Settings },
+const WORKSPACE_ITEMS = [
+    { name: 'Home',         label: 'Dashboard',  icon: Home },
+    { name: 'AI',           label: 'AI Tutor',   icon: Sparkles, highlight: true },
+    { name: 'Calendar',     label: 'Calendar',   icon: CalendarDays },
+    { name: 'Gradebook',    label: 'Gradebook',  icon: BookOpen },
+    { name: 'Focus',        label: 'Focus',      icon: Timer },
+    { name: 'Leaderboard',  label: 'Leaderboard',icon: Trophy },
 ];
 
+const ACCOUNT_ITEMS = [
+    { name: 'Integrations', label: 'Integrations',icon: Plug },
+    { name: 'Premium',      label: 'Upgrade',     icon: Crown, highlight: true },
+    { name: 'Settings',     label: 'Settings',    icon: Settings },
+];
+
+const ALL_NAV = [...WORKSPACE_ITEMS, ...ACCOUNT_ITEMS];
+
 function CustomSidebar({ state, descriptors, navigation }) {
-    const { theme, isDarkMode } = useTheme();
-    const styles = getStyles(theme);
+    const { theme } = useTheme();
+    const [collapsed, setCollapsed] = useState(false);
+    const W = isWeb ? (collapsed ? 68 : 220) : 68;
+
+    const renderItem = (n) => {
+        const routeIndex = state.routes.findIndex(r => r.name === n.name);
+        if (routeIndex === -1) return null;
+        const isFocused = state.index === routeIndex;
+        const route = state.routes[routeIndex];
+
+        const onPress = () => {
+            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
+        };
+
+        const iconColor = n.highlight && !isFocused
+            ? '#FFB800'
+            : isFocused
+            ? theme.colors.ink
+            : theme.colors.ink3;
+
+        return (
+            <TouchableOpacity
+                key={route.key}
+                onPress={onPress}
+                style={[
+                    styles.navItem(theme),
+                    isFocused && styles.navItemFocused(theme),
+                    !isWeb && { justifyContent: 'center' },
+                ]}
+                activeOpacity={0.7}
+            >
+                {/* Active indicator bar */}
+                {isFocused && (
+                    <View style={{
+                        position: 'absolute', left: -12, top: 8, bottom: 8,
+                        width: 3, backgroundColor: theme.colors.ink, borderRadius: 2,
+                    }} />
+                )}
+                <n.icon
+                    size={18}
+                    color={iconColor}
+                    strokeWidth={isFocused ? 2.5 : 2}
+                />
+                {isWeb && !collapsed && (
+                    <Text style={[
+                        styles.navLabel(theme),
+                        isFocused && styles.navLabelFocused(theme),
+                        n.highlight && !isFocused && { color: '#FFB800' },
+                    ]}>
+                        {n.label}
+                    </Text>
+                )}
+                {/* AI pill badge */}
+                {isWeb && !collapsed && n.highlight && !isFocused && n.name === 'AI' && (
+                    <View style={{
+                        backgroundColor: '#FFB800' + '1A',
+                        paddingHorizontal: 6, paddingVertical: 2, borderRadius: 99, marginLeft: 'auto',
+                    }}>
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#FFB800', letterSpacing: 0.5 }}>AI</Text>
+                    </View>
+                )}
+            </TouchableOpacity>
+        );
+    };
 
     return (
-        <View style={[styles.sidebarContainer, { width: SIDEBAR_WIDTH }]}>
-            <View style={styles.logoContainer}>
-                <View style={styles.logoCircle} />
-                {isWeb && <Text style={styles.logoText}>Option</Text>}
+        <View style={[styles.sidebar(theme, W)]}>
+
+            {/* Logo */}
+            <View style={styles.logoRow(W)}>
+                <View style={styles.logoMark(theme)} />
+                {isWeb && !collapsed && (
+                    <Text style={styles.logoText(theme)}>Option</Text>
+                )}
             </View>
 
-            <View style={styles.navItemsContainer}>
-                {state.routes.map((route, index) => {
-                    const isFocused = state.index === index;
-                    const nav = NAV_ITEMS.find(n => n.name === route.name) || NAV_ITEMS[0];
-                    const { Icon, label } = nav;
-
-                    const onPress = () => {
-                        const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-                        if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
-                    };
-
-                    const isHighlight = nav.highlight;
-                    const iconColor = isHighlight ? '#FFB800' : (isFocused ? theme.colors.ink : theme.colors.ink3);
-
-                    return (
-                        <TouchableOpacity
-                            key={route.key}
-                            onPress={onPress}
-                            style={[styles.navItem, isFocused && styles.navItemFocused, !isWeb && { justifyContent: 'center' }]}
-                        >
-                            <Icon size={20} color={iconColor} strokeWidth={isFocused ? 2.5 : 2} />
-                            {isWeb && (
-                                <Text style={[styles.navLabel, isFocused && styles.navLabelFocused, isHighlight && { color: '#FFB800' }]}>{label}</Text>
-                            )}
-                        </TouchableOpacity>
-                    );
-                })}
+            {/* WORKSPACE section */}
+            <View style={styles.navSection}>
+                {isWeb && !collapsed && (
+                    <Text style={styles.sectionLabel(theme)}>Workspace</Text>
+                )}
+                {WORKSPACE_ITEMS.map(renderItem)}
             </View>
+
+            <View style={{ flex: 1 }} />
+
+            {/* ACCOUNT section */}
+            <View style={styles.navSection}>
+                {isWeb && !collapsed && (
+                    <Text style={styles.sectionLabel(theme)}>Account</Text>
+                )}
+                {ACCOUNT_ITEMS.map(renderItem)}
+            </View>
+
+            {/* Collapse toggle (web only) */}
+            {isWeb && (
+                <TouchableOpacity
+                    onPress={() => setCollapsed(c => !c)}
+                    style={styles.collapseBtn(theme)}
+                    activeOpacity={0.7}
+                >
+                    {collapsed
+                        ? <ChevronRight size={14} color={theme.colors.ink3} />
+                        : <ChevronLeft size={14} color={theme.colors.ink3} />
+                    }
+                    {!collapsed && (
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 }}>Collapse</Text>
+                    )}
+                </TouchableOpacity>
+            )}
+
+            {/* User pill (web only, expanded) */}
+            {isWeb && !collapsed && (
+                <View style={styles.userPill(theme)}>
+                    <View style={styles.userAvatar(theme)}>
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '700', color: theme.colors.bg }}>
+                            {/* Initials placeholder — could be wired to real user data */}
+                            U
+                        </Text>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink }} numberOfLines={1}>
+                            My Account
+                        </Text>
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: '#7C3AED', fontWeight: '600' }}>
+                            Premium
+                        </Text>
+                    </View>
+                </View>
+            )}
         </View>
     );
 }
 
 export default function TabNavigator({ isGuest, onSignOut }) {
     const { theme } = useTheme();
+    const [collapsed, setCollapsed] = useState(false);
+    const SIDEBAR_WIDTH = isWeb ? (collapsed ? 68 : 220) : 68;
+
     return (
         <Tab.Navigator
             initialRouteName="Home"
@@ -85,14 +185,14 @@ export default function TabNavigator({ isGuest, onSignOut }) {
                 sceneStyle: { backgroundColor: theme.colors.bg, paddingLeft: SIDEBAR_WIDTH },
             }}
         >
-            <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: 'Dashboard' }} />
-            <Tab.Screen name="AI" component={AIAssistantScreen} options={{ tabBarLabel: 'AI Assistant' }} />
-            <Tab.Screen name="Calendar" component={MatrixScreen} options={{ tabBarLabel: 'Calendar' }} />
-            <Tab.Screen name="Gradebook" component={GradebookScreen} options={{ tabBarLabel: 'Gradebook' }} />
-            <Tab.Screen name="Focus" component={ScreentimeScreen} options={{ tabBarLabel: 'Focus' }} />
-            <Tab.Screen name="Leaderboard" component={LeaderboardScreen} options={{ tabBarLabel: 'Leaderboard' }} />
+            <Tab.Screen name="Home"        component={DashboardScreen}    options={{ tabBarLabel: 'Dashboard' }} />
+            <Tab.Screen name="AI"          component={AIAssistantScreen}  options={{ tabBarLabel: 'AI Tutor' }} />
+            <Tab.Screen name="Calendar"    component={MatrixScreen}       options={{ tabBarLabel: 'Calendar' }} />
+            <Tab.Screen name="Gradebook"   component={GradebookScreen}    options={{ tabBarLabel: 'Gradebook' }} />
+            <Tab.Screen name="Focus"       component={ScreentimeScreen}   options={{ tabBarLabel: 'Focus' }} />
+            <Tab.Screen name="Leaderboard" component={LeaderboardScreen}  options={{ tabBarLabel: 'Leaderboard' }} />
             <Tab.Screen name="Integrations" component={IntegrationsScreen} options={{ tabBarLabel: 'Integrations' }} />
-            <Tab.Screen name="Premium" component={PremiumScreen} options={{ tabBarLabel: 'Upgrade' }} />
+            <Tab.Screen name="Premium"     component={PremiumScreen}      options={{ tabBarLabel: 'Upgrade' }} />
             <Tab.Screen name="Settings">
                 {(props) => <SettingsScreen {...props} isGuest={isGuest} onSignOut={onSignOut} />}
             </Tab.Screen>
@@ -100,20 +200,66 @@ export default function TabNavigator({ isGuest, onSignOut }) {
     );
 }
 
-const getStyles = (theme) => StyleSheet.create({
-    sidebarContainer: {
-        position: 'absolute', top: 0, left: 0, bottom: 0,
+// ── Styles (functions so they get live theme values) ─────────────
+
+const styles = {
+    sidebar: (theme, W) => ({
+        position: 'absolute', top: 0, left: 0, bottom: 0, width: W,
         backgroundColor: theme.colors.surface,
         borderRightWidth: 1, borderRightColor: theme.colors.border,
-        paddingTop: 40, alignItems: 'center', paddingHorizontal: 12,
+        paddingTop: 20, paddingBottom: 16, paddingHorizontal: 12,
+        alignItems: 'center',
         zIndex: 100,
+    }),
+    logoRow: (W) => ({
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        marginBottom: 28, width: '100%', paddingLeft: 4,
+    }),
+    logoMark: (theme) => ({
+        width: 28, height: 28, backgroundColor: theme.colors.ink, borderRadius: 7, flexShrink: 0,
+    }),
+    logoText: (theme) => ({
+        fontFamily: theme.fonts.logo || theme.fonts.d,
+        fontSize: 20, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.3,
+    }),
+    navSection: {
+        width: '100%', gap: 2, marginBottom: 4,
     },
-    logoContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 36, width: '100%', gap: 10 },
-    logoCircle: { width: 28, height: 28, backgroundColor: theme.colors.ink, borderRadius: 7 },
-    logoText: { fontFamily: theme.fonts.logo || theme.fonts.d, fontSize: 20, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.3 },
-    navItemsContainer: { width: '100%', gap: 2 },
-    navItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderRadius: theme.radii.r, gap: 10 },
-    navItemFocused: { backgroundColor: theme.colors.surface2 },
-    navLabel: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, fontWeight: '500' },
-    navLabelFocused: { color: theme.colors.ink, fontWeight: '600' },
-});
+    sectionLabel: (theme) => ({
+        fontFamily: theme.fonts.m,
+        fontSize: 10, fontWeight: '600',
+        color: theme.colors.ink4,
+        textTransform: 'uppercase', letterSpacing: 1.2,
+        paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4,
+    }),
+    navItem: (theme) => ({
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        paddingVertical: 9, paddingHorizontal: 12,
+        borderRadius: 10, position: 'relative', width: '100%',
+    }),
+    navItemFocused: (theme) => ({
+        backgroundColor: theme.colors.surface2,
+    }),
+    navLabel: (theme) => ({
+        fontFamily: theme.fonts.m, fontSize: 13, fontWeight: '500',
+        color: theme.colors.ink3, flex: 1,
+    }),
+    navLabelFocused: (theme) => ({
+        color: theme.colors.ink, fontWeight: '600',
+    }),
+    collapseBtn: (theme) => ({
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+        paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.colors.border,
+        marginTop: 8, width: '100%',
+    }),
+    userPill: (theme) => ({
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        padding: 10, marginTop: 8, borderRadius: 10,
+        backgroundColor: theme.colors.surface2, width: '100%',
+    }),
+    userAvatar: (theme) => ({
+        width: 28, height: 28, borderRadius: 14,
+        backgroundColor: theme.colors.ink,
+        alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    }),
+};

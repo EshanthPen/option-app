@@ -4,22 +4,26 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { BookOpen, CalendarDays, TrendingUp, TrendingDown, AlertTriangle, Award, AlertCircle, Lightbulb, ChevronRight } from 'lucide-react-native';
+import {
+    BookOpen, CalendarDays, TrendingUp, TrendingDown, AlertTriangle,
+    Award, AlertCircle, Lightbulb, ChevronRight, Target, Flame,
+    FileText, FlaskConical, HelpCircle, ClipboardCheck, Pencil,
+    Gauge, Sparkles,
+} from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { computeFocusScore, syncScoreToSupabase, getScoreLabel } from '../utils/focusScoreEngine';
 import { generateNudges } from '../utils/studyNudges';
 import { getUnlockedAchievements, ACHIEVEMENTS } from '../utils/achievements';
 import { lightImpact } from '../utils/haptics';
-import GradeTrendChart from '../components/GradeTrendChart';
 import SyncStatusBar from '../components/SyncStatusBar';
 
-const screenWidth = Dimensions.get('window').width;
+const SEM = { red: '#E03E3E', orange: '#D97706', green: '#16A34A', blue: '#2563EB', purple: '#7C3AED', gold: '#FFB800' };
 
-const gradeColor = (pct, theme) => {
-    if (pct >= 90) return theme.colors.green;
-    if (pct >= 80) return theme.colors.blue;
-    if (pct >= 70) return theme.colors.orange;
-    return theme.colors.red;
+const gradeColor = (pct) => {
+    if (pct >= 90) return SEM.green;
+    if (pct >= 80) return SEM.blue;
+    if (pct >= 70) return SEM.orange;
+    return SEM.red;
 };
 
 const gradeLetter = (pct) => {
@@ -44,6 +48,15 @@ const calcWGPA = (classes) => {
     return (pts / classes.length).toFixed(2);
 };
 
+const calcUGPA = (classes) => {
+    if (!classes || classes.length === 0) return null;
+    const pts = classes.reduce((sum, c) => {
+        const base = c.grade >= 93 ? 4 : c.grade >= 90 ? 3.7 : c.grade >= 87 ? 3.3 : c.grade >= 83 ? 3 : c.grade >= 80 ? 2.7 : c.grade >= 77 ? 2.3 : c.grade >= 73 ? 2 : c.grade >= 70 ? 1.7 : 1;
+        return sum + base;
+    }, 0);
+    return (pts / classes.length).toFixed(2);
+};
+
 const getGreeting = () => {
     const h = new Date().getHours();
     if (h < 12) return 'Good morning';
@@ -52,61 +65,91 @@ const getGreeting = () => {
 };
 
 const TODAY = new Date();
+const todayStr = TODAY.toISOString().slice(0, 10);
 const fmt = (iso) => {
-    const d = new Date(iso);
+    const d = new Date(iso + 'T00:00');
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 const daysUntil = (iso) => {
     if (!iso) return null;
-    const diff = new Date(iso) - TODAY;
-    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-    return days;
+    return Math.ceil((new Date(iso + 'T00:00') - new Date(todayStr + 'T00:00')) / 86400000);
 };
 
+function AssignmentIcon({ weight, color, size = 14 }) {
+    const props = { size, color, strokeWidth: 2 };
+    if (weight === 'Essay' || weight === 'essay') return <FileText {...props} />;
+    if (weight === 'Lab' || weight === 'lab') return <FlaskConical {...props} />;
+    if (weight === 'Quiz' || weight === 'quiz') return <HelpCircle {...props} />;
+    if (weight === 'Test' || weight === 'test' || weight === 'Exam' || weight === 'exam') return <ClipboardCheck {...props} />;
+    return <Pencil {...props} />;
+}
+
+function StatCard({ label, value, sub, color, icon: Icon, onPress, theme }) {
+    return (
+        <TouchableOpacity
+            style={{
+                flex: 1, padding: 16,
+                backgroundColor: theme.colors.surface,
+                borderRadius: theme.radii.lg,
+                borderWidth: 1, borderColor: theme.colors.border,
+                ...theme.shadows.sm,
+            }}
+            onPress={onPress}
+            activeOpacity={onPress ? 0.75 : 1}
+        >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Text>
+                {Icon && <Icon size={14} color={theme.colors.ink4} strokeWidth={2} />}
+            </View>
+            <Text style={{ fontFamily: theme.fonts.s, fontSize: 26, fontWeight: '700', color: color || theme.colors.ink, letterSpacing: -0.5 }}>{value ?? '—'}</Text>
+            {sub && <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 4 }}>{sub}</Text>}
+        </TouchableOpacity>
+    );
+}
+
 export default function DashboardScreen() {
-    const { theme, isDarkMode } = useTheme();
-    const styles = getStyles(theme);
+    const { theme } = useTheme();
     const navigation = useNavigation();
+
     const [classes, setClasses] = useState([]);
     const [periodName, setPeriodName] = useState('');
     const [greeting, setGreeting] = useState(getGreeting());
     const [userName, setUserName] = useState('Student');
-    const [loaded, setLoaded] = useState(false);
     const [focusScoreNum, setFocusScoreNum] = useState(0);
     const [focusLabel, setFocusLabel] = useState('');
+    const [streak, setStreak] = useState(0);
     const [nudges, setNudges] = useState([]);
     const [recentAchievements, setRecentAchievements] = useState([]);
 
     useFocusEffect(
         useCallback(() => {
+            setGreeting(getGreeting());
             const load = async () => {
                 try {
                     const raw = await AsyncStorage.getItem('studentVueGrades');
                     const pn = await AsyncStorage.getItem('studentVuePeriodName');
                     const savedName = await AsyncStorage.getItem('userName');
+                    const streakRaw = await AsyncStorage.getItem('studyStreak');
                     if (raw) setClasses(JSON.parse(raw));
                     if (pn) setPeriodName(pn);
                     if (savedName) setUserName(savedName);
+                    if (streakRaw) setStreak(JSON.parse(streakRaw)?.currentStreak || 0);
 
-                    // Compute real focus score
-                    const { score, breakdown } = await computeFocusScore();
+                    const { score } = await computeFocusScore();
                     setFocusScoreNum(score);
                     setFocusLabel(getScoreLabel(score));
-                    // Sync to Supabase in background (non-blocking)
-                    syncScoreToSupabase(score, breakdown).catch(() => {});
+                    syncScoreToSupabase(score, {}).catch(() => {});
 
-                    // Load study nudges
                     try {
                         const n = await generateNudges();
                         setNudges(n.slice(0, 3));
-                    } catch (e) { console.warn('Nudges error:', e); }
+                    } catch {}
 
-                    // Check achievements
                     try {
                         const unlocked = await getUnlockedAchievements();
                         const recent = unlocked.slice(-3).reverse();
                         setRecentAchievements(recent.map(id => ACHIEVEMENTS[id]).filter(Boolean));
-                    } catch (e) { console.warn('Achievements error:', e); }
+                    } catch {}
                 } catch (e) {
                     console.error(e);
                 }
@@ -116,342 +159,376 @@ export default function DashboardScreen() {
     );
 
     const wgpa = calcWGPA(classes);
-    const ugpa = classes.length > 0 ? (classes.reduce((s, c) => {
-        const base = c.grade >= 93 ? 4 : c.grade >= 90 ? 3.7 : c.grade >= 87 ? 3.3 : c.grade >= 83 ? 3 : c.grade >= 80 ? 2.7 : c.grade >= 77 ? 2.3 : c.grade >= 73 ? 2 : c.grade >= 70 ? 1.7 : 1;
-        return s + base;
-    }, 0) / classes.length).toFixed(2) : null;
-
-    // At-risk: below 83 (B), sorted by grade ascending
+    const ugpa = calcUGPA(classes);
     const atRisk = [...classes].filter(c => c.grade < 83).sort((a, b) => a.grade - b.grade);
-
-    // Upcoming assignments: collect all, sort by isoDate, take next 7
     const upcoming = classes.flatMap(c =>
-        (c.assignments || []).map(a => ({ ...a, courseName: c.name, courseColor: gradeColor(c.grade, theme) }))
-    )
-        .filter(a => a.isoDate && a.isoDate >= TODAY.toISOString().slice(0, 10))
-        .sort((a, b) => a.isoDate.localeCompare(b.isoDate))
-        .slice(0, 7);
+        (c.assignments || [])
+            .filter(a => !a.score && a.isoDate >= todayStr)
+            .map(a => ({ ...a, courseName: c.name, courseColor: gradeColor(c.grade) }))
+    ).sort((a, b) => a.isoDate.localeCompare(b.isoDate)).slice(0, 6);
 
-    const gpaColor = wgpa ? (parseFloat(wgpa) >= 3.7 ? theme.colors.green : parseFloat(wgpa) >= 3.0 ? theme.colors.blue : parseFloat(wgpa) >= 2.0 ? theme.colors.orange : theme.colors.red) : theme.colors.ink2;
+    const recentScores = classes.flatMap(c =>
+        (c.assignments || [])
+            .filter(a => a.score != null)
+            .map(a => ({ ...a, courseName: c.name, courseColor: gradeColor(c.grade), pct: a.total ? Math.round(a.score / a.total * 100) : null }))
+    ).sort((a, b) => (b.isoDate || '').localeCompare(a.isoDate || '')).slice(0, 4);
+
+    const urgentCount = upcoming.filter(a => (daysUntil(a.isoDate) || 0) <= 3).length;
+
+    const focusScoreColor = focusScoreNum >= 70 ? SEM.green : focusScoreNum >= 50 ? SEM.orange : SEM.red;
 
     return (
-        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            <View style={styles.contentWrapper}>
-                {/* Modern Greeting Header */}
-                <View style={styles.heroSection}>
-                    <View>
-                        <Text style={styles.greetingText}>{greeting},</Text>
-                        <Text style={styles.userNameText}>{userName}</Text>
-                    </View>
-                    <TouchableOpacity
-                        style={styles.focusWidget}
-                        onPress={() => navigation.navigate('Focus')}
-                    >
-                        <View style={styles.focusRing}>
-                            <View style={[styles.focusFill, { height: `${focusScoreNum}%` }]} />
-                            <Text style={styles.focusNumText}>{focusScoreNum}</Text>
-                        </View>
+        <ScrollView
+            style={{ flex: 1, backgroundColor: theme.colors.bg }}
+            contentContainerStyle={{ paddingTop: 48, paddingHorizontal: 32, paddingBottom: 100 }}
+            showsVerticalScrollIndicator={false}
+        >
+            <View style={{ maxWidth: 1200, width: '100%', alignSelf: 'center' }}>
+
+                {/* ── Header ── */}
+                <View style={{ marginBottom: 28 }}>
+                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 }}>{greeting},</Text>
+                    <Text style={{ fontFamily: theme.fonts.d, fontSize: 30, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5, marginTop: 2 }}>{userName}</Text>
+                    {periodName ? (
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 4 }}>
+                            {periodName} · {classes.length} classes
+                        </Text>
+                    ) : null}
+                </View>
+
+                {/* ── Stat Row ── */}
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 28, flexWrap: 'wrap' }}>
+                    <StatCard label="Weighted GPA" value={wgpa} sub="AP/HN weighted" color={wgpa && parseFloat(wgpa) >= 3.7 ? SEM.green : theme.colors.ink} icon={TrendingUp} theme={theme} />
+                    <StatCard label="Unweighted GPA" value={ugpa} sub="4.0 scale" color={theme.colors.ink} icon={Gauge} theme={theme} />
+                    <StatCard label="Classes" value={classes.length || '—'} sub={classes.filter(c => c.type === 'AP').length + ' AP · ' + classes.filter(c => c.type === 'HN').length + ' HN'} icon={BookOpen} theme={theme} />
+                    <StatCard label="Focus Score" value={focusScoreNum || '—'} sub={focusLabel || 'Keep it up'} color={focusScoreColor} icon={Target} onPress={() => navigation.navigate('Focus')} theme={theme} />
+                    <StatCard label="Study Streak" value={streak ? streak + 'd' : '0d'} sub="Keep going!" color={streak >= 3 ? SEM.orange : theme.colors.ink} icon={Flame} theme={theme} />
+                </View>
+
+                {/* ── Main Grid ── */}
+                <View style={{ flexDirection: 'row', gap: 24 }}>
+
+                    {/* Left: Up Next + Recent Scores */}
+                    <View style={{ flex: 1.5, gap: 24 }}>
+
+                        {/* Up Next */}
                         <View>
-                            <Text style={styles.focusLabel}>Focus Score</Text>
-                            <Text style={styles.focusSub}>{focusLabel}</Text>
-                        </View>
-                    </TouchableOpacity>
-                </View>
-
-                {/* GPA Stats Row */}
-                <View style={styles.statsRow}>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statLabel}>Weighted GPA</Text>
-                        <Text style={[styles.statValue, { color: gpaColor }]}>{wgpa || '—'}</Text>
-                        <View style={[styles.statIndicator, { backgroundColor: gpaColor }]} />
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statLabel}>Unweighted</Text>
-                        <Text style={styles.statValue}>{ugpa || '—'}</Text>
-                        <View style={[styles.statIndicator, { backgroundColor: theme.colors.ink3 }]} />
-                    </View>
-                    <View style={styles.statCard}>
-                        <Text style={styles.statLabel}>Period</Text>
-                        <Text style={styles.statValue}>{periodName || 'Q3'}</Text>
-                    </View>
-                </View>
-
-                <View style={styles.layoutMain}>
-                    {/* Left Column: Assignments */}
-                    <View style={styles.columnLeft}>
-                        <View style={styles.sectionHeader}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <CalendarDays size={18} color={theme.colors.ink} strokeWidth={2.5} />
-                                <Text style={styles.sectionTitle}>Up Next</Text>
-                            </View>
-                            <TouchableOpacity>
-                                <Text style={styles.seeAllText}>See Calendar</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {upcoming.length > 0 ? (
-                            upcoming.map((asgn, i) => (
-                                <View key={i} style={styles.assignmentCard}>
-                                    <View style={[styles.asgnColorBar, { backgroundColor: asgn.courseColor }]} />
-                                    <View style={styles.asgnContent}>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.asgnTitle} numberOfLines={1}>{asgn.name}</Text>
-                                            <Text style={styles.asgnCourse}>{asgn.courseName}</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <CalendarDays size={18} color={theme.colors.ink} strokeWidth={2.4} />
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Up Next</Text>
+                                    {urgentCount > 0 && (
+                                        <View style={{ backgroundColor: SEM.red + '18', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 }}>
+                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '700', color: SEM.red }}>{urgentCount} urgent</Text>
                                         </View>
-                                        <View style={{ alignItems: 'flex-end' }}>
-                                            <Text style={styles.asgnDate}>{fmt(asgn.isoDate)}</Text>
-                                            <Text style={[styles.asgnDays, { color: daysUntil(asgn.isoDate) <= 2 ? theme.colors.red : theme.colors.ink3 }]}>
-                                                in {daysUntil(asgn.isoDate)} days
-                                            </Text>
-                                        </View>
-                                    </View>
+                                    )}
                                 </View>
-                            ))
-                        ) : (
-                            <View style={styles.emptyCard}>
-                                <Text style={styles.emptyText}>All caught up!</Text>
+                                <TouchableOpacity onPress={() => navigation.navigate('Calendar')}>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 }}>Full calendar →</Text>
+                                </TouchableOpacity>
                             </View>
-                        )}
-                    </View>
 
-                    {/* Right Column: Grades & Insights */}
-                    <View style={styles.columnRight}>
-                        <View style={styles.sectionHeader}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <TrendingDown size={18} color={theme.colors.red} strokeWidth={2.5} />
-                                <Text style={styles.sectionTitle}>Attention</Text>
-                            </View>
-                        </View>
-
-                        {atRisk.length > 0 ? (
-                            atRisk.map((c, i) => {
-                                const color = gradeColor(c.grade, theme);
+                            {upcoming.length > 0 ? upcoming.map((a, i) => {
+                                const d = daysUntil(a.isoDate);
+                                const urgent = d !== null && d <= 2;
                                 return (
-                                    <View key={i} style={styles.atRiskCard}>
-                                        <View style={styles.atRiskHeader}>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={styles.atRiskName} numberOfLines={1}>{c.name}</Text>
-                                                <Text style={styles.atRiskSub}>Needs {(83 - c.grade).toFixed(1)}% to reach B</Text>
+                                    <View key={i} style={{
+                                        flexDirection: 'row',
+                                        backgroundColor: theme.colors.surface,
+                                        borderRadius: theme.radii.lg,
+                                        borderWidth: 1, borderColor: theme.colors.border,
+                                        marginBottom: 8, overflow: 'hidden',
+                                        ...theme.shadows.sm,
+                                    }}>
+                                        <View style={{ width: 3, backgroundColor: a.courseColor }} />
+                                        <View style={{ flex: 1, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                                            <View style={{
+                                                width: 38, height: 38, borderRadius: 10,
+                                                backgroundColor: a.courseColor + '18',
+                                                alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                                            }}>
+                                                <AssignmentIcon weight={a.category || a.weight} color={a.courseColor} size={16} />
                                             </View>
-                                            <View style={[styles.atRiskGradeBox, { backgroundColor: color + '15' }]}>
-                                                <Text style={[styles.atRiskGradeText, { color }]}>{c.grade}%</Text>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink }} numberOfLines={1}>{a.name}</Text>
+                                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>
+                                                    {a.courseName}{a.category || a.weight ? ' · ' + (a.category || a.weight) : ''}
+                                                    {a.total ? ' · ' + a.total + ' pts' : ''}
+                                                </Text>
+                                            </View>
+                                            <View style={{ alignItems: 'flex-end' }}>
+                                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>{fmt(a.isoDate)}</Text>
+                                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '600', color: urgent ? SEM.red : theme.colors.ink3, marginTop: 2 }}>
+                                                    {d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : d !== null ? `in ${d}d` : ''}
+                                                </Text>
                                             </View>
                                         </View>
                                     </View>
                                 );
-                            })
-                        ) : (
-                            <View style={styles.successCard}>
-                                <TrendingUp size={24} color={theme.colors.green} />
-                                <Text style={styles.successText}>All your classes are in great shape.</Text>
+                            }) : (
+                                <View style={{
+                                    padding: 32, alignItems: 'center',
+                                    backgroundColor: theme.colors.surface,
+                                    borderRadius: theme.radii.lg,
+                                    borderWidth: 1, borderColor: theme.colors.border,
+                                    ...theme.shadows.sm,
+                                }}>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink3 }}>All caught up! No upcoming assignments.</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Recent Scores */}
+                        {recentScores.length > 0 && (
+                            <View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                                    <TrendingUp size={18} color={theme.colors.ink} strokeWidth={2.4} />
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Recent Scores</Text>
+                                </View>
+                                <View style={{
+                                    backgroundColor: theme.colors.surface,
+                                    borderRadius: theme.radii.lg,
+                                    borderWidth: 1, borderColor: theme.colors.border,
+                                    overflow: 'hidden',
+                                    ...theme.shadows.sm,
+                                }}>
+                                    {recentScores.map((a, i) => (
+                                        <View key={i} style={{
+                                            flexDirection: 'row', alignItems: 'center',
+                                            padding: 14, gap: 14,
+                                            borderBottomWidth: i < recentScores.length - 1 ? 1 : 0,
+                                            borderBottomColor: theme.colors.border,
+                                        }}>
+                                            <View style={{ width: 3, height: 32, backgroundColor: a.courseColor, borderRadius: 2, flexShrink: 0 }} />
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }} numberOfLines={1}>{a.name}</Text>
+                                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>{a.courseName}{a.isoDate ? ' · ' + fmt(a.isoDate) : ''}</Text>
+                                            </View>
+                                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 11, color: theme.colors.ink3 }}>
+                                                {a.score != null && a.total ? `${a.score}/${a.total}` : ''}
+                                            </Text>
+                                            {a.pct != null && (
+                                                <View style={{ backgroundColor: gradeColor(a.pct) + '18', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 7 }}>
+                                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '700', color: gradeColor(a.pct) }}>{a.pct}%</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Right: Focus Widget + Classes + Needs Attention + Nudges */}
+                    <View style={{ flex: 1, gap: 24 }}>
+
+                        {/* Focus Score Widget (dark gradient) */}
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('Focus')}
+                            activeOpacity={0.85}
+                            style={{
+                                padding: 20, borderRadius: theme.radii.lg,
+                                backgroundColor: theme.colors.ink,
+                                overflow: 'hidden',
+                            }}
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
+                                <View>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 1.2 }}>Today's Focus Score</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
+                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 48, fontWeight: '700', color: '#fff', letterSpacing: -2 }}>{focusScoreNum}</Text>
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>/ 100</Text>
+                                    </View>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, color: focusScoreColor, marginTop: 4, fontWeight: '600' }}>
+                                        {focusScoreNum >= 70 ? '↑ ' : focusScoreNum >= 50 ? '→ ' : '↓ '}{focusLabel || 'Keep going'}
+                                    </Text>
+                                </View>
+                                <View style={{
+                                    width: 52, height: 52, borderRadius: 26,
+                                    backgroundColor: focusScoreColor + '25',
+                                    borderWidth: 2, borderColor: focusScoreColor,
+                                    alignItems: 'center', justifyContent: 'center'
+                                }}>
+                                    <Target size={22} color={focusScoreColor} strokeWidth={2.4} />
+                                </View>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 10 }}>
+                                {[
+                                    { label: 'Focus', val: Math.min(focusScoreNum, 100), color: SEM.blue },
+                                    { label: 'Streak', val: Math.min(streak * 10, 100), color: SEM.orange },
+                                    { label: 'Score', val: focusScoreNum, color: focusScoreColor },
+                                ].map((m, i) => (
+                                    <View key={i} style={{ flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>{m.label}</Text>
+                                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: '#fff', fontWeight: '600' }}>{m.val}</Text>
+                                        </View>
+                                        <View style={{ height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+                                            <View style={{ width: `${m.val}%`, height: '100%', backgroundColor: m.color, borderRadius: 2 }} />
+                                        </View>
+                                    </View>
+                                ))}
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Class Overview */}
+                        <View>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                    <BookOpen size={18} color={theme.colors.ink} strokeWidth={2.4} />
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Class Overview</Text>
+                                </View>
+                                <TouchableOpacity onPress={() => navigation.navigate('Gradebook')}>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 }}>See all →</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <View style={{
+                                backgroundColor: theme.colors.surface,
+                                borderRadius: theme.radii.lg,
+                                borderWidth: 1, borderColor: theme.colors.border,
+                                padding: 16,
+                                ...theme.shadows.sm,
+                            }}>
+                                {classes.slice(0, 6).map((c, i) => (
+                                    <TouchableOpacity key={i} onPress={() => navigation.navigate('Gradebook')} style={{
+                                        flexDirection: 'row', alignItems: 'center', gap: 12,
+                                        paddingVertical: 10,
+                                        borderTopWidth: i > 0 ? 1 : 0, borderTopColor: theme.colors.border,
+                                    }}>
+                                        <View style={{ width: 6, height: 28, backgroundColor: gradeColor(c.grade), borderRadius: 3, flexShrink: 0 }} />
+                                        <View style={{ flex: 1, minWidth: 0 }}>
+                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }} numberOfLines={1}>{c.name}</Text>
+                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 1 }}>{c.type || 'REG'} · {c.teacher || ''}</Text>
+                                        </View>
+                                        <View style={{ flex: 1, height: 5, backgroundColor: theme.colors.surface2, borderRadius: 3, overflow: 'hidden', maxWidth: 70 }}>
+                                            <View style={{ width: `${c.grade}%`, height: '100%', backgroundColor: gradeColor(c.grade), borderRadius: 3 }} />
+                                        </View>
+                                        <View style={{ alignItems: 'flex-end', minWidth: 44 }}>
+                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '700', color: gradeColor(c.grade) }}>{gradeLetter(c.grade)}</Text>
+                                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.ink3 }}>{c.grade}%</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                ))}
+                                {classes.length === 0 && (
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, textAlign: 'center', paddingVertical: 16 }}>
+                                        No classes loaded yet.{'\n'}Connect StudentVUE in Integrations.
+                                    </Text>
+                                )}
+                            </View>
+                        </View>
+
+                        {/* Needs Attention */}
+                        {atRisk.length > 0 && (
+                            <View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                                    <TrendingDown size={18} color={SEM.red} strokeWidth={2.4} />
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Needs Attention</Text>
+                                </View>
+                                {atRisk.map((c, i) => {
+                                    const col = gradeColor(c.grade);
+                                    return (
+                                        <View key={i} style={{
+                                            flexDirection: 'row', alignItems: 'center', gap: 12,
+                                            backgroundColor: theme.colors.surface,
+                                            borderRadius: theme.radii.lg, padding: 14, marginBottom: 8,
+                                            borderWidth: 1, borderColor: theme.colors.border,
+                                            ...theme.shadows.sm,
+                                        }}>
+                                            <View style={{
+                                                width: 36, height: 36, borderRadius: 10,
+                                                backgroundColor: SEM.red + '15',
+                                                alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                                            }}>
+                                                <AlertTriangle size={18} color={SEM.red} strokeWidth={2} />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }} numberOfLines={1}>{c.name}</Text>
+                                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>Needs {(83 - c.grade).toFixed(1)}% to reach B</Text>
+                                            </View>
+                                            <View style={{ backgroundColor: col + '18', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '700', color: col }}>{c.grade}%</Text>
+                                            </View>
+                                        </View>
+                                    );
+                                })}
                             </View>
                         )}
 
-                        <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-                            <Text style={styles.sectionTitle}>Overview</Text>
-                        </View>
-                        <View style={styles.overviewContainer}>
-                            {classes.slice(0, 5).map((c, i) => (
-                                <View key={i} style={styles.overviewRow}>
-                                    <Text style={styles.overviewLabel} numberOfLines={1}>{c.name}</Text>
-                                    <View style={styles.progressBarBg}>
-                                        <View style={[styles.progressBarFill, { width: `${c.grade}%`, backgroundColor: gradeColor(c.grade, theme) }]} />
-                                    </View>
-                                    <Text style={styles.overviewValue}>{c.grade}%</Text>
+                        {/* Smart Nudges */}
+                        {nudges.length > 0 && (
+                            <View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                                    <Lightbulb size={18} color={SEM.gold} strokeWidth={2.4} />
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Smart Nudges</Text>
                                 </View>
-                            ))}
-                        </View>
-                    </View>
-                </View>
-
-            {/* ── Smart Nudges ── */}
-            {nudges.length > 0 && (
-                <View style={{ marginTop: 24, width: '100%' }}>
-                    <View style={styles.sectionHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Lightbulb size={18} color={theme.colors.ink} strokeWidth={2.5} />
-                            <Text style={styles.sectionTitle}>Smart Nudges</Text>
-                        </View>
-                    </View>
-                    {nudges.map((nudge, idx) => (
-                        <TouchableOpacity
-                            key={nudge.id || idx}
-                            style={{
-                                backgroundColor: theme.colors.surface,
-                                borderWidth: 1, borderColor: theme.colors.border,
-                                borderRadius: theme.radii.lg, padding: 14, marginBottom: 8,
-                                flexDirection: 'row', alignItems: 'center', gap: 12,
-                                ...theme.shadows.sm,
-                            }}
-                            onPress={() => {
-                                lightImpact();
-                                if (nudge.action === 'navigate_focus') navigation.navigate('Focus');
-                                else if (nudge.action === 'navigate_gradebook') navigation.navigate('Gradebook');
-                                else if (nudge.action === 'navigate_calendar') navigation.navigate('Calendar');
-                                else if (nudge.action === 'navigate_leaderboard') navigation.navigate('Leaderboard');
-                            }}
-                        >
-                            <View style={{
-                                width: 36, height: 36, borderRadius: 18,
-                                backgroundColor: nudge.type === 'warning' ? theme.colors.red + '20' :
-                                    nudge.type === 'motivation' ? theme.colors.green + '20' :
-                                    theme.colors.accent + '20',
-                                alignItems: 'center', justifyContent: 'center',
-                            }}>
-                                {nudge.type === 'warning' ? <AlertCircle size={18} color={theme.colors.red} /> :
-                                 nudge.type === 'achievement' ? <Award size={18} color={theme.colors.accent} /> :
-                                 <Lightbulb size={18} color={theme.colors.ink} />}
+                                {nudges.map((nudge, idx) => {
+                                    const nColor = nudge.type === 'warning' ? SEM.red : nudge.type === 'motivation' ? SEM.green : SEM.blue;
+                                    return (
+                                        <TouchableOpacity
+                                            key={nudge.id || idx}
+                                            style={{
+                                                backgroundColor: theme.colors.surface,
+                                                borderRadius: theme.radii.lg, padding: 14, marginBottom: 8,
+                                                flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+                                                borderWidth: 1, borderColor: theme.colors.border,
+                                                ...theme.shadows.sm,
+                                            }}
+                                            onPress={() => {
+                                                lightImpact();
+                                                if (nudge.action === 'navigate_focus') navigation.navigate('Focus');
+                                                else if (nudge.action === 'navigate_gradebook') navigation.navigate('Gradebook');
+                                                else if (nudge.action === 'navigate_calendar') navigation.navigate('Calendar');
+                                                else if (nudge.action === 'navigate_leaderboard') navigation.navigate('Leaderboard');
+                                            }}
+                                            activeOpacity={0.75}
+                                        >
+                                            <View style={{
+                                                width: 32, height: 32, borderRadius: 8,
+                                                backgroundColor: nColor + '15',
+                                                alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2
+                                            }}>
+                                                {nudge.type === 'warning' ? <AlertCircle size={16} color={nColor} /> :
+                                                 nudge.type === 'achievement' ? <Award size={16} color={nColor} /> :
+                                                 <Sparkles size={16} color={nColor} />}
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>{nudge.title}</Text>
+                                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 3, lineHeight: 17 }}>{nudge.message}</Text>
+                                            </View>
+                                            <ChevronRight size={16} color={theme.colors.ink3} style={{ marginTop: 2 }} />
+                                        </TouchableOpacity>
+                                    );
+                                })}
                             </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink }}>{nudge.title}</Text>
-                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 2 }}>{nudge.message}</Text>
-                            </View>
-                            <ChevronRight size={16} color={theme.colors.ink3} />
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            )}
+                        )}
 
-            {/* ── Recent Achievements ── */}
-            {recentAchievements.length > 0 && (
-                <View style={{ marginTop: 24, width: '100%' }}>
-                    <View style={styles.sectionHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Award size={18} color={theme.colors.ink} strokeWidth={2.5} />
-                            <Text style={styles.sectionTitle}>Achievements</Text>
-                        </View>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 10 }}>
-                        {recentAchievements.map((ach, idx) => (
-                            <View key={idx} style={{
-                                flex: 1, backgroundColor: theme.colors.surface,
-                                borderWidth: 1, borderColor: theme.colors.border,
-                                borderRadius: theme.radii.lg, padding: 14, alignItems: 'center',
-                                ...theme.shadows.sm,
-                            }}>
-                                <Text style={{ fontSize: 28, marginBottom: 6 }}>{ach.icon}</Text>
-                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '600', color: theme.colors.ink, textAlign: 'center' }}>{ach.title}</Text>
+                        {/* Recent Achievements */}
+                        {recentAchievements.length > 0 && (
+                            <View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                                    <Award size={18} color={theme.colors.ink} strokeWidth={2.4} />
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Achievements</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', gap: 10 }}>
+                                    {recentAchievements.map((ach, idx) => (
+                                        <View key={idx} style={{
+                                            flex: 1,
+                                            backgroundColor: theme.colors.surface,
+                                            borderRadius: theme.radii.lg, padding: 14,
+                                            alignItems: 'center',
+                                            borderWidth: 1, borderColor: theme.colors.border,
+                                            ...theme.shadows.sm,
+                                        }}>
+                                            <Text style={{ fontSize: 28, marginBottom: 6 }}>{ach.icon}</Text>
+                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '600', color: theme.colors.ink, textAlign: 'center' }}>{ach.title}</Text>
+                                        </View>
+                                    ))}
+                                </View>
                             </View>
-                        ))}
+                        )}
                     </View>
                 </View>
-            )}
-
-            {/* ── Grade Trends ── */}
-            <View style={{ marginTop: 24, marginBottom: 10, width: '100%' }}>
-                <View style={styles.sectionHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <TrendingUp size={18} color={theme.colors.ink} strokeWidth={2.5} />
-                        <Text style={styles.sectionTitle}>Grade Trends</Text>
-                    </View>
-                </View>
-                <GradeTrendChart />
             </View>
-            </View>
-
-            <View style={{ height: 100 }} />
         </ScrollView>
     );
 }
-
-const getStyles = (theme) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg },
-    scrollContent: { paddingTop: 48, paddingHorizontal: 32, alignItems: 'center' },
-    contentWrapper: { width: '100%', maxWidth: 1200 },
-
-    // Hero Section
-    heroSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
-    greetingText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, letterSpacing: 0.5 },
-    userNameText: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5, marginTop: 2 },
-
-    focusWidget: {
-        flexDirection: 'row', alignItems: 'center', gap: 12,
-        padding: 10, paddingRight: 18,
-        backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        borderWidth: 1, borderColor: theme.colors.border,
-        ...theme.shadows.sm,
-    },
-    focusRing: {
-        width: 44, height: 44, borderRadius: 22,
-        backgroundColor: theme.colors.surface2, overflow: 'hidden',
-        justifyContent: 'center', alignItems: 'center',
-        borderWidth: 1, borderColor: theme.colors.border
-    },
-    focusFill: {
-        position: 'absolute', bottom: 0, width: '100%',
-        backgroundColor: theme.colors.green, opacity: 0.15
-    },
-    focusNumText: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700', color: theme.colors.ink },
-    focusLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.8 },
-    focusSub: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.green },
-
-    // Stats Row
-    statsRow: { flexDirection: 'row', gap: 12, marginBottom: 28 },
-    statCard: {
-        flex: 1, padding: 16,
-        backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        borderWidth: 1, borderColor: theme.colors.border,
-        ...theme.shadows.sm,
-    },
-    statLabel: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
-    statValue: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '700', color: theme.colors.ink },
-    statIndicator: { height: 3, width: 28, borderRadius: 2, marginTop: 10 },
-
-    // Main Layout
-    layoutMain: { flexDirection: 'row', gap: 24 },
-    columnLeft: { flex: 1.4 },
-    columnRight: { flex: 1 },
-
-    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-    sectionTitle: { fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '600', color: theme.colors.ink },
-    seeAllText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },
-
-    // Assignments
-    assignmentCard: {
-        flexDirection: 'row', backgroundColor: theme.colors.surface,
-        borderRadius: theme.radii.lg, marginBottom: 10, overflow: 'hidden',
-        borderWidth: 1, borderColor: theme.colors.border,
-        ...theme.shadows.sm,
-    },
-    asgnColorBar: { width: 3 },
-    asgnContent: { flex: 1, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
-    asgnTitle: { fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink },
-    asgnCourse: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 3 },
-    asgnDate: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink },
-    asgnDays: { fontFamily: theme.fonts.m, fontSize: 11, marginTop: 3 },
-
-    // At Risk
-    atRiskCard: {
-        backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        padding: 14, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border,
-        ...theme.shadows.sm,
-    },
-    atRiskHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    atRiskName: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink },
-    atRiskSub: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 },
-    atRiskGradeBox: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, alignItems: 'center' },
-    atRiskGradeText: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '700' },
-
-    successCard: {
-        padding: 24, alignItems: 'center', gap: 10,
-        backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        borderWidth: 1, borderColor: theme.colors.border,
-        ...theme.shadows.sm,
-    },
-    successText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, textAlign: 'center' },
-
-    // Overview
-    overviewContainer: {
-        backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-        padding: 18, borderWidth: 1, borderColor: theme.colors.border,
-        ...theme.shadows.sm,
-    },
-    overviewRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-    overviewLabel: { flex: 1, fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2 },
-    progressBarBg: { flex: 2, height: 6, backgroundColor: theme.colors.surface2, borderRadius: 3, overflow: 'hidden' },
-    progressBarFill: { height: '100%', borderRadius: 3 },
-    overviewValue: { width: 36, fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', textAlign: 'right', color: theme.colors.ink },
-
-    emptyCard: { padding: 32, alignItems: 'center', backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border, ...theme.shadows.sm },
-    emptyText: { fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink3 }
-});
