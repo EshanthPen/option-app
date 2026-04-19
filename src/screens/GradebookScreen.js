@@ -10,6 +10,7 @@ import { LineChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { ChevronLeft, RefreshCw, Plus, BookOpen, Trash2, Bell, FileText, Sparkles } from 'lucide-react-native';
+import { TopBar } from '../components/DesignKit';
 import * as Notifications from 'expo-notifications';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -493,67 +494,56 @@ export default function GradebookScreen() {
 
     return (
         <View style={S.root}>
-            {/* Top bar matching design */}
-            {cls ? (
-                <View style={{
-                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                    padding: 24, paddingTop: 28, paddingBottom: 20,
-                    borderBottomWidth: 1, borderBottomColor: theme.colors.border,
-                    backgroundColor: theme.colors.surface,
-                }}>
-                    <TouchableOpacity
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
-                        onPress={() => {
-                            setSelectedClass(null);
-                            setHypothetical(false);
-                            setHypoEdits({});
-                            setCatFilter('All');
-                        }}
-                    >
-                        <ChevronLeft size={18} color={theme.colors.ink3} />
-                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, color: theme.colors.ink3, fontWeight: '500' }}>
-                            Gradebook
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-            ) : (
-                <View style={{
-                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                    padding: 24, paddingTop: 28, paddingBottom: 20,
-                    borderBottomWidth: 1, borderBottomColor: theme.colors.border,
-                    backgroundColor: theme.colors.surface,
-                }}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.4 }}>
-                            Gradebook
-                        </Text>
-                        {curPeriodName ? (
-                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 2 }}>
-                                {curPeriodName} · {allClasses.length} classes
+            <TopBar
+                title={cls && !IS_WIDE ? cls.name : 'Gradebook'}
+                subtitle={cls && !IS_WIDE
+                    ? (cls.teacher || '')
+                    : `${curPeriodName || 'Current period'} · ${allClasses.length} class${allClasses.length === 1 ? '' : 'es'}`}
+                actions={
+                    cls && !IS_WIDE ? (
+                        <TouchableOpacity
+                            onPress={() => {
+                                setSelectedClass(null);
+                                setHypothetical(false);
+                                setHypoEdits({});
+                                setCatFilter('All');
+                            }}
+                            style={{
+                                flexDirection: 'row', alignItems: 'center', gap: 6,
+                                paddingHorizontal: 12, paddingVertical: 8,
+                                borderRadius: 10,
+                                backgroundColor: theme.colors.surface,
+                                borderWidth: 1, borderColor: theme.colors.border2,
+                            }}
+                        >
+                            <ChevronLeft size={14} color={theme.colors.ink2} />
+                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink2 }}>
+                                Back
                             </Text>
-                        ) : null}
-                    </View>
-                    <TouchableOpacity
-                        onPress={() => syncPeriod(curPeriodIdx ?? 0)}
-                        disabled={isSyncing}
-                        style={{
-                            flexDirection: 'row', alignItems: 'center', gap: 6,
-                            paddingHorizontal: 12, paddingVertical: 8,
-                            borderRadius: 10,
-                            backgroundColor: theme.colors.surface,
-                            borderWidth: 1, borderColor: theme.colors.border2,
-                        }}
-                    >
-                        {isSyncing
-                            ? <ActivityIndicator size="small" color={theme.colors.ink3} />
-                            : <RefreshCw size={14} color={theme.colors.ink2} />
-                        }
-                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink2 }}>
-                            Sync
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-            )}
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            onPress={() => syncPeriod(curPeriodIdx ?? 0)}
+                            disabled={isSyncing}
+                            style={{
+                                flexDirection: 'row', alignItems: 'center', gap: 6,
+                                paddingHorizontal: 12, paddingVertical: 8,
+                                borderRadius: 10,
+                                backgroundColor: theme.colors.surface,
+                                borderWidth: 1, borderColor: theme.colors.border2,
+                            }}
+                        >
+                            {isSyncing
+                                ? <ActivityIndicator size="small" color={theme.colors.ink3} />
+                                : <RefreshCw size={14} color={theme.colors.ink2} />
+                            }
+                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink2 }}>
+                                Sync
+                            </Text>
+                        </TouchableOpacity>
+                    )
+                }
+            />
 
             {/* Quarter tabs (only when list is visible) */}
             {(!cls || IS_WIDE) && periods.length > 0 && (
@@ -652,7 +642,7 @@ export default function GradebookScreen() {
                     {/* Detail header (matches design): color dot + type badge + title + teacher | actions */}
                     <View style={{
                         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-                        padding: 24, paddingBottom: 18,
+                        paddingHorizontal: 32, paddingTop: 28, paddingBottom: 18,
                     }}>
                         <View style={{ flex: 1, minWidth: 0 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -701,7 +691,7 @@ export default function GradebookScreen() {
                     </View>
 
                     {/* 3-card stat row (matches design) */}
-                    <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 24, marginBottom: 18 }}>
+                    <View style={{ flexDirection: 'row', gap: 14, paddingHorizontal: 32, marginBottom: 24 }}>
                         {/* Letter + percent + bar */}
                         <View style={{
                             flex: 1.3,
@@ -870,7 +860,7 @@ export default function GradebookScreen() {
                     {/* (Hypothetical toggle moved to header above) */}
 
                     {/* Section heading + filter pills (matches design) */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 24, marginBottom: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 32, marginBottom: 14 }}>
                         <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>
                             Assignments
                         </Text>
@@ -911,7 +901,7 @@ export default function GradebookScreen() {
                         {/* TABLE VIEW (matches design) — non-hypothetical mode only */}
                         {!hypothetical && renderAssignments.length > 0 && (
                             <View style={{
-                                marginHorizontal: 24, marginBottom: 14,
+                                marginHorizontal: 32, marginBottom: 14,
                                 backgroundColor: theme.colors.surface,
                                 borderRadius: theme.radii.lg,
                                 borderWidth: 1, borderColor: theme.colors.border,
@@ -1030,7 +1020,7 @@ export default function GradebookScreen() {
                             const pending = (cls.assignments || []).filter(a => isNaN(numScore(a.score))).length;
                             return (
                                 <View style={{
-                                    marginHorizontal: 24, marginTop: 14, marginBottom: 14,
+                                    marginHorizontal: 32, marginTop: 14, marginBottom: 14,
                                     padding: 18,
                                     borderRadius: theme.radii.lg,
                                     borderWidth: 1, borderColor: theme.colors.purple + '30',

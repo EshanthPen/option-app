@@ -1099,7 +1099,7 @@ export default function MatrixScreen() {
 }
 
 const getStyles = (theme) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40 },
+    container: { flex: 1, backgroundColor: theme.colors.bg },
     mainLayout: { flex: 1, paddingHorizontal: HPAD },
     layoutWide: { flexDirection: 'row', gap: 30 },
 
