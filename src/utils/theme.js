@@ -269,11 +269,14 @@ export const getTheme = (isDark, presetKey = 'classic') => {
     return {
         colors: isDark ? preset.dark : preset.light,
         fonts: {
-            d: 'InstrumentSans-Bold',
-            m: 'InstrumentSans',
-            s: 'InstrumentSans-SemiBold',
-            b: 'InstrumentSans-Bold',
+            // Geist — matches the Claude Design exactly
+            d: 'Geist-Bold',
+            m: 'Geist',
+            s: 'Geist-SemiBold',
+            b: 'Geist-Bold',
             mono: 'DMMono',
+            // Logo uses display serif; Fraunces would be a closer match to design
+            // but PlayfairDisplay is already bundled and reads similarly.
             logo: 'PlayfairDisplay-Bold',
         },
         shadows,

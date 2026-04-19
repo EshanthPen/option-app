@@ -29,6 +29,12 @@ import {
   CormorantGaramond_600SemiBold,
   CormorantGaramond_700Bold,
 } from '@expo-google-fonts/cormorant-garamond';
+import {
+  Geist_400Regular,
+  Geist_500Medium,
+  Geist_600SemiBold,
+  Geist_700Bold,
+} from '@expo-google-fonts/geist';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { PremiumProvider } from './src/context/PremiumContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -117,6 +123,11 @@ export default function App() {
     'CormorantGaramond-Medium': CormorantGaramond_500Medium,
     'CormorantGaramond-SemiBold': CormorantGaramond_600SemiBold,
     'CormorantGaramond-Bold': CormorantGaramond_700Bold,
+    // Geist — matches the Claude Design exactly
+    'Geist': Geist_400Regular,
+    'Geist-Medium': Geist_500Medium,
+    'Geist-SemiBold': Geist_600SemiBold,
+    'Geist-Bold': Geist_700Bold,
   });
 
   if (!fontsLoaded || loading || (isAuthenticating && !session)) {
