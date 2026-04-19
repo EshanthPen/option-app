@@ -172,7 +172,7 @@ export default function ScreentimeScreen() {
                 actions={<Button variant="primary" icon={Play} onPress={toggle}>{isActive ? 'Pause' : 'Start session'}</Button>}
             />
 
-            <ScrollView contentContainerStyle={{ padding: 28, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
                 <View style={{ maxWidth: 1200, alignSelf: 'center', width: '100%' }}>
 
                     {/* ── Chrome extension banner (web only, dismissable) ── */}
@@ -183,7 +183,7 @@ export default function ScreentimeScreen() {
                             backgroundColor: theme.colors.surface,
                             borderRadius: theme.radii.lg,
                             borderWidth: 1, borderColor: theme.colors.border,
-                            marginBottom: 20,
+                            marginBottom: 16,
                         }}>
                             <View style={{
                                 width: 36, height: 36, borderRadius: 9,
@@ -207,7 +207,7 @@ export default function ScreentimeScreen() {
                     )}
 
                     {/* ── Top row: Pomodoro + Score ── */}
-                    <View style={{ flexDirection: 'row', gap: 24, marginBottom: 24 }}>
+                    <View style={{ flexDirection: 'row', gap: 16, marginBottom: 16 }}>
 
                         {/* Pomodoro Card */}
                         <Card padding={32} style={{ flex: 1.2, alignItems: 'center' }}>
@@ -368,7 +368,7 @@ export default function ScreentimeScreen() {
                     </View>
 
                     {/* ── Bottom row: Today's sessions + Screen time ── */}
-                    <View style={{ flexDirection: 'row', gap: 24, marginBottom: 24 }}>
+                    <View style={{ flexDirection: 'row', gap: 16 }}>
 
                         {/* Today's sessions */}
                         <Card padding={20} style={{ flex: 1 }}>
@@ -455,53 +455,6 @@ export default function ScreentimeScreen() {
                         </Card>
                     </View>
 
-                    {/* ── Weekly bar chart (simple SVG) ── */}
-                    <Card padding={20} style={{ marginBottom: 24 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                            <TrendingUp size={16} color={theme.colors.ink} strokeWidth={2.4} />
-                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink, flex: 1 }}>
-                                This week
-                            </Text>
-                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 }}>
-                                {Math.floor(weeklyTotalMin / 60)}h {weeklyTotalMin % 60}m total
-                            </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, height: 100 }}>
-                            {weeklyHours.map((h, i) => {
-                                const maxH = Math.max(...weeklyHours, 1);
-                                const heightPct = h / maxH;
-                                return (
-                                    <View key={i} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-                                        <View style={{
-                                            width: '100%', height: `${heightPct * 100}%`,
-                                            backgroundColor: h > 0 ? SEM.green : theme.colors.surface2,
-                                            borderRadius: 4,
-                                            minHeight: 4,
-                                        }} />
-                                        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.ink3 }}>
-                                            {DAY_LABELS[i]}
-                                        </Text>
-                                    </View>
-                                );
-                            })}
-                        </View>
-                    </Card>
-
-                    {/* ── Blocked sites manager ── */}
-                    <Card padding={20}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                            <Shield size={16} color={theme.colors.ink} strokeWidth={2.4} />
-                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink, flex: 1 }}>
-                                Blocked sites
-                            </Text>
-                        </View>
-                        <BlacklistManager
-                            blacklist={blacklist}
-                            onAdd={(d) => saveBlacklist([...blacklist, d])}
-                            onRemove={(d) => saveBlacklist(blacklist.filter(x => x !== d))}
-                            theme={theme}
-                        />
-                    </Card>
                 </View>
             </ScrollView>
         </View>

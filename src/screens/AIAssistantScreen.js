@@ -9,7 +9,9 @@ import {
     CheckCircle, Target, Flame, BarChart3, Calendar, Zap, ArrowRight,
     AlertCircle, Crown, Send, MessageCircle, BookOpen, RefreshCw,
     Lock, Plus, Mic, Paperclip, GraduationCap, HelpCircle, ArrowUp,
+    CalendarPlus, Trash2,
 } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { usePremium } from '../context/PremiumContext';
 import { useNavigation } from '@react-navigation/native';
@@ -20,7 +22,11 @@ import {
     generateAIReschedule,
     chatWithAI,
 } from '../utils/aiEngine';
+import { createGoogleCalendarEvent } from '../utils/googleCalendarAPI';
 import { TopBar, Card, Button, Badge, EmptyState, SEM, SectionLabel } from '../components/DesignKit';
+
+const CHAT_HISTORY_KEY = '@ai_chat_history';
+// Each saved item: { id, title, messages: [], updatedAt }
 
 const MODES = [
     { id: 'chat',     label: 'Tutor',   icon: GraduationCap },
@@ -53,13 +59,107 @@ export default function AIAssistantScreen() {
     const [chatInput, setChatInput] = useState('');
     const [chatLoading, setChatLoading] = useState(false);
 
+    // Persisted chat history: list of past conversations
+    const [chatHistory, setChatHistory] = useState([]);
+    const [activeChatId, setActiveChatId] = useState(null);
+
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const bottomRef = useRef(null);
     const scrollRef = useRef(null);
 
     useEffect(() => {
         Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+        // Load saved chat history
+        (async () => {
+            try {
+                const raw = await AsyncStorage.getItem(CHAT_HISTORY_KEY);
+                if (raw) setChatHistory(JSON.parse(raw));
+            } catch {}
+        })();
     }, []);
+
+    // Persist chat history whenever it changes
+    useEffect(() => {
+        AsyncStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatHistory)).catch(() => {});
+    }, [chatHistory]);
+
+    // Save current chat into history every time messages settle
+    const persistCurrentChat = (msgs) => {
+        if (msgs.length === 0) return;
+        const firstUserMsg = msgs.find(m => m.role === 'user');
+        const title = firstUserMsg ? firstUserMsg.content.slice(0, 60) : 'New conversation';
+        setChatHistory(prev => {
+            const id = activeChatId || Date.now().toString(36);
+            if (!activeChatId) setActiveChatId(id);
+            const next = prev.filter(c => c.id !== id);
+            return [{ id, title, messages: msgs, updatedAt: Date.now() }, ...next].slice(0, 30);
+        });
+    };
+
+    const startNewChat = () => {
+        setActiveChatId(null);
+        setChatMessages([]);
+        setMode('chat');
+    };
+
+    const loadChat = (item) => {
+        setActiveChatId(item.id);
+        setChatMessages(item.messages || []);
+        setMode('chat');
+    };
+
+    const deleteChat = (id) => {
+        setChatHistory(prev => prev.filter(c => c.id !== id));
+        if (activeChatId === id) startNewChat();
+    };
+
+    // ── Add suggested study plan block to Google Calendar ──
+    const addBlockToCalendar = async (block) => {
+        try {
+            const token = await AsyncStorage.getItem('googleAccessToken');
+            if (!token) {
+                if (Platform.OS === 'web') window.alert('Connect Google Calendar in Integrations first.');
+                else alert('Connect Google Calendar in Integrations first.');
+                return;
+            }
+            // Parse the block's start time (e.g. "3:00 PM") into today's date
+            const today = new Date();
+            const timeStr = block.startTime || block.time || '';
+            const m = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+            if (!m) {
+                if (Platform.OS === 'web') window.alert('Could not parse start time.');
+                return;
+            }
+            let hour = parseInt(m[1]);
+            const min = parseInt(m[2]);
+            const ampm = (m[3] || '').toUpperCase();
+            if (ampm === 'PM' && hour < 12) hour += 12;
+            if (ampm === 'AM' && hour === 12) hour = 0;
+            const start = new Date(today);
+            start.setHours(hour, min, 0, 0);
+            // Duration parsing
+            const durStr = String(block.duration || '45 min');
+            const durMatch = durStr.match(/(\d+)/);
+            const durMin = durMatch ? parseInt(durMatch[1]) : 45;
+            const end = new Date(start.getTime() + durMin * 60000);
+
+            const event = {
+                summary: `Option AI: ${block.task}`,
+                description: `${block.tip || ''}\n\nScheduled by Option AI Tutor.`,
+                start: { dateTime: start.toISOString(), timeZone: 'America/New_York' },
+                end:   { dateTime: end.toISOString(),   timeZone: 'America/New_York' },
+            };
+            const ok = await createGoogleCalendarEvent(token, event);
+            if (Platform.OS === 'web') {
+                window.alert(ok ? `Added "${block.task}" to your Google Calendar` : 'Failed to add — your Google session may have expired.');
+            } else {
+                alert(ok ? 'Added to Google Calendar' : 'Failed to add');
+            }
+        } catch (err) {
+            console.error('Add to calendar error:', err);
+            if (Platform.OS === 'web') window.alert('Error: ' + err.message);
+        }
+    };
 
     useEffect(() => {
         // Auto-scroll chat to bottom on new messages
@@ -157,20 +257,25 @@ export default function AIAssistantScreen() {
         const msg = (txt || chatInput).trim();
         if (!msg) return;
         setChatInput('');
-        setChatMessages(prev => [...prev, { role: 'user', content: msg }]);
+        const withUser = [...chatMessages, { role: 'user', content: msg }];
+        setChatMessages(withUser);
         setChatLoading(true);
         try {
             const response = await chatWithAI(msg);
-            setChatMessages(prev => [...prev, {
+            const withAi = [...withUser, {
                 role: 'ai',
                 content: response.response,
                 suggestions: response.suggestions,
                 tip: response.relatedTip,
-            }]);
+            }];
+            setChatMessages(withAi);
+            persistCurrentChat(withAi);
         } catch {
-            setChatMessages(prev => [...prev, {
+            const withErr = [...withUser, {
                 role: 'ai', content: "Sorry, I couldn't process that. Please try again.",
-            }]);
+            }];
+            setChatMessages(withErr);
+            persistCurrentChat(withErr);
         } finally {
             setChatLoading(false);
         }
@@ -222,7 +327,7 @@ export default function AIAssistantScreen() {
     return (
         <View style={{ flex: 1, backgroundColor: theme.colors.bg, flexDirection: 'row' }}>
 
-            {/* ── Left sidebar: chat history (web/desktop only) ── */}
+            {/* ── Left sidebar: real chat history (web/desktop only) ── */}
             {Platform.OS === 'web' && (
                 <View style={{
                     width: 240, flexShrink: 0,
@@ -231,32 +336,70 @@ export default function AIAssistantScreen() {
                     display: 'flex', flexDirection: 'column',
                 }}>
                     <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
-                        <Button variant="primary" icon={Plus} onPress={() => setChatMessages([])}>
+                        <Button variant="primary" icon={Plus} onPress={startNewChat}>
                             New conversation
                         </Button>
                     </View>
                     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 8 }}>
                         <SectionLabel style={{ paddingHorizontal: 10, marginBottom: 4 }}>Recent</SectionLabel>
-                        {chatMessages.length === 0 && [
-                            'Calc BC integration help',
-                            'APUSH essay thesis review',
-                            'Physics momentum review',
-                            'Study plan for midterms',
-                        ].map((title, i) => (
-                            <View key={i} style={{
-                                padding: 10,
-                                borderRadius: 8,
-                                marginBottom: 2,
-                                backgroundColor: i === 0 ? theme.colors.surface2 : 'transparent',
+                        {chatHistory.length === 0 ? (
+                            <Text style={{
+                                fontFamily: theme.fonts.m, fontSize: 11,
+                                color: theme.colors.ink3, padding: 10, fontStyle: 'italic',
                             }}>
-                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: i === 0 ? '600' : '500', color: theme.colors.ink }} numberOfLines={1}>
-                                    {title}
-                                </Text>
-                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 2 }}>
-                                    Sample
-                                </Text>
-                            </View>
-                        ))}
+                                Past chats will appear here.
+                            </Text>
+                        ) : chatHistory.map((c) => {
+                            const active = c.id === activeChatId;
+                            const ago = (() => {
+                                const sec = Math.floor((Date.now() - c.updatedAt) / 1000);
+                                if (sec < 60) return 'Just now';
+                                const min = Math.floor(sec / 60);
+                                if (min < 60) return `${min}m ago`;
+                                const hr = Math.floor(min / 60);
+                                if (hr < 24) return `${hr}h ago`;
+                                const d = Math.floor(hr / 24);
+                                if (d < 7) return `${d}d ago`;
+                                return new Date(c.updatedAt).toLocaleDateString();
+                            })();
+                            return (
+                                <View
+                                    key={c.id}
+                                    style={{
+                                        position: 'relative', marginBottom: 2,
+                                        borderRadius: 8,
+                                        backgroundColor: active ? theme.colors.surface2 : 'transparent',
+                                    }}
+                                >
+                                    <TouchableOpacity
+                                        onPress={() => loadChat(c)}
+                                        activeOpacity={0.7}
+                                        style={{ padding: 10, paddingRight: 28 }}
+                                    >
+                                        <Text style={{
+                                            fontFamily: theme.fonts.s, fontSize: 12,
+                                            fontWeight: active ? '600' : '500',
+                                            color: theme.colors.ink,
+                                        }} numberOfLines={1}>
+                                            {c.title}
+                                        </Text>
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 2 }}>
+                                            {ago}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={() => deleteChat(c.id)}
+                                        style={{
+                                            position: 'absolute', right: 6, top: 8,
+                                            padding: 4, borderRadius: 4,
+                                        }}
+                                        title="Delete chat"
+                                    >
+                                        <Trash2 size={11} color={theme.colors.ink3} />
+                                    </TouchableOpacity>
+                                </View>
+                            );
+                        })}
                     </ScrollView>
                 </View>
             )}
@@ -332,7 +475,7 @@ export default function AIAssistantScreen() {
                 <ScrollView
                     ref={bottomRef}
                     style={{ flex: 1 }}
-                    contentContainerStyle={{ padding: 28, paddingBottom: 16 }}
+                    contentContainerStyle={{ padding: 20, paddingBottom: 12 }}
                     showsVerticalScrollIndicator={false}
                 >
                     <View style={{ maxWidth: 760, alignSelf: 'center', width: '100%' }}>
@@ -436,7 +579,7 @@ export default function AIAssistantScreen() {
                                     </Bubble>
                                 )}
                                 {!tabLoading && briefing && (
-                                    <BriefingView briefing={briefing} theme={theme} />
+                                    <BriefingView briefing={briefing} theme={theme} onAddToCalendar={addBlockToCalendar} />
                                 )}
                             </View>
                         )}
@@ -446,7 +589,7 @@ export default function AIAssistantScreen() {
                             <View>
                                 {tabLoading && <LoadingMessage theme={theme} message="Building your study plan…" />}
                                 {!tabLoading && studyPlan && (
-                                    <PlanView plan={studyPlan} theme={theme} />
+                                    <PlanView plan={studyPlan} theme={theme} onAddToCalendar={addBlockToCalendar} />
                                 )}
                             </View>
                         )}
@@ -548,7 +691,7 @@ function LoadingMessage({ theme, message }) {
 }
 
 // ── Briefing renderer (chat-bubble style) ──────────────────
-function BriefingView({ briefing, theme }) {
+function BriefingView({ briefing, theme, onAddToCalendar }) {
     const isAI = briefing.source === 'ai';
     return (
         <View>
@@ -618,7 +761,7 @@ function BriefingView({ briefing, theme }) {
                                 </Text>
                             </View>
                             {briefing.studyPlan.map((b, i) => (
-                                <View key={i} style={{ flexDirection: 'row', gap: 12, paddingVertical: 8, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: theme.colors.border }}>
+                                <View key={i} style={{ flexDirection: 'row', gap: 12, paddingVertical: 8, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: theme.colors.border, alignItems: 'center' }}>
                                     <View style={{ width: 70 }}>
                                         <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, fontWeight: '600', color: theme.colors.ink }}>
                                             {b.time}
@@ -635,6 +778,23 @@ function BriefingView({ briefing, theme }) {
                                             {b.tip}
                                         </Text>
                                     </View>
+                                    {onAddToCalendar && (
+                                        <TouchableOpacity
+                                            onPress={() => onAddToCalendar(b)}
+                                            style={{
+                                                flexDirection: 'row', alignItems: 'center', gap: 4,
+                                                paddingHorizontal: 8, paddingVertical: 5,
+                                                backgroundColor: theme.colors.surface2,
+                                                borderRadius: 6,
+                                            }}
+                                            title="Add to Google Calendar"
+                                        >
+                                            <CalendarPlus size={11} color={theme.colors.ink2} />
+                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 10, fontWeight: '600', color: theme.colors.ink2 }}>
+                                                Add
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
                                 </View>
                             ))}
                         </Card>
@@ -687,7 +847,7 @@ function BriefingView({ briefing, theme }) {
 }
 
 // ── Plan renderer ──────────────────────────────────────────
-function PlanView({ plan, theme }) {
+function PlanView({ plan, theme, onAddToCalendar }) {
     return (
         <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
             <View style={{
@@ -719,6 +879,7 @@ function PlanView({ plan, theme }) {
                             <View key={i} style={{
                                 flexDirection: 'row', gap: 12, paddingVertical: 10,
                                 borderTopWidth: i > 0 ? 1 : 0, borderTopColor: theme.colors.border,
+                                alignItems: 'center',
                             }}>
                                 <View style={{ width: 80 }}>
                                     <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, fontWeight: '600', color: theme.colors.ink }}>
@@ -748,6 +909,23 @@ function PlanView({ plan, theme }) {
                                         </Text>
                                     )}
                                 </View>
+                                {onAddToCalendar && (
+                                    <TouchableOpacity
+                                        onPress={() => onAddToCalendar(b)}
+                                        style={{
+                                            flexDirection: 'row', alignItems: 'center', gap: 4,
+                                            paddingHorizontal: 10, paddingVertical: 6,
+                                            backgroundColor: theme.colors.ink,
+                                            borderRadius: 8,
+                                        }}
+                                        title="Add to Google Calendar"
+                                    >
+                                        <CalendarPlus size={12} color={theme.colors.bg} />
+                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '600', color: theme.colors.bg }}>
+                                            Add
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         ))}
                     </Card>

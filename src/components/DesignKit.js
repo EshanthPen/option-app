@@ -4,7 +4,9 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Platform } from 'react-native';
+import { Search, Bell } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 
 // ── Semantic colors (universal across themes) ────────────────────
@@ -142,34 +144,38 @@ export function Badge({ children, color, style }) {
     );
 }
 
-// ── TopBar ───────────────────────────────────────────────────────
+// ── TopBar (matches design exactly) ───────────────────────────────
 /**
- * Standard screen top bar matching the design.
+ * <TopBar title="Calendar" subtitle="April 2026 · Week of the 19th"
+ *         actions={<Button variant="primary" icon={Plus}>Add event</Button>} />
  *
- * <TopBar title="Dashboard" subtitle="6 classes · Q3 closes in 11 days"
- *         actions={<Button variant="primary" icon={Plus}>Add</Button>} />
+ * By default shows search input + notification bell on the right.
+ * Pass `showSearch={false}` or `showBell={false}` to hide.
  */
-export function TopBar({ title, subtitle, actions, style }) {
+export function TopBar({
+    title, subtitle, actions, style,
+    showSearch = true, showBell = true,
+}) {
     const { theme } = useTheme();
+    const isWeb = Platform.OS === 'web';
     return (
         <View style={[{
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: 24,
-            paddingTop: 28,
-            paddingBottom: 20,
+            paddingHorizontal: 24, paddingTop: 22, paddingBottom: 18,
             borderBottomWidth: 1,
             borderBottomColor: theme.colors.border,
             backgroundColor: theme.colors.surface,
+            gap: 12,
         }, style]}>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{
                     fontFamily: theme.fonts.d,
                     fontSize: 22, fontWeight: '700',
                     color: theme.colors.ink,
                     letterSpacing: -0.4,
-                }}>
+                }} numberOfLines={1}>
                     {title}
                 </Text>
                 {subtitle ? (
@@ -177,17 +183,79 @@ export function TopBar({ title, subtitle, actions, style }) {
                         fontFamily: theme.fonts.m,
                         fontSize: 12, color: theme.colors.ink3,
                         marginTop: 2,
-                    }}>
+                    }} numberOfLines={1}>
                         {subtitle}
                     </Text>
                 ) : null}
             </View>
-            {actions ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    {actions}
-                </View>
-            ) : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                {showSearch && isWeb && (
+                    <View style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 8,
+                        paddingHorizontal: 12, paddingVertical: 8,
+                        backgroundColor: theme.colors.bg,
+                        borderWidth: 1, borderColor: theme.colors.border,
+                        borderRadius: 10, width: 240,
+                    }}>
+                        <Search size={14} color={theme.colors.ink3} />
+                        <TextInput
+                            placeholder="Search classes, assignments…"
+                            placeholderTextColor={theme.colors.ink3}
+                            style={{
+                                flex: 1, paddingVertical: 0,
+                                fontFamily: theme.fonts.m, fontSize: 13,
+                                color: theme.colors.ink,
+                                ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
+                            }}
+                        />
+                        <View style={{
+                            paddingHorizontal: 5, paddingVertical: 1,
+                            backgroundColor: theme.colors.surface2,
+                            borderRadius: 4,
+                        }}>
+                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink4 }}>
+                                ⌘K
+                            </Text>
+                        </View>
+                    </View>
+                )}
+                {showBell && (
+                    <TouchableOpacity style={{
+                        width: 36, height: 36, borderRadius: 10,
+                        backgroundColor: theme.colors.surface,
+                        borderWidth: 1, borderColor: theme.colors.border,
+                        alignItems: 'center', justifyContent: 'center', position: 'relative',
+                    }}>
+                        <Bell size={16} color={theme.colors.ink2} />
+                        <View style={{
+                            position: 'absolute', top: 8, right: 8,
+                            width: 7, height: 7, borderRadius: 4,
+                            backgroundColor: SEM.red,
+                            borderWidth: 1.5, borderColor: theme.colors.surface,
+                        }} />
+                    </TouchableOpacity>
+                )}
+                {actions}
+            </View>
         </View>
+    );
+}
+
+// ── GradientCard — wrapper for design's linear-gradient cards ────
+export function GradientCard({ colors, style, children, angle = 135 }) {
+    // Convert CSS angle (135deg = top-left → bottom-right) to RN start/end
+    const rad = ((angle - 90) * Math.PI) / 180;
+    const start = { x: 0.5 - Math.cos(rad) * 0.5, y: 0.5 - Math.sin(rad) * 0.5 };
+    const end   = { x: 0.5 + Math.cos(rad) * 0.5, y: 0.5 + Math.sin(rad) * 0.5 };
+    return (
+        <LinearGradient
+            colors={colors}
+            start={start}
+            end={end}
+            style={style}
+        >
+            {children}
+        </LinearGradient>
     );
 }
 

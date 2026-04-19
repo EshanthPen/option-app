@@ -108,8 +108,8 @@ export default function SettingsScreen({ navigation, isGuest, onSignOut }) {
         <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
             <TopBar title="Settings" subtitle={isPro ? 'Option Pro · all features unlocked' : 'Free plan'} />
 
-            <ScrollView contentContainerStyle={{ padding: 28, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-                <View style={{ flexDirection: 'row', gap: 28, maxWidth: 1000, alignSelf: 'center', width: '100%' }}>
+            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+                <View style={{ flexDirection: 'row', gap: 24, maxWidth: 1000, alignSelf: 'center', width: '100%' }}>
 
                     {/* ── Tabs sidebar ── */}
                     <View style={{ width: 220, flexShrink: 0 }}>
@@ -147,80 +147,17 @@ export default function SettingsScreen({ navigation, isGuest, onSignOut }) {
                     {/* ── Content ── */}
                     <View style={{ flex: 1, minWidth: 0 }}>
 
-                        {/* ── ACCOUNT ── */}
+                        {/* ── ACCOUNT (matches design exactly) ── */}
                         {tab === 'account' && (
-                            <>
-                                <Card padding={24} style={{ marginBottom: 16 }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                                        <View style={{
-                                            width: 64, height: 64, borderRadius: 32,
-                                            backgroundColor: theme.colors.ink,
-                                            alignItems: 'center', justifyContent: 'center',
-                                        }}>
-                                            <Text style={{ fontFamily: theme.fonts.d, fontSize: 24, fontWeight: '700', color: theme.colors.bg }}>
-                                                {initials}
-                                            </Text>
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={{ fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink }}>
-                                                {userName || 'Set your name'}
-                                            </Text>
-                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginTop: 2 }}>
-                                                {userEmail || 'No email on file'}
-                                            </Text>
-                                            <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-                                                {isPro
-                                                    ? <Badge color={SEM.purple}>{subscription?.isBeta ? 'Beta Tester' : 'Premium'}</Badge>
-                                                    : <Badge color={theme.colors.ink3}>Free</Badge>
-                                                }
-                                                {!isGuest && <Badge color={SEM.green}>Verified student</Badge>}
-                                            </View>
-                                        </View>
-                                    </View>
-                                </Card>
-
-                                <Card padding={0} style={{ marginBottom: 16, overflow: 'hidden' }}>
-                                    {/* Editable display name */}
-                                    <View style={{
-                                        padding: 16, paddingHorizontal: 20,
-                                        borderBottomWidth: 1, borderBottomColor: theme.colors.border,
-                                    }}>
-                                        <SectionLabel style={{ marginBottom: 6 }}>Display Name</SectionLabel>
-                                        <TextInput
-                                            value={userName}
-                                            onChangeText={handleSaveName}
-                                            placeholder="What should we call you?"
-                                            placeholderTextColor={theme.colors.ink3}
-                                            style={{
-                                                fontFamily: theme.fonts.s, fontSize: 15,
-                                                color: theme.colors.ink,
-                                                paddingVertical: 4,
-                                            }}
-                                        />
-                                    </View>
-
-                                    {/* Static rows */}
-                                    {[
-                                        { label: 'Email',   value: userEmail || '—' },
-                                        { label: 'Status',  value: isPro ? 'Premium' : 'Free' },
-                                        { label: 'Account', value: isGuest ? 'Guest' : 'Student' },
-                                    ].map((r, i, arr) => (
-                                        <View key={i} style={{
-                                            flexDirection: 'row', alignItems: 'center',
-                                            paddingHorizontal: 20, paddingVertical: 14,
-                                            borderBottomWidth: i < arr.length - 1 ? 1 : 0,
-                                            borderBottomColor: theme.colors.border,
-                                        }}>
-                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, width: 140 }}>{r.label}</Text>
-                                            <Text style={{ flex: 1, fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink }}>{r.value}</Text>
-                                        </View>
-                                    ))}
-                                </Card>
-
-                                {!isGuest && (
-                                    <Button variant="danger" icon={LogOut} onPress={handleSignOut}>Sign out</Button>
-                                )}
-                            </>
+                            <AccountTab
+                                theme={theme}
+                                userName={userName} setUserName={handleSaveName}
+                                userEmail={userEmail}
+                                initials={initials}
+                                isPro={isPro} subscription={subscription}
+                                isGuest={isGuest}
+                                onSignOut={handleSignOut}
+                            />
                         )}
 
                         {/* ── APPEARANCE ── */}
@@ -479,5 +416,145 @@ function ToggleRow({ label, desc, on, onToggle, isLast }) {
             </View>
             <Switch on={on} onToggle={onToggle} />
         </View>
+    );
+}
+
+// ── Account Tab (matches design exactly) ───────────────────────
+function AccountTab({ theme, userName, setUserName, userEmail, initials, isPro, subscription, isGuest, onSignOut }) {
+    const [editingField, setEditingField] = React.useState(null);
+    const [draftValue, setDraftValue] = React.useState('');
+    const [profileFields, setProfileFields] = React.useState({
+        fullName: '',
+        email: '',
+        phone: '',
+        school: '',
+        gradeLevel: '',
+        graduation: '',
+    });
+
+    React.useEffect(() => {
+        (async () => {
+            const stored = await AsyncStorage.getItem('@profile_extended');
+            const next = stored ? JSON.parse(stored) : {};
+            setProfileFields({
+                fullName: next.fullName || userName || '',
+                email: next.email || userEmail || '',
+                phone: next.phone || '',
+                school: next.school || '',
+                gradeLevel: next.gradeLevel || '',
+                graduation: next.graduation || '',
+            });
+        })();
+    }, [userName, userEmail]);
+
+    const startEdit = (key) => {
+        setEditingField(key);
+        setDraftValue(profileFields[key] || '');
+    };
+
+    const commitEdit = async () => {
+        const next = { ...profileFields, [editingField]: draftValue };
+        setProfileFields(next);
+        await AsyncStorage.setItem('@profile_extended', JSON.stringify(next));
+        // Mirror name → top-level userName
+        if (editingField === 'fullName') {
+            setUserName(draftValue);
+        }
+        setEditingField(null);
+    };
+
+    const ROWS = [
+        { key: 'fullName',   label: 'Full name',   placeholder: 'Your full name' },
+        { key: 'email',      label: 'Email',       placeholder: 'name@school.edu' },
+        { key: 'phone',      label: 'Phone',       placeholder: '(555) 123-4567' },
+        { key: 'school',     label: 'School',      placeholder: 'Your high school' },
+        { key: 'gradeLevel', label: 'Grade level', placeholder: 'e.g. 11th · Junior' },
+        { key: 'graduation', label: 'Graduation',  placeholder: 'e.g. Class of 2027' },
+    ];
+
+    return (
+        <>
+            {/* Profile header card */}
+            <Card padding={20} style={{ marginBottom: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                    <View style={{
+                        width: 64, height: 64, borderRadius: 32,
+                        backgroundColor: theme.colors.ink,
+                        alignItems: 'center', justifyContent: 'center',
+                    }}>
+                        <Text style={{ fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.bg }}>
+                            {initials}
+                        </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink }}>
+                            {profileFields.fullName || userName || 'Set your name'}
+                        </Text>
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginTop: 2 }} numberOfLines={1}>
+                            {[profileFields.email || userEmail, profileFields.gradeLevel, profileFields.school]
+                                .filter(Boolean).join(' · ') || 'Add your details below'}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+                            {isPro
+                                ? <Badge color={SEM.purple}>{subscription?.isBeta ? 'Beta Tester' : 'Premium'}</Badge>
+                                : <Badge color={theme.colors.ink3}>Free</Badge>
+                            }
+                            {!isGuest && <Badge color={SEM.green}>Verified student</Badge>}
+                        </View>
+                    </View>
+                    <Button variant="secondary" size="sm" icon={Camera}>Change photo</Button>
+                </View>
+            </Card>
+
+            {/* Detail rows card */}
+            <Card padding={0} style={{ marginBottom: 14, overflow: 'hidden' }}>
+                {ROWS.map((r, i, arr) => {
+                    const isEditing = editingField === r.key;
+                    const value = profileFields[r.key];
+                    return (
+                        <View key={r.key} style={{
+                            flexDirection: 'row', alignItems: 'center',
+                            paddingHorizontal: 20, paddingVertical: 14,
+                            borderBottomWidth: i < arr.length - 1 ? 1 : 0,
+                            borderBottomColor: theme.colors.border,
+                        }}>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, width: 140 }}>
+                                {r.label}
+                            </Text>
+                            {isEditing ? (
+                                <TextInput
+                                    autoFocus
+                                    value={draftValue}
+                                    onChangeText={setDraftValue}
+                                    onBlur={commitEdit}
+                                    onSubmitEditing={commitEdit}
+                                    placeholder={r.placeholder}
+                                    placeholderTextColor={theme.colors.ink4}
+                                    style={{
+                                        flex: 1, fontFamily: theme.fonts.s, fontSize: 13,
+                                        color: theme.colors.ink, paddingVertical: 0,
+                                        ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
+                                    }}
+                                />
+                            ) : (
+                                <Text style={{
+                                    flex: 1, fontFamily: theme.fonts.s, fontSize: 13,
+                                    color: value ? theme.colors.ink : theme.colors.ink4,
+                                }}>
+                                    {value || r.placeholder}
+                                </Text>
+                            )}
+                            <TouchableOpacity onPress={() => isEditing ? commitEdit() : startEdit(r.key)} style={{ padding: 4 }}>
+                                <Pencil size={13} color={theme.colors.ink3} />
+                            </TouchableOpacity>
+                        </View>
+                    );
+                })}
+            </Card>
+
+            {!isGuest && (
+                <Button variant="danger" icon={LogOut} onPress={onSignOut}>Sign out of all devices</Button>
+            )}
+        </>
     );
 }

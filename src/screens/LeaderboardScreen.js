@@ -15,7 +15,7 @@ import {
 } from '../utils/profileService';
 import { supabase } from '../supabaseClient';
 import * as Clipboard from 'expo-clipboard';
-import { TopBar, Card, Button, Badge, TabPills, EmptyState, SectionHeader, gradeColor, SEM } from '../components/DesignKit';
+import { TopBar, Card, Button, Badge, TabPills, EmptyState, SectionHeader, GradientCard, gradeColor, SEM } from '../components/DesignKit';
 
 const SCOPE_TABS = [
     { id: 'Friends', label: 'Friends' },
@@ -48,6 +48,7 @@ export default function LeaderboardScreen() {
     const [loading, setLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [myProfile, setMyProfile] = useState(null);
+    const [scopeCounts, setScopeCounts] = useState({ Friends: 0, School: 0, Global: 0 });
 
     const [showAddFriend, setShowAddFriend] = useState(false);
     const [friendCode, setFriendCode] = useState('');
@@ -82,6 +83,19 @@ export default function LeaderboardScreen() {
             }));
 
             setEntries(data);
+
+            // Update count for current scope
+            setScopeCounts(prev => ({ ...prev, [scope]: data.length }));
+
+            // Best-effort populate the other scope counts in background
+            if (scope === 'Friends') {
+                Promise.all([
+                    getSchoolLeaderboard(period).catch(() => []),
+                    getGlobalLeaderboard(period).catch(() => []),
+                ]).then(([school, global]) => {
+                    setScopeCounts(prev => ({ ...prev, School: school.length, Global: global.length }));
+                });
+            }
         } catch (err) {
             console.error('Leaderboard load error:', err);
         }
@@ -204,20 +218,22 @@ export default function LeaderboardScreen() {
                 }
             />
 
-            <ScrollView contentContainerStyle={{ padding: 28, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
                 <View style={{ maxWidth: 1200, alignSelf: 'center', width: '100%' }}>
 
-                    {/* Scope tabs (large, design-style) */}
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+                    {/* Scope tabs (large, design-style with count badges) */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                         {SCOPE_TABS.map((s) => {
                             const active = scope === s.id;
+                            const count = scopeCounts[s.id] || 0;
+                            const countDisplay = count > 999 ? `${(count / 1000).toFixed(1)}k` : String(count);
                             return (
                                 <TouchableOpacity
                                     key={s.id}
                                     onPress={() => setScope(s.id)}
                                     activeOpacity={0.85}
                                     style={{
-                                        paddingHorizontal: 16, paddingVertical: 8,
+                                        paddingHorizontal: 14, paddingVertical: 8,
                                         borderRadius: 10,
                                         backgroundColor: active ? theme.colors.ink : theme.colors.surface,
                                         borderWidth: 1, borderColor: active ? theme.colors.ink : theme.colors.border,
@@ -229,6 +245,13 @@ export default function LeaderboardScreen() {
                                         color: active ? theme.colors.bg : theme.colors.ink2,
                                     }}>
                                         {s.label}
+                                    </Text>
+                                    <Text style={{
+                                        fontFamily: theme.fonts.mono, fontSize: 11,
+                                        color: active ? theme.colors.bg : theme.colors.ink3,
+                                        opacity: 0.7,
+                                    }}>
+                                        {countDisplay}
                                     </Text>
                                 </TouchableOpacity>
                             );
@@ -425,12 +448,12 @@ export default function LeaderboardScreen() {
                                 </Text>
                             </Card>
 
-                            {/* Weekly challenge gradient card */}
-                            <View style={{
-                                padding: 18,
-                                borderRadius: theme.radii.lg,
-                                backgroundColor: SEM.purple,
-                            }}>
+                            {/* Weekly challenge — linear gradient (matches design) */}
+                            <GradientCard
+                                colors={[SEM.purple, SEM.blue]}
+                                angle={135}
+                                style={{ padding: 18, borderRadius: theme.radii.lg }}
+                            >
                                 <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
                                     Weekly challenge
                                 </Text>
@@ -447,7 +470,7 @@ export default function LeaderboardScreen() {
                                     <Text style={{ fontFamily: theme.fonts.mono, fontSize: 11, color: 'rgba(255,255,255,0.85)' }}>4 / 5 days</Text>
                                     <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: '#fff', fontWeight: '600' }}>1 day to go</Text>
                                 </View>
-                            </View>
+                            </GradientCard>
                         </View>
                     </View>
                 </View>

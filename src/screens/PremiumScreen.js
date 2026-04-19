@@ -89,7 +89,7 @@ export default function PremiumScreen({ navigation, onClose }) {
             <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
                 <TopBar title="Premium" subtitle={subscription?.isBeta ? 'Beta Tester · Pro access' : 'Option Pro · all features unlocked'} />
 
-                <ScrollView contentContainerStyle={{ padding: 28, paddingBottom: 100 }}>
+                <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
                     <View style={{ maxWidth: 700, alignSelf: 'center', width: '100%' }}>
 
                         {/* Pro status hero */}

@@ -8,10 +8,11 @@ import {
     BookOpen, CalendarDays, TrendingUp, TrendingDown, AlertTriangle,
     Award, AlertCircle, Lightbulb, ChevronRight, Target, Flame,
     FileText, FlaskConical, HelpCircle, ClipboardCheck, Pencil,
-    Gauge, Sparkles, Activity,
+    Gauge, Sparkles, Activity, Plus,
 } from 'lucide-react-native';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
+import { TopBar, Button } from '../components/DesignKit';
 import { computeFocusScore, syncScoreToSupabase, getScoreLabel } from '../utils/focusScoreEngine';
 import { generateNudges } from '../utils/studyNudges';
 import { getUnlockedAchievements, ACHIEVEMENTS } from '../utils/achievements';
@@ -178,27 +179,24 @@ export default function DashboardScreen() {
 
     const focusScoreColor = focusScoreNum >= 70 ? SEM.green : focusScoreNum >= 50 ? SEM.orange : SEM.red;
 
-    return (
-        <ScrollView
-            style={{ flex: 1, backgroundColor: theme.colors.bg }}
-            contentContainerStyle={{ paddingTop: 48, paddingHorizontal: 32, paddingBottom: 100 }}
-            showsVerticalScrollIndicator={false}
-        >
-            <View style={{ maxWidth: 1200, width: '100%', alignSelf: 'center' }}>
+    const todayStrFmt = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-                {/* ── Header ── */}
-                <View style={{ marginBottom: 28 }}>
-                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 }}>{greeting},</Text>
-                    <Text style={{ fontFamily: theme.fonts.d, fontSize: 30, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5, marginTop: 2 }}>{userName}</Text>
-                    {periodName ? (
-                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 4 }}>
-                            {periodName} · {classes.length} classes
-                        </Text>
-                    ) : null}
-                </View>
+    return (
+        <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+            <TopBar
+                title={`${greeting}, ${userName}`}
+                subtitle={`${todayStrFmt}${classes.length ? ` · ${classes.length} classes` : ''}${periodName ? ` · ${periodName}` : ''}`}
+                actions={<Button variant="primary" icon={Plus}>Add assignment</Button>}
+            />
+            <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingTop: 24, paddingHorizontal: 24, paddingBottom: 80 }}
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={{ maxWidth: 1200, width: '100%', alignSelf: 'center' }}>
 
                 {/* ── Stat Row ── */}
-                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 28, flexWrap: 'wrap' }}>
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 22, flexWrap: 'wrap' }}>
                     <StatCard label="Weighted GPA" value={wgpa} sub="AP/HN weighted" color={wgpa && parseFloat(wgpa) >= 3.7 ? SEM.green : theme.colors.ink} icon={TrendingUp} theme={theme} />
                     <StatCard label="Unweighted GPA" value={ugpa} sub="4.0 scale" color={theme.colors.ink} icon={Gauge} theme={theme} />
                     <StatCard label="Classes" value={classes.length || '—'} sub={classes.filter(c => c.type === 'AP').length + ' AP · ' + classes.filter(c => c.type === 'HN').length + ' HN'} icon={BookOpen} theme={theme} />
@@ -207,10 +205,10 @@ export default function DashboardScreen() {
                 </View>
 
                 {/* ── Main Grid ── */}
-                <View style={{ flexDirection: 'row', gap: 24 }}>
+                <View style={{ flexDirection: 'row', gap: 18 }}>
 
                     {/* Left: Up Next + Recent Scores */}
-                    <View style={{ flex: 1.5, gap: 24 }}>
+                    <View style={{ flex: 1.5, gap: 18 }}>
 
                         {/* Up Next */}
                         <View>
@@ -326,7 +324,7 @@ export default function DashboardScreen() {
                     </View>
 
                     {/* Right: Focus Widget + Classes + Needs Attention + Nudges */}
-                    <View style={{ flex: 1, gap: 24 }}>
+                    <View style={{ flex: 1, gap: 18 }}>
 
                         {/* Focus Score Widget (dark gradient) */}
                         <TouchableOpacity
@@ -534,8 +532,9 @@ export default function DashboardScreen() {
                         )}
                     </View>
                 </View>
-            </View>
-        </ScrollView>
+                </View>
+            </ScrollView>
+        </View>
     );
 }
 

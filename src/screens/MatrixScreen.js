@@ -13,6 +13,7 @@ import { ChevronLeft, ChevronRight, Plus, Download, CalendarDays, Zap, Sparkles 
 import { fetchFreeBusy, createGoogleCalendarEvent } from '../utils/googleCalendarAPI';
 import { performSmartScheduling } from '../utils/schedulerAssistant';
 import { getUserId } from '../utils/auth';
+import { TopBar, Card } from '../components/DesignKit';
 
 const { width: SCREEN_W, height: SCREEN_H_RAW } = Dimensions.get('window');
 const IS_WIDE = SCREEN_W > 800;
@@ -573,114 +574,95 @@ export default function MatrixScreen() {
         return t.due_date?.startsWith(selectedDate) || t.date?.startsWith(selectedDate);
     });
 
+    // Subtitle reflects current view + week/day context
+    const sel = new Date(selectedDate + 'T12:00:00');
+    const weekStart = new Date(sel); weekStart.setDate(sel.getDate() - sel.getDay());
+    const subtitleStr = view === 'week'
+        ? `${MN[weekStart.getMonth()]} ${weekStart.getFullYear()} · Week of the ${weekStart.getDate()}${weekStart.getDate() === 1 ? 'st' : weekStart.getDate() === 2 ? 'nd' : weekStart.getDate() === 3 ? 'rd' : 'th'}`
+        : view === 'day'
+        ? sel.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+        : `${MN[month]} ${year} · ${tasks.length} tasks`;
+
     return (
         <View style={styles.container}>
-            {/* ── TopBar matching design ── */}
-            <View style={{
-                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                padding: 24, paddingTop: 28, paddingBottom: 20,
-                borderBottomWidth: 1, borderBottomColor: theme.colors.border,
-                backgroundColor: theme.colors.surface,
-            }}>
-                <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.4 }}>
-                        Calendar
-                    </Text>
-                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 2 }}>
-                        {MN[month]} {year} · {tasks.length} tasks
-                    </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    {/* Day/Week/Month view toggle (matches design) */}
-                    <View style={{
-                        flexDirection: 'row', gap: 3,
-                        backgroundColor: theme.colors.surface2,
-                        padding: 3, borderRadius: 8,
-                    }}>
-                        {['day', 'week', 'month'].map((v) => {
-                            const active = view === v;
-                            return (
-                                <TouchableOpacity
-                                    key={v}
-                                    onPress={() => setView(v)}
-                                    activeOpacity={0.85}
-                                    style={{
-                                        paddingHorizontal: 10, paddingVertical: 6,
-                                        borderRadius: 6,
-                                        backgroundColor: active ? theme.colors.surface : 'transparent',
-                                        ...(active ? theme.shadows.sm : {}),
-                                    }}
-                                >
-                                    <Text style={{
-                                        fontFamily: theme.fonts.s, fontSize: 11, fontWeight: active ? '600' : '500',
-                                        color: active ? theme.colors.ink : theme.colors.ink3,
-                                        textTransform: 'capitalize',
-                                    }}>
-                                        {v}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
-                    <TouchableOpacity
-                        onPress={handleAutoPrioritize}
-                        disabled={saving}
-                        style={{
-                            flexDirection: 'row', alignItems: 'center', gap: 6,
-                            paddingHorizontal: 12, paddingVertical: 8,
-                            backgroundColor: theme.colors.surface,
-                            borderWidth: 1, borderColor: theme.colors.border2,
-                            borderRadius: 10,
-                        }}
-                    >
-                        <Sparkles color={theme.colors.orange} size={14} />
-                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink2 }}>
-                            Auto-sort
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={handleSmartSchedule}
-                        disabled={saving}
-                        style={{
-                            flexDirection: 'row', alignItems: 'center', gap: 6,
-                            paddingHorizontal: 12, paddingVertical: 8,
-                            backgroundColor: theme.colors.surface,
-                            borderWidth: 1, borderColor: theme.colors.border2,
-                            borderRadius: 10,
-                        }}
-                    >
-                        {saving ? <ActivityIndicator size="small" color={theme.colors.purple} /> : <Zap color={theme.colors.purple} size={14} />}
-                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink2 }}>
-                            Auto-schedule
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => setImportModalVisible(true)}
-                        style={{
-                            width: 36, height: 36, borderRadius: 10,
-                            backgroundColor: theme.colors.surface,
-                            borderWidth: 1, borderColor: theme.colors.border,
-                            alignItems: 'center', justifyContent: 'center',
-                        }}
-                    >
-                        <Download color={theme.colors.ink2} size={16} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={() => setModalVisible(true)}
-                        style={{
-                            flexDirection: 'row', alignItems: 'center', gap: 6,
-                            paddingHorizontal: 14, paddingVertical: 9,
-                            backgroundColor: theme.colors.ink,
-                            borderRadius: 10,
-                        }}
-                    >
-                        <Plus color={theme.colors.bg} size={14} strokeWidth={2.5} />
-                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.bg }}>
-                            Add event
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
+            <TopBar
+                title="Calendar"
+                subtitle={subtitleStr}
+                actions={
+                    <>
+                        {/* Day/Week/Month toggle */}
+                        <View style={{
+                            flexDirection: 'row', gap: 3,
+                            backgroundColor: theme.colors.surface2,
+                            padding: 3, borderRadius: 8,
+                        }}>
+                            {['day', 'week', 'month'].map((v) => {
+                                const active = view === v;
+                                return (
+                                    <TouchableOpacity
+                                        key={v}
+                                        onPress={() => setView(v)}
+                                        activeOpacity={0.85}
+                                        style={{
+                                            paddingHorizontal: 12, paddingVertical: 6,
+                                            borderRadius: 6,
+                                            backgroundColor: active ? theme.colors.surface : 'transparent',
+                                            ...(active ? theme.shadows.sm : {}),
+                                        }}
+                                    >
+                                        <Text style={{
+                                            fontFamily: theme.fonts.s, fontSize: 12, fontWeight: active ? '600' : '500',
+                                            color: active ? theme.colors.ink : theme.colors.ink3,
+                                            textTransform: 'capitalize',
+                                        }}>
+                                            {v}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                        <TouchableOpacity
+                            onPress={handleSmartSchedule}
+                            disabled={saving}
+                            style={{
+                                width: 36, height: 36, borderRadius: 10,
+                                backgroundColor: theme.colors.surface,
+                                borderWidth: 1, borderColor: theme.colors.border,
+                                alignItems: 'center', justifyContent: 'center',
+                            }}
+                            title="Auto-schedule with AI"
+                        >
+                            {saving ? <ActivityIndicator size="small" color={theme.colors.purple} /> : <Zap color={theme.colors.purple} size={16} />}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => setImportModalVisible(true)}
+                            style={{
+                                width: 36, height: 36, borderRadius: 10,
+                                backgroundColor: theme.colors.surface,
+                                borderWidth: 1, borderColor: theme.colors.border,
+                                alignItems: 'center', justifyContent: 'center',
+                            }}
+                            title="Import from Schoology"
+                        >
+                            <Download color={theme.colors.ink2} size={16} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => setModalVisible(true)}
+                            style={{
+                                flexDirection: 'row', alignItems: 'center', gap: 6,
+                                paddingHorizontal: 14, paddingVertical: 9,
+                                backgroundColor: theme.colors.ink,
+                                borderRadius: 10,
+                            }}
+                        >
+                            <Plus color={theme.colors.bg} size={14} strokeWidth={2.5} />
+                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.bg }}>
+                                Add event
+                            </Text>
+                        </TouchableOpacity>
+                    </>
+                }
+            />
 
             <View style={[styles.mainLayout, IS_WIDE && styles.layoutWide]}>
                 {/* Left: Calendar Grid */}
@@ -812,63 +794,19 @@ export default function MatrixScreen() {
                     )}
                 </View>
 
-                {/* Right/Bottom Sidebar: Day Details */}
-                <View style={[styles.sidebar, IS_WIDE ? styles.sidebarWide : styles.sidebarMobile]}>
-                    <View style={styles.sidebarHeader}>
-                        <Text style={styles.sidebarTitle}>
-                            {new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                        </Text>
-                        {selectedTaskIds.length > 0 && (
-                            <TouchableOpacity style={styles.removeBtn} onPress={handleRemoveSelected} disabled={saving}>
-                                <Text style={styles.removeBtnText}>Remove ({selectedTaskIds.length})</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-
-                    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                        {selectedDayTasks.length === 0 ? (
-                            <View style={styles.emptySidebar}>
-                                <Text style={styles.emptySidebarText}>No events for this day</Text>
-                            </View>
-                        ) : selectedDayTasks.map((t, idx) => {
-                            const prio = getPrio(t.urgency, t.importance);
-                            const isSelected = selectedTaskIds.includes(t.id);
-                            return (
-                                <TouchableOpacity
-                                    key={idx}
-                                    style={[styles.sidebarTask, isSelected && styles.sidebarTaskActive]}
-                                    onPress={() => toggleTaskSelection(t.id)}
-                                >
-                                    <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
-                                        {isSelected && <View style={styles.checkboxInner} />}
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.sidebarTaskTitle} numberOfLines={1}>{t.title}</Text>
-
-                                        {t.scheduled_start && t.type === 'worktime' && (
-                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2, marginBottom: 4 }}>
-                                                🕒 Block: {new Date(t.scheduled_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(t.scheduled_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </Text>
-                                        )}
-                                        {t.type !== 'worktime' && (
-                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.red, marginTop: 2, marginBottom: 4 }}>
-                                                🚨 Deadline
-                                            </Text>
-                                        )}
-
-                                        <View style={styles.sidebarTaskMeta}>
-                                            <View style={[styles.miniSwatch, { backgroundColor: prio.text }]} />
-                                            <Text style={styles.sidebarTaskPrio}>{t.urgency}U · {t.importance}I</Text>
-                                        </View>
-                                    </View>
-                                    <TouchableOpacity style={styles.sidebarBlockBtn} onPress={() => blockTask(t)}>
-                                        <CalendarDays size={18} color={theme.colors.ink} />
-                                    </TouchableOpacity>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </ScrollView>
-                </View>
+                {/* Right Sidebar (matches design): Mini month + Upcoming + Categories */}
+                {IS_WIDE && (
+                    <CalendarSidebar
+                        theme={theme}
+                        tasks={tasks}
+                        month={month} setMonth={setMonth}
+                        year={year} setYear={setYear}
+                        selectedDate={selectedDate} setSelectedDate={setSelectedDate}
+                        getPrio={getPrio}
+                        MN={MN}
+                        blockTask={blockTask}
+                    />
+                )}
             </View>
 
             {/* Add Event Modal */}
@@ -1243,6 +1181,217 @@ const getStyles = (theme) => StyleSheet.create({
     sidebarTaskPrio: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.5 },
     sidebarBlockBtn: { padding: 10, borderRadius: 8, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
 });
+
+// ── Calendar Sidebar (mini month + upcoming + categories) ─────────
+function CalendarSidebar({ theme, tasks, month, setMonth, year, setYear, selectedDate, setSelectedDate, getPrio, MN, blockTask }) {
+    const dim = new Date(year, month + 1, 0).getDate();
+    const firstDay = new Date(year, month, 1).getDay();
+    const cells = [];
+    for (let i = 0; i < firstDay; i++) cells.push(null);
+    for (let i = 1; i <= dim; i++) cells.push(i);
+    while (cells.length % 7 !== 0) cells.push(null);
+
+    const today = new Date();
+    const isCurrentMonth = today.getMonth() === month && today.getFullYear() === year;
+
+    // Upcoming: next 5 events sorted by date
+    const todayStr = today.toLocaleDateString('en-CA');
+    const upcoming = tasks
+        .filter(t => {
+            const d = (t.due_date || t.date || '').slice(0, 10);
+            return d && d >= todayStr;
+        })
+        .sort((a, b) => {
+            const da = (a.due_date || a.date || '').slice(0, 10);
+            const db = (b.due_date || b.date || '').slice(0, 10);
+            return da.localeCompare(db);
+        })
+        .slice(0, 5);
+
+    // Days that have events (for dot indicators)
+    const eventDates = new Set(tasks.map(t => (t.due_date || t.date || '').slice(0, 10)).filter(Boolean));
+
+    const [categories, setCategories] = React.useState({
+        Assignments: true, 'Tests & Quizzes': true, Labs: true, 'Study plan (AI)': true,
+    });
+    const toggleCategory = (k) => setCategories(prev => ({ ...prev, [k]: !prev[k] }));
+
+    const SEM_BLUE = '#2563EB', SEM_RED = '#E03E3E', SEM_GREEN = '#16A34A', SEM_PURPLE = '#7C3AED';
+
+    return (
+        <View style={{
+            width: 280, flexShrink: 0,
+            padding: 16, gap: 14,
+        }}>
+            {/* Mini month calendar */}
+            <View style={{
+                backgroundColor: theme.colors.surface,
+                borderRadius: 12,
+                borderWidth: 1, borderColor: theme.colors.border,
+                padding: 14,
+            }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink }}>
+                        {MN[month]} {year}
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 4 }}>
+                        <TouchableOpacity
+                            onPress={() => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); }}
+                            style={{ padding: 4 }}
+                        >
+                            <ChevronLeft size={14} color={theme.colors.ink3} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); }}
+                            style={{ padding: 4 }}
+                        >
+                            <ChevronRight size={14} color={theme.colors.ink3} />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* Day headers */}
+                <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                        <Text key={i} style={{
+                            flex: 1, textAlign: 'center',
+                            fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3,
+                            paddingVertical: 4,
+                        }}>
+                            {d}
+                        </Text>
+                    ))}
+                </View>
+
+                {/* Date grid */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                    {cells.map((d, i) => {
+                        if (d === null) return <View key={i} style={{ width: '14.285%', height: 30 }} />;
+                        const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        const isToday = isCurrentMonth && d === today.getDate();
+                        const isSelected = iso === selectedDate;
+                        const hasEvent = eventDates.has(iso);
+                        return (
+                            <TouchableOpacity
+                                key={i}
+                                onPress={() => setSelectedDate(iso)}
+                                style={{
+                                    width: '14.285%', height: 30,
+                                    alignItems: 'center', justifyContent: 'center',
+                                    position: 'relative',
+                                }}
+                            >
+                                <View style={{
+                                    width: 26, height: 26, borderRadius: 13,
+                                    alignItems: 'center', justifyContent: 'center',
+                                    backgroundColor: isToday ? theme.colors.ink : isSelected ? theme.colors.surface2 : 'transparent',
+                                }}>
+                                    <Text style={{
+                                        fontFamily: theme.fonts.s, fontSize: 11,
+                                        color: isToday ? theme.colors.bg : theme.colors.ink,
+                                        fontWeight: isToday || hasEvent ? '600' : '400',
+                                    }}>
+                                        {d}
+                                    </Text>
+                                </View>
+                                {hasEvent && !isToday && (
+                                    <View style={{
+                                        position: 'absolute', bottom: 1,
+                                        width: 3, height: 3, borderRadius: 2,
+                                        backgroundColor: SEM_BLUE,
+                                    }} />
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            </View>
+
+            {/* Upcoming */}
+            <View style={{
+                backgroundColor: theme.colors.surface,
+                borderRadius: 12,
+                borderWidth: 1, borderColor: theme.colors.border,
+                padding: 14,
+            }}>
+                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink, marginBottom: 10 }}>
+                    Upcoming
+                </Text>
+                {upcoming.length === 0 ? (
+                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 }}>
+                        Nothing scheduled
+                    </Text>
+                ) : upcoming.map((t, i) => {
+                    const dateStr = (t.due_date || t.date || '').slice(0, 10);
+                    const dateFmt = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                    const lower = (t.title || '').toLowerCase();
+                    const c = lower.includes('test') || lower.includes('quiz') || lower.includes('exam') ? SEM_RED
+                        : lower.includes('lab') ? SEM_GREEN
+                        : t.type === 'worktime' ? SEM_PURPLE
+                        : SEM_BLUE;
+                    return (
+                        <View key={i} style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 10,
+                            paddingVertical: 6,
+                        }}>
+                            <View style={{ width: 3, height: 26, backgroundColor: c, borderRadius: 2 }} />
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '500', color: theme.colors.ink }} numberOfLines={1}>
+                                    {t.title}
+                                </Text>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 1 }}>
+                                    {dateFmt}
+                                </Text>
+                            </View>
+                            <TouchableOpacity onPress={() => blockTask(t)} style={{ padding: 4 }} title="Add to Google Calendar">
+                                <CalendarDays size={14} color={theme.colors.ink3} />
+                            </TouchableOpacity>
+                        </View>
+                    );
+                })}
+            </View>
+
+            {/* Categories */}
+            <View style={{
+                backgroundColor: theme.colors.surface,
+                borderRadius: 12,
+                borderWidth: 1, borderColor: theme.colors.border,
+                padding: 14,
+            }}>
+                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink, marginBottom: 10 }}>
+                    Categories
+                </Text>
+                {[
+                    { label: 'Assignments', color: SEM_BLUE },
+                    { label: 'Tests & Quizzes', color: SEM_RED },
+                    { label: 'Labs', color: SEM_GREEN },
+                    { label: 'Study plan (AI)', color: SEM_PURPLE },
+                ].map((c, i) => {
+                    const active = categories[c.label];
+                    return (
+                        <TouchableOpacity
+                            key={i}
+                            onPress={() => toggleCategory(c.label)}
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}
+                            activeOpacity={0.7}
+                        >
+                            <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: c.color, opacity: active ? 1 : 0.3 }} />
+                            <Text style={{
+                                flex: 1, fontFamily: theme.fonts.s, fontSize: 12,
+                                color: active ? theme.colors.ink : theme.colors.ink3,
+                            }}>
+                                {c.label}
+                            </Text>
+                            {active && (
+                                <Text style={{ color: theme.colors.ink3, fontSize: 12, fontWeight: '600' }}>✓</Text>
+                            )}
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+        </View>
+    );
+}
 
 // ── Week View Content (matches design's calendar week grid) ──────
 function WeekViewContent({ theme, tasks, selectedDate, setSelectedDate, getPrio, month, setMonth, year, setYear }) {
