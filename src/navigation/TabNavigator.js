@@ -20,11 +20,12 @@ const Tab = createBottomTabNavigator();
 
 const isWeb = typeof window !== 'undefined' && Dimensions.get('window').width > 768;
 
+// Design order: Dashboard / AI Tutor / Gradebook / Calendar / Focus / Leaderboard
 const WORKSPACE_ITEMS = [
     { name: 'Home',         label: 'Dashboard',  icon: Home },
     { name: 'AI',           label: 'AI Tutor',   icon: Sparkles, highlight: true },
-    { name: 'Calendar',     label: 'Calendar',   icon: CalendarDays },
     { name: 'Gradebook',    label: 'Gradebook',  icon: BookOpen },
+    { name: 'Calendar',     label: 'Calendar',   icon: CalendarDays },
     { name: 'Focus',        label: 'Focus',      icon: Timer },
     { name: 'Leaderboard',  label: 'Leaderboard',icon: Trophy },
 ];
@@ -111,7 +112,7 @@ function CustomSidebar({ state, navigation, collapsed, setCollapsed, userName, u
         );
     };
 
-    const W = isWeb ? (collapsed ? 68 : 220) : 68;
+    const W = isWeb ? (collapsed ? 68 : 236) : 68;
 
     return (
         <View style={[styles.sidebar(theme, W)]}>
@@ -244,7 +245,7 @@ export default function TabNavigator({ isGuest, onSignOut }) {
         AsyncStorage.setItem(COLLAPSE_KEY, v ? 'true' : 'false').catch(() => {});
     };
 
-    const SIDEBAR_WIDTH = isWeb ? (collapsed ? 68 : 220) : 68;
+    const SIDEBAR_WIDTH = isWeb ? (collapsed ? 68 : 236) : 68;
 
     return (
         <Tab.Navigator
