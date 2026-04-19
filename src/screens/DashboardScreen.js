@@ -179,6 +179,53 @@ export default function DashboardScreen() {
 
     const focusScoreColor = focusScoreNum >= 70 ? SEM.green : focusScoreNum >= 50 ? SEM.orange : SEM.red;
 
+    // Stat sub-texts matching the design's richer copy
+    const apCount = classes.filter(c => c.type === 'AP').length;
+    const hnCount = classes.filter(c => c.type === 'HN').length;
+    const regCount = classes.length - apCount - hnCount;
+    const classesSub = [
+        apCount > 0 && `${apCount} AP`,
+        hnCount > 0 && `${hnCount} HN`,
+        regCount > 0 && `${regCount} REG`,
+    ].filter(Boolean).join(' · ') || 'No classes yet';
+
+    // Compute weighted GPA trend if we have a previous snapshot
+    const [prevWgpa, setPrevWgpa] = useState(null);
+    React.useEffect(() => {
+        AsyncStorage.getItem('prevWgpa').then(v => {
+            if (v) setPrevWgpa(parseFloat(v));
+            if (wgpa) AsyncStorage.setItem('prevWgpa', wgpa);
+        }).catch(() => {});
+    }, [wgpa]);
+    const wgpaTrend = prevWgpa && wgpa ? parseFloat(wgpa) - prevWgpa : null;
+    const wgpaSub = wgpaTrend !== null && wgpaTrend !== 0
+        ? `${wgpaTrend > 0 ? '+' : ''}${wgpaTrend.toFixed(2)} this quarter`
+        : 'AP/HN weighted';
+
+    // Focus score: label + relative ranking line
+    const focusSub = focusScoreNum >= 80 ? `${focusLabel || 'Great'} — top 20%`
+        : focusScoreNum >= 65 ? `${focusLabel || 'Good'} — above average`
+        : focusScoreNum >= 40 ? (focusLabel || 'Ok — room to grow')
+        : (focusLabel || 'Needs work');
+
+    // Streak sub: show best streak if we have one, else encourage
+    const [bestStreak, setBestStreak] = useState(0);
+    React.useEffect(() => {
+        AsyncStorage.getItem('bestStreak').then(v => {
+            const b = parseInt(v || '0');
+            setBestStreak(b);
+            if (streak > b) AsyncStorage.setItem('bestStreak', String(streak));
+        }).catch(() => {});
+    }, [streak]);
+    const streakSub = bestStreak > 0 ? `Best: ${bestStreak}d`
+        : streak > 0 ? 'First streak!'
+        : 'Start your first streak';
+
+    // Period close date: if we know the period end, show "closes in N days"
+    const periodSub = periodName
+        ? `${classes.length} class${classes.length === 1 ? '' : 'es'}${periodName ? ' · ' + periodName : ''}`
+        : `${classes.length} class${classes.length === 1 ? '' : 'es'}`;
+
     const todayStrFmt = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
     return (
@@ -197,11 +244,11 @@ export default function DashboardScreen() {
 
                 {/* ── Stat Row ── */}
                 <View style={{ flexDirection: 'row', gap: 14, marginBottom: 28, flexWrap: 'wrap' }}>
-                    <StatCard label="Weighted GPA" value={wgpa} sub="AP/HN weighted" color={wgpa && parseFloat(wgpa) >= 3.7 ? SEM.green : theme.colors.ink} icon={TrendingUp} theme={theme} />
+                    <StatCard label="Weighted GPA" value={wgpa} sub={wgpaSub} color={wgpa && parseFloat(wgpa) >= 3.7 ? SEM.green : theme.colors.ink} icon={TrendingUp} theme={theme} />
                     <StatCard label="Unweighted GPA" value={ugpa} sub="4.0 scale" color={theme.colors.ink} icon={Gauge} theme={theme} />
-                    <StatCard label="Classes" value={classes.length || '—'} sub={classes.filter(c => c.type === 'AP').length + ' AP · ' + classes.filter(c => c.type === 'HN').length + ' HN'} icon={BookOpen} theme={theme} />
-                    <StatCard label="Focus Score" value={focusScoreNum || '—'} sub={focusLabel || 'Keep it up'} color={focusScoreColor} icon={Target} onPress={() => navigation.navigate('Focus')} theme={theme} />
-                    <StatCard label="Study Streak" value={streak ? streak + 'd' : '0d'} sub="Keep going!" color={streak >= 3 ? SEM.orange : theme.colors.ink} icon={Flame} theme={theme} />
+                    <StatCard label="Classes" value={classes.length || '—'} sub={classesSub} icon={BookOpen} theme={theme} />
+                    <StatCard label="Focus Score" value={focusScoreNum || '—'} sub={focusSub} color={focusScoreColor} icon={Target} onPress={() => navigation.navigate('Focus')} theme={theme} />
+                    <StatCard label="Study Streak" value={streak ? streak + 'd' : '0d'} sub={streakSub} color={streak >= 3 ? SEM.orange : theme.colors.ink} icon={Flame} theme={theme} />
                 </View>
 
                 {/* ── Main Grid ── */}
