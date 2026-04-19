@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Home, CalendarDays, BookOpen, Settings, Timer, Trophy, Plug, Crown, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import Svg, { Rect, Path } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DashboardScreen from '../screens/DashboardScreen';
 import MatrixScreen from '../screens/MatrixScreen';
@@ -119,7 +120,18 @@ function CustomSidebar({ state, navigation, collapsed, setCollapsed, userName, u
 
             {/* Logo */}
             <View style={[styles.logoRow, collapsed && { justifyContent: 'center', paddingLeft: 0 }]}>
-                <View style={styles.logoMark(theme)} />
+                {/* Graduation-cap mark (design option 5) */}
+                <Svg width={32} height={32} viewBox="0 0 32 32">
+                    <Rect width={32} height={32} rx={8} fill={theme.colors.ink} />
+                    <Path d="M6 14 L16 8 L26 14 L16 20 Z" fill={theme.colors.bg} />
+                    <Path
+                        d="M11 17 L11 22 Q16 25 21 22 L21 17"
+                        stroke={theme.colors.bg}
+                        strokeWidth={1.6}
+                        fill="none"
+                        strokeLinecap="round"
+                    />
+                </Svg>
                 {isWeb && !collapsed && (
                     <Text style={styles.logoText(theme)}>Option</Text>
                 )}
