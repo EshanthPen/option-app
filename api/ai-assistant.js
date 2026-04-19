@@ -128,7 +128,7 @@ RULES:
     if (!geminiRes.ok) {
       const errBody = await geminiRes.text();
       console.error('Gemini error:', geminiRes.status, errBody);
-      return res.status(502).json({ error: 'AI service error', details: geminiRes.status });
+      return res.status(502).json({ error: 'AI service error', details: geminiRes.status, geminiError: errBody });
     }
 
     const data = await geminiRes.json();
