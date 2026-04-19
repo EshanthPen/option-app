@@ -90,7 +90,7 @@ export default function PremiumScreen({ navigation, onClose }) {
                 <TopBar title="Premium" subtitle={subscription?.isBeta ? 'Beta Tester · Pro access' : 'Option Pro · all features unlocked'} />
 
                 <ScrollView contentContainerStyle={{ paddingVertical: 28, paddingHorizontal: 32 }}>
-                    <View style={{ width: '100%' }}>
+                    <View style={{ maxWidth: 900, alignSelf: 'center', width: '100%' }}>
 
                         {/* Pro status hero — matches design's ink → purple gradient */}
                         <GradientCard
@@ -207,7 +207,7 @@ export default function PremiumScreen({ navigation, onClose }) {
             />
 
             <ScrollView contentContainerStyle={{ paddingVertical: 28, paddingHorizontal: 32 }} showsVerticalScrollIndicator={false}>
-                <View style={{ width: '100%' }}>
+                <View style={{ maxWidth: 1200, alignSelf: 'center', width: '100%' }}>
                     <View style={{ flexDirection: 'row', gap: 24 }}>
 
                         {/* Left: Hero + Features grid */}

@@ -173,7 +173,7 @@ export default function ScreentimeScreen() {
             />
 
             <ScrollView contentContainerStyle={{ paddingVertical: 28, paddingHorizontal: 32 }} showsVerticalScrollIndicator={false}>
-                <View style={{ width: '100%' }}>
+                <View style={{ maxWidth: 1400, alignSelf: 'center', width: '100%' }}>
 
                     {/* ── Chrome extension banner (web only, dismissable) ── */}
                     {showBanner && (

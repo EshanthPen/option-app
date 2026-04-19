@@ -240,7 +240,7 @@ export default function DashboardScreen() {
                 contentContainerStyle={{ paddingVertical: 28, paddingHorizontal: 32 }}
                 showsVerticalScrollIndicator={false}
             >
-                <View style={{ width: '100%' }}>
+                <View style={{ maxWidth: 1400, alignSelf: 'center', width: '100%' }}>
 
                 {/* ── Stat Row ── */}
                 <View style={{ flexDirection: 'row', gap: 14, marginBottom: 28, flexWrap: 'wrap' }}>
