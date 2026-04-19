@@ -22,7 +22,7 @@ const SIDEBAR_W = 320;
 // On web the sidebar is 220px wide; on mobile it's 72px.
 // The screen content area is already offset by the sidebar via sceneStyle paddingLeft.
 // So available width for the calendar is just the screen content area.
-const HPAD = 20;
+const HPAD = 32; // matches design content padding (28×32)
 const GAP = 2;
 // Use shorter height for cells to fit on standard screens
 const CELL_W = (SCREEN_W - HPAD * 2 - GAP * 6) / 7;
@@ -1100,8 +1100,8 @@ export default function MatrixScreen() {
 
 const getStyles = (theme) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg },
-    mainLayout: { flex: 1, paddingHorizontal: HPAD },
-    layoutWide: { flexDirection: 'row', gap: 30 },
+    mainLayout: { flex: 1, paddingTop: 28, paddingHorizontal: HPAD },
+    layoutWide: { flexDirection: 'row', gap: 24 },
 
     headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14 },
     title: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
@@ -1221,7 +1221,7 @@ function CalendarSidebar({ theme, tasks, month, setMonth, year, setYear, selecte
     return (
         <View style={{
             width: 280, flexShrink: 0,
-            padding: 16, gap: 14,
+            gap: 16,
         }}>
             {/* Mini month calendar */}
             <View style={{
@@ -1444,7 +1444,7 @@ function WeekViewContent({ theme, tasks, selectedDate, setSelectedDate, getPrio,
     const nowOffset = ((nowHour - HOURS[0]) / (HOURS.length)) * 100;
 
     return (
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, flex: 1 }}>
+        <View style={{ paddingTop: 0, flex: 1 }}>
             {/* Week nav header */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <TouchableOpacity
@@ -1633,7 +1633,7 @@ function DayViewContent({ theme, tasks, selectedDate, setSelectedDate, getPrio }
     const isToday = sel.toDateString() === new Date().toDateString();
 
     return (
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, flex: 1 }}>
+        <View style={{ paddingTop: 0, flex: 1 }}>
             {/* Date nav */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <TouchableOpacity onPress={() => {
