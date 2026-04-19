@@ -86,7 +86,7 @@ function CustomSidebar({ state, navigation, collapsed, setCollapsed, userName, u
                     }} />
                 )}
                 <n.icon
-                    size={20}
+                    size={18}
                     color={iconColor}
                     strokeWidth={isFocused ? 2.5 : 2}
                 />
@@ -112,7 +112,7 @@ function CustomSidebar({ state, navigation, collapsed, setCollapsed, userName, u
         );
     };
 
-    const W = isWeb ? (collapsed ? 76 : 280) : 76;
+    const W = isWeb ? (collapsed ? 68 : 236) : 68;
 
     return (
         <View style={[styles.sidebar(theme, W)]}>
@@ -245,7 +245,7 @@ export default function TabNavigator({ isGuest, onSignOut }) {
         AsyncStorage.setItem(COLLAPSE_KEY, v ? 'true' : 'false').catch(() => {});
     };
 
-    const SIDEBAR_WIDTH = isWeb ? (collapsed ? 76 : 280) : 76;
+    const SIDEBAR_WIDTH = isWeb ? (collapsed ? 68 : 236) : 68;
 
     return (
         <Tab.Navigator
@@ -296,10 +296,11 @@ const styles = {
     },
     logoMark: (theme) => ({
         width: 32, height: 32, backgroundColor: theme.colors.ink, borderRadius: 8, flexShrink: 0,
+        alignItems: 'center', justifyContent: 'center',
     }),
     logoText: (theme) => ({
         fontFamily: theme.fonts.logo || theme.fonts.d,
-        fontSize: 24, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.4,
+        fontSize: 22, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5,
     }),
     navSection: {
         width: '100%', gap: 2, marginBottom: 4,
@@ -312,15 +313,15 @@ const styles = {
         paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4,
     }),
     navItem: (theme) => ({
-        flexDirection: 'row', alignItems: 'center', gap: 12,
-        paddingVertical: 11, paddingHorizontal: 14,
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        paddingVertical: 9, paddingHorizontal: 12,
         borderRadius: 10, position: 'relative', width: '100%',
     }),
     navItemFocused: (theme) => ({
         backgroundColor: theme.colors.surface2,
     }),
     navLabel: (theme) => ({
-        fontFamily: theme.fonts.m, fontSize: 14, fontWeight: '500',
+        fontFamily: theme.fonts.m, fontSize: 13, fontWeight: '500',
         color: theme.colors.ink3, flex: 1,
     }),
     navLabelFocused: (theme) => ({

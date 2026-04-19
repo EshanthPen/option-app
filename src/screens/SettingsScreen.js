@@ -108,7 +108,7 @@ export default function SettingsScreen({ navigation, isGuest, onSignOut }) {
         <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
             <TopBar title="Settings" subtitle={isPro ? 'Option Pro · all features unlocked' : 'Free plan'} />
 
-            <ScrollView contentContainerStyle={{ paddingVertical: 32, paddingHorizontal: 40 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ paddingVertical: 28, paddingHorizontal: 32 }} showsVerticalScrollIndicator={false}>
                 <View style={{ flexDirection: 'row', gap: 28, maxWidth: 1000, alignSelf: 'center', width: '100%' }}>
 
                     {/* ── Tabs sidebar ── */}

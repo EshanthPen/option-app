@@ -172,7 +172,7 @@ export default function ScreentimeScreen() {
                 actions={<Button variant="primary" icon={Play} onPress={toggle}>{isActive ? 'Pause' : 'Start session'}</Button>}
             />
 
-            <ScrollView contentContainerStyle={{ paddingVertical: 32, paddingHorizontal: 40 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ paddingVertical: 28, paddingHorizontal: 32 }} showsVerticalScrollIndicator={false}>
                 <View style={{ maxWidth: 1200, alignSelf: 'center', width: '100%' }}>
 
                     {/* ── Chrome extension banner (web only, dismissable) ── */}

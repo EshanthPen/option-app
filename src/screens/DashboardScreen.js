@@ -90,21 +90,21 @@ function StatCard({ label, value, sub, color, icon: Icon, onPress, theme }) {
     return (
         <TouchableOpacity
             style={{
-                flex: 1, padding: 22,
+                flex: 1, padding: 16,
                 backgroundColor: theme.colors.surface,
-                borderRadius: 16,
+                borderRadius: 14,
                 borderWidth: 1, borderColor: theme.colors.border,
                 ...theme.shadows.sm,
             }}
             onPress={onPress}
             activeOpacity={onPress ? 0.75 : 1}
         >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Text>
-                {Icon && <Icon size={16} color={theme.colors.ink4} strokeWidth={2} />}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Text>
+                {Icon && <Icon size={14} color={theme.colors.ink4} strokeWidth={2} />}
             </View>
-            <Text style={{ fontFamily: theme.fonts.s, fontSize: 36, fontWeight: '700', color: color || theme.colors.ink, letterSpacing: -0.7 }}>{value ?? '—'}</Text>
-            {sub && <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 6 }}>{sub}</Text>}
+            <Text style={{ fontFamily: theme.fonts.b, fontSize: 28, fontWeight: '700', color: color || theme.colors.ink, letterSpacing: -0.5 }}>{value ?? '—'}</Text>
+            {sub && <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 4 }}>{sub}</Text>}
         </TouchableOpacity>
     );
 }
@@ -190,13 +190,13 @@ export default function DashboardScreen() {
             />
             <ScrollView
                 style={{ flex: 1 }}
-                contentContainerStyle={{ paddingVertical: 32, paddingHorizontal: 40 }}
+                contentContainerStyle={{ paddingVertical: 28, paddingHorizontal: 32 }}
                 showsVerticalScrollIndicator={false}
             >
-                <View style={{ maxWidth: 1500, width: '100%', alignSelf: 'center' }}>
+                <View style={{ maxWidth: 1400, width: '100%', alignSelf: 'center' }}>
 
                 {/* ── Stat Row ── */}
-                <View style={{ flexDirection: 'row', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
+                <View style={{ flexDirection: 'row', gap: 14, marginBottom: 28, flexWrap: 'wrap' }}>
                     <StatCard label="Weighted GPA" value={wgpa} sub="AP/HN weighted" color={wgpa && parseFloat(wgpa) >= 3.7 ? SEM.green : theme.colors.ink} icon={TrendingUp} theme={theme} />
                     <StatCard label="Unweighted GPA" value={ugpa} sub="4.0 scale" color={theme.colors.ink} icon={Gauge} theme={theme} />
                     <StatCard label="Classes" value={classes.length || '—'} sub={classes.filter(c => c.type === 'AP').length + ' AP · ' + classes.filter(c => c.type === 'HN').length + ' HN'} icon={BookOpen} theme={theme} />
@@ -205,17 +205,17 @@ export default function DashboardScreen() {
                 </View>
 
                 {/* ── Main Grid ── */}
-                <View style={{ flexDirection: 'row', gap: 28 }}>
+                <View style={{ flexDirection: 'row', gap: 24 }}>
 
                     {/* Left: Up Next + Recent Scores */}
-                    <View style={{ flex: 1.5, gap: 28 }}>
+                    <View style={{ flex: 1.5, gap: 24 }}>
 
                         {/* Up Next */}
                         <View>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                     <CalendarDays size={18} color={theme.colors.ink} strokeWidth={2.4} />
-                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '600', color: theme.colors.ink }}>Up Next</Text>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Up Next</Text>
                                     {urgentCount > 0 && (
                                         <View style={{ backgroundColor: SEM.red + '18', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 }}>
                                             <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '700', color: SEM.red }}>{urgentCount} urgent</Text>
@@ -287,7 +287,7 @@ export default function DashboardScreen() {
                             <View>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                                     <TrendingUp size={18} color={theme.colors.ink} strokeWidth={2.4} />
-                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '600', color: theme.colors.ink }}>Recent Scores</Text>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Recent Scores</Text>
                                 </View>
                                 <View style={{
                                     backgroundColor: theme.colors.surface,
@@ -324,7 +324,7 @@ export default function DashboardScreen() {
                     </View>
 
                     {/* Right: Focus Widget + Classes + Needs Attention + Nudges */}
-                    <View style={{ flex: 1, gap: 28 }}>
+                    <View style={{ flex: 1, gap: 24 }}>
 
                         {/* Focus Score Widget (dark gradient) */}
                         <TouchableOpacity
@@ -380,7 +380,7 @@ export default function DashboardScreen() {
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                     <BookOpen size={18} color={theme.colors.ink} strokeWidth={2.4} />
-                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '600', color: theme.colors.ink }}>Class Overview</Text>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Class Overview</Text>
                                 </View>
                                 <TouchableOpacity onPress={() => navigation.navigate('Gradebook')}>
                                     <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 }}>See all →</Text>
@@ -426,7 +426,7 @@ export default function DashboardScreen() {
                             <View>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                                     <TrendingDown size={18} color={SEM.red} strokeWidth={2.4} />
-                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '600', color: theme.colors.ink }}>Needs Attention</Text>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Needs Attention</Text>
                                 </View>
                                 {atRisk.map((c, i) => {
                                     const col = gradeColor(c.grade);
@@ -463,7 +463,7 @@ export default function DashboardScreen() {
                             <View>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                                     <Lightbulb size={18} color={SEM.gold} strokeWidth={2.4} />
-                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '600', color: theme.colors.ink }}>Smart Nudges</Text>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Smart Nudges</Text>
                                 </View>
                                 {nudges.map((nudge, idx) => {
                                     const nColor = nudge.type === 'warning' ? SEM.red : nudge.type === 'motivation' ? SEM.green : SEM.blue;
@@ -511,7 +511,7 @@ export default function DashboardScreen() {
                             <View>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                                     <Award size={18} color={theme.colors.ink} strokeWidth={2.4} />
-                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '600', color: theme.colors.ink }}>Achievements</Text>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Achievements</Text>
                                 </View>
                                 <View style={{ flexDirection: 'row', gap: 10 }}>
                                     {recentAchievements.map((ach, idx) => (

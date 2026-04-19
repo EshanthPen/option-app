@@ -22,7 +22,7 @@ const SIDEBAR_W = 320;
 // On web the sidebar is 220px wide; on mobile it's 72px.
 // The screen content area is already offset by the sidebar via sceneStyle paddingLeft.
 // So available width for the calendar is just the screen content area.
-const HPAD = 40; // matches design content padding (32×40)
+const HPAD = 32; // matches design content padding (28×32)
 const GAP = 2;
 // Use shorter height for cells to fit on standard screens
 const CELL_W = (SCREEN_W - HPAD * 2 - GAP * 6) / 7;
@@ -1100,7 +1100,7 @@ export default function MatrixScreen() {
 
 const getStyles = (theme) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg },
-    mainLayout: { flex: 1, paddingTop: 32, paddingHorizontal: HPAD },
+    mainLayout: { flex: 1, paddingTop: 28, paddingHorizontal: HPAD },
     layoutWide: { flexDirection: 'row', gap: 24 },
 
     headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14 },
