@@ -89,7 +89,7 @@ export default function PremiumScreen({ navigation, onClose }) {
             <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
                 <TopBar title="Premium" subtitle={subscription?.isBeta ? 'Beta Tester · Pro access' : 'Option Pro · all features unlocked'} />
 
-                <ScrollView contentContainerStyle={{ paddingVertical: 28, paddingHorizontal: 32 }}>
+                <ScrollView contentContainerStyle={{ paddingVertical: 32, paddingHorizontal: 40 }}>
                     <View style={{ maxWidth: 700, alignSelf: 'center', width: '100%' }}>
 
                         {/* Pro status hero — matches design's ink → purple gradient */}
@@ -206,7 +206,7 @@ export default function PremiumScreen({ navigation, onClose }) {
                 actions={onClose ? <TouchableOpacity onPress={onClose}><X size={22} color={theme.colors.ink3} /></TouchableOpacity> : null}
             />
 
-            <ScrollView contentContainerStyle={{ paddingVertical: 28, paddingHorizontal: 32 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ paddingVertical: 32, paddingHorizontal: 40 }} showsVerticalScrollIndicator={false}>
                 <View style={{ maxWidth: 1000, alignSelf: 'center', width: '100%' }}>
                     <View style={{ flexDirection: 'row', gap: 24 }}>
 

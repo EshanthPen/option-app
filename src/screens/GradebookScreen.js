@@ -642,7 +642,7 @@ export default function GradebookScreen() {
                     {/* Detail header (matches design): color dot + type badge + title + teacher | actions */}
                     <View style={{
                         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-                        paddingHorizontal: 32, paddingTop: 28, paddingBottom: 18,
+                        paddingHorizontal: 40, paddingTop: 32, paddingBottom: 22,
                     }}>
                         <View style={{ flex: 1, minWidth: 0 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -691,7 +691,7 @@ export default function GradebookScreen() {
                     </View>
 
                     {/* 3-card stat row (matches design) */}
-                    <View style={{ flexDirection: 'row', gap: 14, paddingHorizontal: 32, marginBottom: 24 }}>
+                    <View style={{ flexDirection: 'row', gap: 14, paddingHorizontal: 40, marginBottom: 28 }}>
                         {/* Letter + percent + bar */}
                         <View style={{
                             flex: 1.3,
@@ -860,7 +860,7 @@ export default function GradebookScreen() {
                     {/* (Hypothetical toggle moved to header above) */}
 
                     {/* Section heading + filter pills (matches design) */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 32, marginBottom: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 40, marginBottom: 16 }}>
                         <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>
                             Assignments
                         </Text>
@@ -901,7 +901,7 @@ export default function GradebookScreen() {
                         {/* TABLE VIEW (matches design) — non-hypothetical mode only */}
                         {!hypothetical && renderAssignments.length > 0 && (
                             <View style={{
-                                marginHorizontal: 32, marginBottom: 14,
+                                marginHorizontal: 40, marginBottom: 16,
                                 backgroundColor: theme.colors.surface,
                                 borderRadius: theme.radii.lg,
                                 borderWidth: 1, borderColor: theme.colors.border,
@@ -1020,7 +1020,7 @@ export default function GradebookScreen() {
                             const pending = (cls.assignments || []).filter(a => isNaN(numScore(a.score))).length;
                             return (
                                 <View style={{
-                                    marginHorizontal: 32, marginTop: 14, marginBottom: 14,
+                                    marginHorizontal: 40, marginTop: 16, marginBottom: 16,
                                     padding: 18,
                                     borderRadius: theme.radii.lg,
                                     borderWidth: 1, borderColor: theme.colors.purple + '30',

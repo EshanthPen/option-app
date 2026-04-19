@@ -180,7 +180,7 @@ export function TopBar({
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                paddingHorizontal: 32, paddingTop: 20, paddingBottom: 20,
+                paddingHorizontal: 40, paddingTop: 24, paddingBottom: 24,
                 borderBottomWidth: 1,
                 borderBottomColor: theme.colors.border,
                 backgroundColor: theme.colors.surface,
@@ -189,17 +189,17 @@ export function TopBar({
                 <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{
                         fontFamily: theme.fonts.d,
-                        fontSize: 22, fontWeight: '700',
+                        fontSize: 28, fontWeight: '700',
                         color: theme.colors.ink,
-                        letterSpacing: -0.4,
+                        letterSpacing: -0.6,
                     }} numberOfLines={1}>
                         {title}
                     </Text>
                     {subtitle ? (
                         <Text style={{
                             fontFamily: theme.fonts.m,
-                            fontSize: 12, color: theme.colors.ink3,
-                            marginTop: 2,
+                            fontSize: 14, color: theme.colors.ink3,
+                            marginTop: 4,
                         }} numberOfLines={1}>
                             {subtitle}
                         </Text>
@@ -211,17 +211,17 @@ export function TopBar({
                             onPress={() => setSearchOpen(true)}
                             activeOpacity={0.85}
                             style={{
-                                flexDirection: 'row', alignItems: 'center', gap: 8,
-                                paddingHorizontal: 12, paddingVertical: 8,
+                                flexDirection: 'row', alignItems: 'center', gap: 10,
+                                paddingHorizontal: 14, paddingVertical: 10,
                                 backgroundColor: theme.colors.bg,
                                 borderWidth: 1, borderColor: theme.colors.border,
-                                borderRadius: 10, width: 240,
+                                borderRadius: 11, width: 280,
                             }}
                         >
-                            <Search size={14} color={theme.colors.ink3} />
+                            <Search size={16} color={theme.colors.ink3} />
                             <Text style={{
                                 flex: 1, paddingVertical: 0,
-                                fontFamily: theme.fonts.m, fontSize: 13,
+                                fontFamily: theme.fonts.m, fontSize: 14,
                                 color: theme.colors.ink3,
                             }} numberOfLines={1}>
                                 Search classes, assignments…
@@ -239,12 +239,12 @@ export function TopBar({
                     )}
                     {showBell && (
                         <TouchableOpacity style={{
-                            width: 36, height: 36, borderRadius: 10,
+                            width: 42, height: 42, borderRadius: 11,
                             backgroundColor: theme.colors.surface,
                             borderWidth: 1, borderColor: theme.colors.border,
                             alignItems: 'center', justifyContent: 'center', position: 'relative',
                         }}>
-                            <Bell size={16} color={theme.colors.ink2} />
+                            <Bell size={18} color={theme.colors.ink2} />
                             <View style={{
                                 position: 'absolute', top: 8, right: 8,
                                 width: 7, height: 7, borderRadius: 4,
