@@ -232,7 +232,7 @@ export default function ScreentimeScreen() {
                                         strokeLinecap="round"
                                     />
                                 </Svg>
-                                <View style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}>
+                                <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center' }}>
                                     <Text style={{
                                         fontFamily: theme.fonts.mono, fontSize: 56, fontWeight: '500',
                                         color: theme.colors.ink, letterSpacing: -2,

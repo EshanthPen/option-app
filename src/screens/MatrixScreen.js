@@ -1376,97 +1376,93 @@ function WeekViewContent({ theme, tasks, selectedDate, setSelectedDate, getPrio,
                     ))}
                 </View>
 
-                {/* Time grid */}
+                {/* Time grid — time column on left, then 7 day columns; events live INSIDE each day column */}
                 <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                    <View style={{ position: 'relative' }}>
-                        {HOURS.map((h, i) => (
-                            <View key={h} style={{
-                                flexDirection: 'row',
-                                borderBottomWidth: 1, borderBottomColor: theme.colors.border,
-                                minHeight: ROW_H,
-                            }}>
-                                <View style={{ width: 50, padding: 4, alignItems: 'flex-end' }}>
-                                    <Text style={{
-                                        fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink3,
-                                    }}>
+                    <View style={{ flexDirection: 'row' }}>
+                        {/* Time labels column */}
+                        <View style={{ width: 50, flexShrink: 0 }}>
+                            {HOURS.map((h) => (
+                                <View key={h} style={{
+                                    height: ROW_H,
+                                    padding: 4, alignItems: 'flex-end',
+                                    borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                                }}>
+                                    <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink3 }}>
                                         {h > 12 ? h - 12 : h}{h >= 12 ? 'p' : 'a'}
                                     </Text>
                                 </View>
-                                {weekDays.map((day) => (
-                                    <View
-                                        key={day.iso}
-                                        style={{
-                                            flex: 1,
-                                            borderLeftWidth: 1, borderLeftColor: theme.colors.border,
-                                        }}
-                                    />
-                                ))}
-                            </View>
-                        ))}
-
-                        {/* Render task blocks absolutely positioned */}
-                        {weekDays.map((day, dayIdx) => {
+                            ))}
+                        </View>
+                        {/* Day columns */}
+                        {weekDays.map((day) => {
                             const dayTasks = tasks.filter(t => {
                                 const p = getTaskPlacement(t);
                                 return p.dateStr === day.iso && p.startHour !== null && p.startHour >= HOURS[0] && p.startHour < HOURS[HOURS.length - 1] + 1;
                             });
-                            return dayTasks.map((t, ti) => {
-                                const p = getTaskPlacement(t);
-                                const top = (p.startHour - HOURS[0]) * ROW_H;
-                                const height = Math.max(20, (p.durationMin / 60) * ROW_H - 2);
-                                const c = getPrio(t.urgency, t.importance);
-                                const isWorktime = t.type === 'worktime';
-                                return (
-                                    <View
-                                        key={day.iso + '_' + ti}
-                                        style={{
-                                            position: 'absolute',
-                                            top: top + 1,
-                                            left: 50 + (dayIdx * (100 / 7)) + '%',
-                                            width: (100 / 7) + '%',
-                                            transform: [{ translateX: 0 }],
-                                            paddingHorizontal: 3,
-                                        }}
-                                    >
+                            return (
+                                <View key={day.iso} style={{
+                                    flex: 1,
+                                    position: 'relative',
+                                    borderLeftWidth: 1, borderLeftColor: theme.colors.border,
+                                }}>
+                                    {/* Hour grid lines for this column */}
+                                    {HOURS.map((h) => (
+                                        <View key={h} style={{
+                                            height: ROW_H,
+                                            borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                                        }} />
+                                    ))}
+                                    {/* Events absolutely positioned within this day column */}
+                                    {dayTasks.map((t, ti) => {
+                                        const p = getTaskPlacement(t);
+                                        const top = (p.startHour - HOURS[0]) * ROW_H;
+                                        const height = Math.max(20, (p.durationMin / 60) * ROW_H - 2);
+                                        const c = getPrio(t.urgency, t.importance);
+                                        const isWorktime = t.type === 'worktime';
+                                        return (
+                                            <View
+                                                key={ti}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: top + 1, left: 3, right: 3,
+                                                    height,
+                                                    backgroundColor: c.bg,
+                                                    borderLeftWidth: 3, borderLeftColor: c.text,
+                                                    borderRadius: 4,
+                                                    padding: 4, paddingLeft: 6,
+                                                    overflow: 'hidden',
+                                                }}
+                                            >
+                                                <Text style={{
+                                                    fontFamily: theme.fonts.s, fontSize: 10, fontWeight: '600',
+                                                    color: c.text,
+                                                }} numberOfLines={2}>
+                                                    {isWorktime ? '🎯 ' : ''}{t.title}
+                                                </Text>
+                                            </View>
+                                        );
+                                    })}
+                                    {/* "Now" line on today's column */}
+                                    {day.isToday && nowHour >= HOURS[0] && nowHour < HOURS[HOURS.length - 1] + 1 && (
                                         <View style={{
-                                            height: height,
-                                            backgroundColor: c.bg,
-                                            borderLeftWidth: 3, borderLeftColor: c.text,
-                                            borderRadius: 4,
-                                            padding: 4, paddingLeft: 6,
-                                            overflow: 'hidden',
+                                            position: 'absolute',
+                                            left: 0, right: 0,
+                                            top: (nowHour - HOURS[0]) * ROW_H,
+                                            borderTopWidth: 2,
+                                            borderTopColor: '#E03E3E',
+                                            zIndex: 5,
                                         }}>
-                                            <Text style={{
-                                                fontFamily: theme.fonts.s, fontSize: 10, fontWeight: '600',
-                                                color: c.text,
-                                            }} numberOfLines={2}>
-                                                {isWorktime ? '🎯 ' : ''}{t.title}
-                                            </Text>
+                                            <View style={{
+                                                position: 'absolute',
+                                                left: -5, top: -5,
+                                                width: 10, height: 10, borderRadius: 5,
+                                                backgroundColor: '#E03E3E',
+                                            }} />
                                         </View>
-                                    </View>
-                                );
-                            });
+                                    )}
+                                </View>
+                            );
                         })}
-
-                        {/* "Now" line */}
-                        {isCurrentWeek && nowHour >= HOURS[0] && nowHour < HOURS[HOURS.length - 1] + 1 && (
-                            <View style={{
-                                position: 'absolute',
-                                left: 50,
-                                right: 0,
-                                top: (nowHour - HOURS[0]) * ROW_H,
-                                borderTopWidth: 2,
-                                borderTopColor: '#E03E3E',
-                                zIndex: 5,
-                            }}>
-                                <View style={{
-                                    position: 'absolute',
-                                    left: -5, top: -5,
-                                    width: 10, height: 10, borderRadius: 5,
-                                    backgroundColor: '#E03E3E',
-                                }} />
-                            </View>
-                        )}
                     </View>
                 </ScrollView>
             </View>

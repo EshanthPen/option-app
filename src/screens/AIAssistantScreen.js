@@ -509,7 +509,8 @@ export default function AIAssistantScreen() {
                                         style={{
                                             flex: 1, paddingVertical: 6,
                                             fontFamily: theme.fonts.m, fontSize: 14,
-                                            color: theme.colors.ink, outline: 'none',
+                                            color: theme.colors.ink,
+                                            ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
                                         }}
                                     />
                                     <TouchableOpacity
