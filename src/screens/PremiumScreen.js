@@ -11,7 +11,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { usePremium } from '../context/PremiumContext';
 import { PRO_FEATURES } from '../utils/premium';
-import { TopBar, Card, Button, Badge, SectionLabel, SEM } from '../components/DesignKit';
+import { TopBar, Card, Button, Badge, SectionLabel, GradientCard, SEM } from '../components/DesignKit';
 
 const ICON_MAP = {
     Infinity, Plug, Bell, TrendingUp, Sparkles, FileText, Flame, Palette, BarChart3, Brain,
@@ -92,12 +92,15 @@ export default function PremiumScreen({ navigation, onClose }) {
                 <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
                     <View style={{ maxWidth: 700, alignSelf: 'center', width: '100%' }}>
 
-                        {/* Pro status hero */}
-                        <View style={{
-                            padding: 28, marginBottom: 20,
-                            borderRadius: theme.radii.lg,
-                            backgroundColor: theme.colors.ink,
-                        }}>
+                        {/* Pro status hero — matches design's ink → purple gradient */}
+                        <GradientCard
+                            colors={[theme.colors.ink, SEM.purple]}
+                            angle={135}
+                            style={{
+                                padding: 28, marginBottom: 20,
+                                borderRadius: theme.radii.lg,
+                            }}
+                        >
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                 <Crown size={22} color={SEM.gold} strokeWidth={2.5} />
                                 <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '700', color: SEM.gold, textTransform: 'uppercase', letterSpacing: 1 }}>
@@ -107,7 +110,7 @@ export default function PremiumScreen({ navigation, onClose }) {
                             <Text style={{ fontFamily: theme.fonts.d, fontSize: 26, fontWeight: '700', color: '#fff', marginTop: 12, letterSpacing: -0.5 }}>
                                 You're on Pro
                             </Text>
-                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 6, lineHeight: 20 }}>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 6, lineHeight: 20 }}>
                                 {subscription?.isBeta
                                     ? "Thanks for being an early supporter — your beta access runs until Sept 1, 2026."
                                     : "All features unlocked. Thank you for supporting Option!"}
@@ -115,23 +118,23 @@ export default function PremiumScreen({ navigation, onClose }) {
                             {subscription?.current_period_end && (
                                 <View style={{
                                     flexDirection: 'row', gap: 24, marginTop: 18,
-                                    padding: 14, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10,
+                                    padding: 14, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 10,
                                 }}>
                                     <View>
-                                        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 1 }}>Plan</Text>
+                                        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>Plan</Text>
                                         <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: '#fff', marginTop: 4 }}>
                                             {subscription.plan_id || 'Annual'}
                                         </Text>
                                     </View>
                                     <View>
-                                        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 1 }}>Renews</Text>
+                                        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>Renews</Text>
                                         <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: '#fff', marginTop: 4 }}>
                                             {new Date(subscription.current_period_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </Text>
                                     </View>
                                 </View>
                             )}
-                        </View>
+                        </GradientCard>
 
                         {/* Pro features list */}
                         <SectionLabel>What you get</SectionLabel>

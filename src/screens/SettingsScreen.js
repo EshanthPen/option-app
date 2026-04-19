@@ -9,7 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import { usePremium } from '../context/PremiumContext';
 import { THEME_PRESETS } from '../utils/theme';
 import WorkingHoursGraph from '../components/WorkingHoursGraph';
-import { TopBar, Card, Button, Badge, Switch, SectionLabel, SEM } from '../components/DesignKit';
+import { TopBar, Card, Button, Badge, Switch, SectionLabel, GradientCard, SEM } from '../components/DesignKit';
 
 const TABS = [
     { id: 'account',       label: 'Account',       icon: User },
@@ -312,11 +312,14 @@ export default function SettingsScreen({ navigation, isGuest, onSignOut }) {
                         {/* ── BILLING ── */}
                         {tab === 'billing' && (
                             <>
-                                <View style={{
-                                    padding: 24, marginBottom: 16,
-                                    borderRadius: theme.radii.lg,
-                                    backgroundColor: theme.colors.ink,
-                                }}>
+                                <GradientCard
+                                    colors={[theme.colors.ink, SEM.purple]}
+                                    angle={135}
+                                    style={{
+                                        padding: 24, marginBottom: 16,
+                                        borderRadius: theme.radii.lg,
+                                    }}
+                                >
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                         <Crown size={20} color={SEM.gold} strokeWidth={2.5} />
                                         <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '700', color: SEM.gold, textTransform: 'uppercase', letterSpacing: 1 }}>
@@ -333,17 +336,17 @@ export default function SettingsScreen({ navigation, isGuest, onSignOut }) {
                                     {isPro ? (
                                         <View style={{
                                             flexDirection: 'row', gap: 24, marginTop: 18,
-                                            padding: 14, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10,
+                                            padding: 14, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 10,
                                         }}>
                                             <View>
-                                                <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 1 }}>Plan</Text>
+                                                <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>Plan</Text>
                                                 <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: '#fff', marginTop: 4 }}>
                                                     {subscription?.plan_id === 'beta' ? 'Beta' : subscription?.plan_id || 'Annual'}
                                                 </Text>
                                             </View>
                                             {subscription?.current_period_end && (
                                                 <View>
-                                                    <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 1 }}>Renews</Text>
+                                                    <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>Renews</Text>
                                                     <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: '#fff', marginTop: 4 }}>
                                                         {new Date(subscription.current_period_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                                     </Text>
@@ -357,7 +360,7 @@ export default function SettingsScreen({ navigation, isGuest, onSignOut }) {
                                             </Button>
                                         </View>
                                     )}
-                                </View>
+                                </GradientCard>
 
                                 {isPro && (
                                     <Card padding={0} style={{ overflow: 'hidden' }}>
