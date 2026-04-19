@@ -219,7 +219,7 @@ export default function LeaderboardScreen() {
             />
 
             <ScrollView contentContainerStyle={{ paddingVertical: 28, paddingHorizontal: 32 }} showsVerticalScrollIndicator={false}>
-                <View style={{ maxWidth: 1200, alignSelf: 'center', width: '100%' }}>
+                <View style={{ width: '100%' }}>
 
                     {/* Scope tabs (large, design-style with count badges) */}
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
