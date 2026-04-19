@@ -484,11 +484,16 @@ export default function GradebookScreen() {
 
     return (
         <View style={S.root}>
-            {/* Header */}
-            <View style={S.header}>
-                {cls ? (
+            {/* Top bar matching design */}
+            {cls ? (
+                <View style={{
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    padding: 24, paddingTop: 28, paddingBottom: 20,
+                    borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                    backgroundColor: theme.colors.surface,
+                }}>
                     <TouchableOpacity
-                        style={S.backBtn}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
                         onPress={() => {
                             setSelectedClass(null);
                             setHypothetical(false);
@@ -497,22 +502,49 @@ export default function GradebookScreen() {
                         }}
                     >
                         <ChevronLeft size={18} color={theme.colors.ink3} />
-                        <Text style={S.backTxt}>Gradebook</Text>
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, color: theme.colors.ink3, fontWeight: '500' }}>
+                            Gradebook
+                        </Text>
                     </TouchableOpacity>
-                ) : (
-                    <View>
-                        <Text style={S.title}>Gradebook</Text>
-                        {curPeriodName ? <Text style={S.titleSub}>{curPeriodName}</Text> : null}
-                    </View>
-                )}
-                <View style={S.headerRight}>
-                    {!cls && (
-                        <TouchableOpacity style={S.syncBtn} onPress={() => syncPeriod(curPeriodIdx ?? 0)} disabled={isSyncing}>
-                            {isSyncing ? <ActivityIndicator size="small" color={theme.colors.ink3} /> : <RefreshCw size={15} color={theme.colors.ink3} />}
-                        </TouchableOpacity>
-                    )}
                 </View>
-            </View>
+            ) : (
+                <View style={{
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    padding: 24, paddingTop: 28, paddingBottom: 20,
+                    borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                    backgroundColor: theme.colors.surface,
+                }}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.4 }}>
+                            Gradebook
+                        </Text>
+                        {curPeriodName ? (
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 2 }}>
+                                {curPeriodName} · {allClasses.length} classes
+                            </Text>
+                        ) : null}
+                    </View>
+                    <TouchableOpacity
+                        onPress={() => syncPeriod(curPeriodIdx ?? 0)}
+                        disabled={isSyncing}
+                        style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 6,
+                            paddingHorizontal: 12, paddingVertical: 8,
+                            borderRadius: 10,
+                            backgroundColor: theme.colors.surface,
+                            borderWidth: 1, borderColor: theme.colors.border2,
+                        }}
+                    >
+                        {isSyncing
+                            ? <ActivityIndicator size="small" color={theme.colors.ink3} />
+                            : <RefreshCw size={14} color={theme.colors.ink2} />
+                        }
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink2 }}>
+                            Sync
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
 
             {/* Quarter tabs */}
             {!cls && periods.length > 0 && (

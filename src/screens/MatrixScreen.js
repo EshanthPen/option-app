@@ -574,33 +574,86 @@ export default function MatrixScreen() {
 
     return (
         <View style={styles.container}>
+            {/* ── TopBar matching design ── */}
+            <View style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                padding: 24, paddingTop: 28, paddingBottom: 20,
+                borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                backgroundColor: theme.colors.surface,
+            }}>
+                <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.4 }}>
+                        Calendar
+                    </Text>
+                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 2 }}>
+                        {MN[month]} {year} · {tasks.length} tasks
+                    </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                        onPress={handleAutoPrioritize}
+                        disabled={saving}
+                        style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 6,
+                            paddingHorizontal: 12, paddingVertical: 8,
+                            backgroundColor: theme.colors.surface,
+                            borderWidth: 1, borderColor: theme.colors.border2,
+                            borderRadius: 10,
+                        }}
+                    >
+                        <Sparkles color={theme.colors.orange} size={14} />
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink2 }}>
+                            Auto-sort
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={handleSmartSchedule}
+                        disabled={saving}
+                        style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 6,
+                            paddingHorizontal: 12, paddingVertical: 8,
+                            backgroundColor: theme.colors.surface,
+                            borderWidth: 1, borderColor: theme.colors.border2,
+                            borderRadius: 10,
+                        }}
+                    >
+                        {saving ? <ActivityIndicator size="small" color={theme.colors.purple} /> : <Zap color={theme.colors.purple} size={14} />}
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink2 }}>
+                            Auto-schedule
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => setImportModalVisible(true)}
+                        style={{
+                            width: 36, height: 36, borderRadius: 10,
+                            backgroundColor: theme.colors.surface,
+                            borderWidth: 1, borderColor: theme.colors.border,
+                            alignItems: 'center', justifyContent: 'center',
+                        }}
+                    >
+                        <Download color={theme.colors.ink2} size={16} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={() => setModalVisible(true)}
+                        style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 6,
+                            paddingHorizontal: 14, paddingVertical: 9,
+                            backgroundColor: theme.colors.ink,
+                            borderRadius: 10,
+                        }}
+                    >
+                        <Plus color={theme.colors.bg} size={14} strokeWidth={2.5} />
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.bg }}>
+                            Add event
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
             <View style={[styles.mainLayout, IS_WIDE && styles.layoutWide]}>
                 {/* Left: Calendar Grid */}
                 <View style={IS_WIDE ? { flex: 1.5 } : { width: '100%' }}>
-                    {/* Header */}
-                    <View style={styles.headerRow}>
-                        <View>
-                            <Text style={styles.title}>Calendar</Text>
-                            <Text style={styles.subtitle}>{MN[month]} {year} · {tasks.length} tasks</Text>
-                        </View>
-                        <View style={styles.btnRow}>
-                            <TouchableOpacity style={[styles.btnDark, { backgroundColor: theme.colors.orange }]} onPress={handleAutoPrioritize} disabled={saving}>
-                                <Sparkles color="#fff" size={16} />
-                                <Text style={styles.btnDarkText}>Auto-Sort</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.btnDark, { backgroundColor: theme.colors.purple }]} onPress={handleSmartSchedule} disabled={saving}>
-                                {saving ? <ActivityIndicator size="small" color="#fff" /> : <Zap color="#fff" size={16} />}
-                                <Text style={styles.btnDarkText}>Auto-Schedule</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.btnOut} onPress={() => setImportModalVisible(true)}>
-                                <Download color={theme.colors.ink2} size={18} />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.btnDark} onPress={() => setModalVisible(true)}>
-                                <Plus color="#fff" size={18} />
-                                <Text style={styles.btnDarkText}>Add Event</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
+                    {/* (Old header removed — now in TopBar above) */}
 
                     {/* Legend */}
                     <View style={styles.legend}>

@@ -1,931 +1,859 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, Animated, TextInput, KeyboardAvoidingView,
-  Platform, RefreshControl,
+    View, Text, StyleSheet, TouchableOpacity, ScrollView,
+    ActivityIndicator, Animated, TextInput, KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import {
-  Sparkles, Brain, AlertTriangle, TrendingUp, Clock, ChevronRight,
-  CheckCircle, Target, Flame, BarChart3, Calendar, Zap, ArrowRight,
-  AlertCircle, Crown, Send, MessageCircle, BookOpen, RefreshCw,
-  Lock,
+    Sparkles, Brain, AlertTriangle, TrendingUp, Clock, ChevronRight,
+    CheckCircle, Target, Flame, BarChart3, Calendar, Zap, ArrowRight,
+    AlertCircle, Crown, Send, MessageCircle, BookOpen, RefreshCw,
+    Lock, Plus, Mic, Paperclip, GraduationCap, HelpCircle, ArrowUp,
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { usePremium } from '../context/PremiumContext';
 import { useNavigation } from '@react-navigation/native';
 import {
-  generateAIDailyBriefing,
-  generateAIWeeklyReport,
-  generateAIStudyPlan,
-  generateAIReschedule,
-  chatWithAI,
+    generateAIDailyBriefing,
+    generateAIWeeklyReport,
+    generateAIStudyPlan,
+    generateAIReschedule,
+    chatWithAI,
 } from '../utils/aiEngine';
+import { TopBar, Card, Button, Badge, EmptyState, SEM, SectionLabel } from '../components/DesignKit';
+
+const MODES = [
+    { id: 'chat',     label: 'Tutor',   icon: GraduationCap },
+    { id: 'briefing', label: 'Briefing',icon: Sparkles },
+    { id: 'plan',     label: 'Planner', icon: Calendar },
+    { id: 'report',   label: 'Report',  icon: BarChart3 },
+];
+
+const SUGGESTIONS = [
+    'Plan my week',
+    'Help me boost a low grade',
+    'Quiz me on my next test',
+    'Explain a concept',
+    'Write an essay outline',
+];
 
 export default function AIAssistantScreen() {
-  const { theme } = useTheme();
-  const { isPro } = usePremium();
-  const navigation = useNavigation();
-  const styles = getStyles(theme);
+    const { theme } = useTheme();
+    const { isPro } = usePremium();
+    const navigation = useNavigation();
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState('briefing');
-  const [briefing, setBriefing] = useState(null);
-  const [weeklyReport, setWeeklyReport] = useState(null);
-  const [studyPlan, setStudyPlan] = useState(null);
-  const [reschedule, setReschedule] = useState(null);
-  const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
-  const [tabLoading, setTabLoading] = useState(false);
+    const [mode, setMode] = useState('chat');
+    const [briefing, setBriefing] = useState(null);
+    const [weeklyReport, setWeeklyReport] = useState(null);
+    const [studyPlan, setStudyPlan] = useState(null);
+    const [reschedule, setReschedule] = useState(null);
+    const [tabLoading, setTabLoading] = useState(false);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scrollRef = useRef(null);
+    const [chatMessages, setChatMessages] = useState([]);
+    const [chatInput, setChatInput] = useState('');
+    const [chatLoading, setChatLoading] = useState(false);
 
-  useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    if (isPro) loadBriefing();
-    else setLoading(false);
-  }, [isPro]);
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const bottomRef = useRef(null);
+    const scrollRef = useRef(null);
 
-  // ── If not pro, show paywall ──────────────────────────────────
+    useEffect(() => {
+        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    }, []);
 
-  if (!isPro) {
-    return (
-      <View style={[styles.container, styles.paywallContainer]}>
-        <Animated.View style={[styles.paywallContent, { opacity: fadeAnim }]}>
-          <View style={styles.paywallIconWrap}>
-            <Sparkles size={36} color="#FFB800" />
-          </View>
-          <Text style={styles.paywallTitle}>AI Assistant</Text>
-          <Text style={styles.paywallSubtitle}>
-            Your personal AI-powered academic coach. Get daily briefings, study plans, weekly reports, and chat with AI about your academics.
-          </Text>
+    useEffect(() => {
+        // Auto-scroll chat to bottom on new messages
+        if (mode === 'chat' && bottomRef.current) {
+            setTimeout(() => bottomRef.current?.scrollToEnd?.({ animated: true }), 80);
+        }
+    }, [chatMessages, chatLoading, mode]);
 
-          <View style={styles.paywallFeatures}>
-            {[
-              { icon: Brain, text: 'AI-generated daily briefings & priorities' },
-              { icon: Calendar, text: 'Smart study plans tailored to your schedule' },
-              { icon: BarChart3, text: 'Detailed weekly performance reports' },
-              { icon: MessageCircle, text: 'Chat with AI about your academics' },
-              { icon: RefreshCw, text: 'Auto-reschedule when plans change' },
-              { icon: TrendingUp, text: 'Grade impact predictions' },
-            ].map((feature, i) => (
-              <View key={i} style={styles.paywallFeatureRow}>
-                <feature.icon size={18} color={theme.colors.accent} />
-                <Text style={styles.paywallFeatureText}>{feature.text}</Text>
-              </View>
-            ))}
-          </View>
+    // ── Paywall ────────────────────────────────────────────────
+    if (!isPro) {
+        return (
+            <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+                <TopBar title="AI Tutor" subtitle="Personalized academic coach" />
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+                    <Animated.View style={{
+                        opacity: fadeAnim, alignItems: 'center', maxWidth: 480,
+                    }}>
+                        <View style={{
+                            width: 64, height: 64, borderRadius: 16,
+                            backgroundColor: SEM.gold + '18',
+                            alignItems: 'center', justifyContent: 'center',
+                            marginBottom: 16,
+                        }}>
+                            <Sparkles size={30} color={SEM.gold} />
+                        </View>
+                        <Text style={{ fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5, marginBottom: 8, textAlign: 'center' }}>
+                            AI Tutor
+                        </Text>
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink3, textAlign: 'center', lineHeight: 20, marginBottom: 24 }}>
+                            Your personal AI-powered academic coach. Daily briefings, study plans, weekly reports, and chat with AI about your academics.
+                        </Text>
 
-          <TouchableOpacity
-            style={styles.paywallCta}
-            onPress={() => navigation.navigate('Premium')}
-            activeOpacity={0.8}
-          >
-            <Crown size={18} color="#121212" />
-            <Text style={styles.paywallCtaText}>Upgrade to Pro</Text>
-          </TouchableOpacity>
+                        <Card padding={20} style={{ width: '100%', marginBottom: 16 }}>
+                            {[
+                                { icon: Brain,         text: 'AI-generated daily briefings & priorities' },
+                                { icon: Calendar,      text: 'Smart study plans tailored to your schedule' },
+                                { icon: BarChart3,     text: 'Detailed weekly performance reports' },
+                                { icon: MessageCircle, text: 'Chat with AI about your academics' },
+                                { icon: RefreshCw,     text: 'Auto-reschedule when plans change' },
+                                { icon: TrendingUp,    text: 'Grade impact predictions' },
+                            ].map((f, i, arr) => {
+                                const Icon = f.icon;
+                                return (
+                                    <View key={i} style={{
+                                        flexDirection: 'row', alignItems: 'center', gap: 12,
+                                        paddingVertical: 10,
+                                        borderTopWidth: i > 0 ? 1 : 0,
+                                        borderTopColor: theme.colors.border,
+                                    }}>
+                                        <Icon size={18} color={theme.colors.accent} />
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink, flex: 1 }}>
+                                            {f.text}
+                                        </Text>
+                                    </View>
+                                );
+                            })}
+                        </Card>
 
-          <Text style={styles.paywallNote}>7-day free trial · Cancel anytime</Text>
-        </Animated.View>
-      </View>
-    );
-  }
-
-  // ── Data Loading ──────────────────────────────────────────────
-
-  const loadBriefing = async () => {
-    setLoading(true);
-    try {
-      const data = await generateAIDailyBriefing();
-      setBriefing(data);
-    } catch (err) {
-      console.error('Briefing error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadTab = async (tab) => {
-    setActiveTab(tab);
-    if (tab === 'briefing' && !briefing) return loadBriefing();
-    if (tab === 'report' && !weeklyReport) {
-      setTabLoading(true);
-      try {
-        const data = await generateAIWeeklyReport();
-        setWeeklyReport(data);
-      } catch (err) { console.error(err); }
-      finally { setTabLoading(false); }
-    }
-    if (tab === 'plan' && !studyPlan) {
-      setTabLoading(true);
-      try {
-        const data = await generateAIStudyPlan();
-        setStudyPlan(data);
-      } catch (err) { console.error(err); }
-      finally { setTabLoading(false); }
-    }
-    if (tab === 'reschedule' && !reschedule) {
-      setTabLoading(true);
-      try {
-        const data = await generateAIReschedule();
-        setReschedule(data);
-      } catch (err) { console.error(err); }
-      finally { setTabLoading(false); }
-    }
-  };
-
-  const handleSendChat = async () => {
-    if (!chatInput.trim()) return;
-    const msg = chatInput.trim();
-    setChatInput('');
-    setChatMessages(prev => [...prev, { role: 'user', content: msg }]);
-    setChatLoading(true);
-
-    try {
-      const response = await chatWithAI(msg);
-      setChatMessages(prev => [...prev, {
-        role: 'ai',
-        content: response.response,
-        suggestions: response.suggestions,
-        tip: response.relatedTip,
-      }]);
-    } catch {
-      setChatMessages(prev => [...prev, {
-        role: 'ai',
-        content: "Sorry, I couldn't process that. Please try again.",
-      }]);
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    setBriefing(null);
-    setWeeklyReport(null);
-    setStudyPlan(null);
-    setReschedule(null);
-    await loadBriefing();
-    setRefreshing(false);
-  };
-
-  // ── Render Helpers ────────────────────────────────────────────
-
-  const alertColor = (type) => {
-    switch (type) {
-      case 'danger': return theme.colors.red;
-      case 'warning': return theme.colors.orange;
-      case 'success': case 'info': return theme.colors.green;
-      default: return theme.colors.blue;
-    }
-  };
-
-  const urgencyColor = (u) => {
-    switch (u) {
-      case 'critical': return theme.colors.red;
-      case 'high': return theme.colors.orange;
-      case 'medium': return theme.colors.blue;
-      default: return theme.colors.ink3;
-    }
-  };
-
-  // ── Loading State ─────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <View style={styles.loadingWrap}>
-          <Sparkles size={28} color="#FFB800" />
-          <Text style={styles.loadingTitle}>Analyzing your data...</Text>
-          <Text style={styles.loadingSubtext}>AI is building your personalized plan</Text>
-          <ActivityIndicator size="small" color={theme.colors.ink3} style={{ marginTop: 12 }} />
-        </View>
-      </View>
-    );
-  }
-
-  // ── Tab Content ───────────────────────────────────────────────
-
-  const renderBriefing = () => {
-    if (!briefing) return null;
-
-    // Handle AI-powered response format
-    const isAI = briefing.source === 'ai';
-
-    return (
-      <View style={styles.tabContent}>
-        {/* Greeting */}
-        <View style={styles.greetingCard}>
-          <View style={styles.aiBadge}>
-            <Sparkles size={12} color="#FFB800" />
-            <Text style={styles.aiBadgeText}>
-              {isAI ? 'AI-Powered' : 'Smart Analysis'}
-            </Text>
-          </View>
-          <Text style={styles.greetingText}>
-            {isAI ? briefing.greeting : briefing.greeting + '!'}
-          </Text>
-          <Text style={styles.summaryText}>
-            {isAI ? briefing.summary : briefing.summary}
-          </Text>
-        </View>
-
-        {/* Priorities (AI format) */}
-        {isAI && briefing.priorities?.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              <Target size={16} color={theme.colors.accent} /> Today's Priorities
-            </Text>
-            {briefing.priorities.map((p, i) => (
-              <View key={i} style={styles.priorityCard}>
-                <View style={styles.priorityHeader}>
-                  <View style={[styles.urgencyDot, { backgroundColor: urgencyColor(p.urgency) }]} />
-                  <Text style={styles.priorityTitle}>{p.title}</Text>
-                  <View style={[styles.urgencyBadge, { backgroundColor: urgencyColor(p.urgency) + '18' }]}>
-                    <Text style={[styles.urgencyText, { color: urgencyColor(p.urgency) }]}>
-                      {p.urgency}
-                    </Text>
-                  </View>
+                        <Button variant="gold" size="lg" icon={Crown} onPress={() => navigation.navigate('Premium')}>
+                            Upgrade to Pro
+                        </Button>
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 8 }}>
+                            7-day free trial · cancel anytime
+                        </Text>
+                    </Animated.View>
                 </View>
-                <Text style={styles.priorityReason}>{p.reason}</Text>
-                <View style={styles.actionRow}>
-                  <Zap size={12} color={theme.colors.accent} />
-                  <Text style={styles.actionText}>{p.suggestedAction}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Heuristic fallback: todaysPlan */}
-        {!isAI && briefing.todaysPlan?.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Today's Plan</Text>
-            {briefing.todaysPlan.map((task, i) => (
-              <View key={i} style={styles.priorityCard}>
-                <View style={styles.priorityHeader}>
-                  <View style={[styles.urgencyDot, { backgroundColor: urgencyColor(task.priorityLabel?.toLowerCase()) }]} />
-                  <Text style={styles.priorityTitle}>{task.title}</Text>
-                </View>
-                <Text style={styles.priorityReason}>
-                  {task.isOverdue ? 'OVERDUE' : `Due in ${task.daysUntilDue} day${task.daysUntilDue !== 1 ? 's' : ''}`} · {task.duration}m
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Study Plan (AI) */}
-        {isAI && briefing.studyPlan?.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              <Clock size={16} color={theme.colors.blue} /> Suggested Schedule
-            </Text>
-            {briefing.studyPlan.map((block, i) => (
-              <View key={i} style={styles.blockCard}>
-                <View style={styles.blockTime}>
-                  <Text style={styles.blockTimeText}>{block.time}</Text>
-                  <Text style={styles.blockDuration}>{block.duration}</Text>
-                </View>
-                <View style={styles.blockInfo}>
-                  <Text style={styles.blockTask}>{block.task}</Text>
-                  <Text style={styles.blockTip}>{block.tip}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Alerts */}
-        {briefing.alerts?.length > 0 && (
-          <View style={styles.section}>
-            {briefing.alerts.map((alert, i) => (
-              <View key={i} style={[styles.alertCard, { borderLeftColor: alertColor(alert.type) }]}>
-                <AlertCircle size={14} color={alertColor(alert.type)} />
-                <Text style={styles.alertText}>{alert.message}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Motivation */}
-        {isAI && briefing.motivation && (
-          <View style={styles.motivationCard}>
-            <Sparkles size={14} color="#FFB800" />
-            <Text style={styles.motivationText}>{briefing.motivation}</Text>
-          </View>
-        )}
-
-        {/* Top Tip */}
-        {isAI && briefing.topTip && (
-          <View style={styles.tipCard}>
-            <Text style={styles.tipLabel}>AI Tip</Text>
-            <Text style={styles.tipText}>{briefing.topTip}</Text>
-          </View>
-        )}
-
-        {/* Heuristic tips */}
-        {!isAI && briefing.tips?.length > 0 && (
-          <View style={styles.tipCard}>
-            <Text style={styles.tipLabel}>Tips</Text>
-            {briefing.tips.map((tip, i) => (
-              <Text key={i} style={styles.tipText}>• {tip}</Text>
-            ))}
-          </View>
-        )}
-      </View>
-    );
-  };
-
-  const renderReport = () => {
-    if (tabLoading) return <LoadingIndicator theme={theme} message="Generating weekly report..." />;
-    if (!weeklyReport) return null;
-
-    const isAI = weeklyReport.source === 'ai';
-
-    return (
-      <View style={styles.tabContent}>
-        {isAI ? (
-          <>
-            <View style={styles.reportGradeCard}>
-              <Text style={styles.reportGradeLabel}>Week Grade</Text>
-              <Text style={styles.reportGradeValue}>{weeklyReport.overallGrade}</Text>
             </View>
-            <Text style={styles.reportHeadline}>{weeklyReport.headline}</Text>
+        );
+    }
 
-            {weeklyReport.wins?.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Wins</Text>
-                {weeklyReport.wins.map((w, i) => (
-                  <View key={i} style={styles.winRow}>
-                    <CheckCircle size={14} color={theme.colors.green} />
-                    <Text style={styles.winText}>{w}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+    // ── Loaders ──────────────────────────────────────────────
+    const loadMode = async (m) => {
+        setMode(m);
+        if (m === 'briefing' && !briefing) {
+            setTabLoading(true);
+            try { const data = await generateAIDailyBriefing(); setBriefing(data); }
+            catch (e) { console.error(e); }
+            finally { setTabLoading(false); }
+        }
+        if (m === 'plan' && !studyPlan) {
+            setTabLoading(true);
+            try { const data = await generateAIStudyPlan(); setStudyPlan(data); }
+            catch (e) { console.error(e); }
+            finally { setTabLoading(false); }
+        }
+        if (m === 'report' && !weeklyReport) {
+            setTabLoading(true);
+            try { const data = await generateAIWeeklyReport(); setWeeklyReport(data); }
+            catch (e) { console.error(e); }
+            finally { setTabLoading(false); }
+        }
+    };
 
-            {weeklyReport.improvements?.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Areas to Improve</Text>
-                {weeklyReport.improvements.map((imp, i) => (
-                  <View key={i} style={styles.winRow}>
-                    <ArrowRight size={14} color={theme.colors.orange} />
-                    <Text style={styles.winText}>{imp}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+    const handleSendChat = async (txt) => {
+        const msg = (txt || chatInput).trim();
+        if (!msg) return;
+        setChatInput('');
+        setChatMessages(prev => [...prev, { role: 'user', content: msg }]);
+        setChatLoading(true);
+        try {
+            const response = await chatWithAI(msg);
+            setChatMessages(prev => [...prev, {
+                role: 'ai',
+                content: response.response,
+                suggestions: response.suggestions,
+                tip: response.relatedTip,
+            }]);
+        } catch {
+            setChatMessages(prev => [...prev, {
+                role: 'ai', content: "Sorry, I couldn't process that. Please try again.",
+            }]);
+        } finally {
+            setChatLoading(false);
+        }
+    };
 
-            {weeklyReport.gradeAnalysis && (
-              <View style={styles.analysisCard}>
-                <BookOpen size={14} color={theme.colors.accent} />
-                <Text style={styles.analysisText}>{weeklyReport.gradeAnalysis}</Text>
-              </View>
-            )}
+    const refreshCurrentMode = () => {
+        if (mode === 'briefing') { setBriefing(null); loadMode('briefing'); }
+        if (mode === 'plan')     { setStudyPlan(null); loadMode('plan'); }
+        if (mode === 'report')   { setWeeklyReport(null); loadMode('report'); }
+        if (mode === 'chat')     { setChatMessages([]); }
+    };
 
-            {weeklyReport.studyPatternInsight && (
-              <View style={styles.analysisCard}>
-                <Clock size={14} color={theme.colors.blue} />
-                <Text style={styles.analysisText}>{weeklyReport.studyPatternInsight}</Text>
-              </View>
-            )}
-
-            {weeklyReport.nextWeekPlan?.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Next Week Goals</Text>
-                {weeklyReport.nextWeekPlan.map((g, i) => (
-                  <View key={i} style={styles.goalCard}>
-                    <Text style={styles.goalTitle}>{g.goal}</Text>
-                    <Text style={styles.goalAction}>{g.action}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {weeklyReport.encouragement && (
-              <View style={styles.motivationCard}>
-                <Sparkles size={14} color="#FFB800" />
-                <Text style={styles.motivationText}>{weeklyReport.encouragement}</Text>
-              </View>
-            )}
-          </>
-        ) : (
-          // Heuristic fallback
-          <>
-            <Text style={styles.reportHeadline}>{weeklyReport.assessment}</Text>
-            {weeklyReport.recommendations?.map((rec, i) => (
-              <View key={i} style={styles.analysisCard}>
-                <ArrowRight size={14} color={theme.colors.accent} />
-                <Text style={styles.analysisText}>{rec.message}</Text>
-              </View>
-            ))}
-          </>
-        )}
-      </View>
-    );
-  };
-
-  const renderStudyPlan = () => {
-    if (tabLoading) return <LoadingIndicator theme={theme} message="Creating study plan..." />;
-    if (!studyPlan) return null;
-
-    const isAI = studyPlan.source === 'ai';
-
-    return (
-      <View style={styles.tabContent}>
-        {isAI ? (
-          <>
-            <View style={styles.planHeader}>
-              <Text style={styles.planOverview}>{studyPlan.overview}</Text>
-              <View style={styles.planTimeBadge}>
-                <Clock size={14} color={theme.colors.accent} />
-                <Text style={styles.planTimeText}>{studyPlan.totalStudyTime}</Text>
-              </View>
-            </View>
-
-            {studyPlan.blocks?.map((block, i) => (
-              <View key={i} style={styles.studyBlock}>
-                <View style={styles.studyBlockTime}>
-                  <Text style={styles.studyBlockTimeText}>{block.startTime}</Text>
-                  <View style={styles.studyBlockLine} />
-                  <Text style={styles.studyBlockEndText}>{block.endTime}</Text>
-                </View>
-                <View style={styles.studyBlockContent}>
-                  <Text style={styles.studyBlockTask}>{block.task}</Text>
-                  <View style={styles.techniqueRow}>
-                    <Brain size={12} color={theme.colors.purple} />
-                    <Text style={styles.techniqueText}>{block.technique}</Text>
-                  </View>
-                  <Text style={styles.studyBlockReason}>{block.reason}</Text>
-                  {block.breakAfter && (
-                    <Text style={styles.breakText}>{block.breakAfter}</Text>
-                  )}
-                </View>
-              </View>
-            ))}
-
-            {studyPlan.tips?.length > 0 && (
-              <View style={styles.tipCard}>
-                <Text style={styles.tipLabel}>Study Tips</Text>
-                {studyPlan.tips.map((tip, i) => (
-                  <Text key={i} style={styles.tipText}>• {tip}</Text>
-                ))}
-              </View>
-            )}
-          </>
-        ) : (
-          // Heuristic fallback
-          <>
-            <Text style={styles.planOverview}>{studyPlan.message}</Text>
-            {studyPlan.blocks?.map((block, i) => (
-              <View key={i} style={styles.studyBlock}>
-                <View style={styles.studyBlockTime}>
-                  <Text style={styles.studyBlockTimeText}>{block.suggestedStart}</Text>
-                </View>
-                <View style={styles.studyBlockContent}>
-                  <Text style={styles.studyBlockTask}>{block.title}</Text>
-                  <Text style={styles.studyBlockReason}>{block.reason}</Text>
-                </View>
-              </View>
-            ))}
-          </>
-        )}
-      </View>
-    );
-  };
-
-  const renderChat = () => (
-    <View style={styles.chatContainer}>
-      <ScrollView
-        ref={scrollRef}
-        style={styles.chatScroll}
-        contentContainerStyle={styles.chatContent}
-        onContentSizeChange={() => scrollRef.current?.scrollToEnd?.({ animated: true })}
-      >
-        {chatMessages.length === 0 && (
-          <View style={styles.chatEmpty}>
-            <MessageCircle size={32} color={theme.colors.ink4} />
-            <Text style={styles.chatEmptyTitle}>Ask me anything</Text>
-            <Text style={styles.chatEmptyText}>
-              I know your tasks, grades, schedule, and study patterns. Ask me for advice, study tips, or help planning.
-            </Text>
-            <View style={styles.chatSuggestions}>
-              {[
-                "What should I focus on this week?",
-                "How can I improve my grades in my lowest class?",
-                "Create a study plan for my upcoming test",
-                "Am I on track with my assignments?",
-              ].map((s, i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={styles.chatSuggestionChip}
-                  onPress={() => { setChatInput(s); }}
-                >
-                  <Text style={styles.chatSuggestionText}>{s}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {chatMessages.map((msg, i) => (
-          <View key={i} style={[
-            styles.chatBubble,
-            msg.role === 'user' ? styles.chatBubbleUser : styles.chatBubbleAI,
-          ]}>
-            {msg.role === 'ai' && (
-              <View style={styles.chatAILabel}>
-                <Sparkles size={12} color="#FFB800" />
-                <Text style={styles.chatAILabelText}>Option AI</Text>
-              </View>
-            )}
-            <Text style={[
-              styles.chatBubbleText,
-              msg.role === 'user' && styles.chatBubbleTextUser,
-            ]}>
-              {msg.content}
-            </Text>
-            {msg.suggestions?.length > 0 && (
-              <View style={styles.chatSuggestionsInline}>
-                {msg.suggestions.map((s, j) => (
-                  <View key={j} style={styles.chatSuggestionInline}>
-                    <ArrowRight size={10} color={theme.colors.accent} />
-                    <Text style={styles.chatSuggestionInlineText}>{s}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-            {msg.tip && (
-              <View style={styles.chatTipInline}>
-                <Sparkles size={10} color="#FFB800" />
-                <Text style={styles.chatTipInlineText}>{msg.tip}</Text>
-              </View>
-            )}
-          </View>
-        ))}
-
-        {chatLoading && (
-          <View style={[styles.chatBubble, styles.chatBubbleAI]}>
-            <View style={styles.chatAILabel}>
-              <Sparkles size={12} color="#FFB800" />
-              <Text style={styles.chatAILabelText}>Option AI</Text>
-            </View>
-            <View style={styles.typingIndicator}>
-              <View style={styles.typingDot} />
-              <View style={[styles.typingDot, { opacity: 0.6 }]} />
-              <View style={[styles.typingDot, { opacity: 0.3 }]} />
-            </View>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Chat Input */}
-      <View style={styles.chatInputRow}>
-        <TextInput
-          style={styles.chatInput}
-          placeholder="Ask about your academics..."
-          placeholderTextColor={theme.colors.ink4}
-          value={chatInput}
-          onChangeText={setChatInput}
-          onSubmitEditing={handleSendChat}
-          returnKeyType="send"
-          multiline={false}
-        />
-        <TouchableOpacity
-          style={[styles.sendBtn, !chatInput.trim() && styles.sendBtnDisabled]}
-          onPress={handleSendChat}
-          disabled={!chatInput.trim() || chatLoading}
-        >
-          <Send size={18} color={chatInput.trim() ? '#121212' : theme.colors.ink4} />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  // ── Main Render ───────────────────────────────────────────────
-
-  const TABS = [
-    { key: 'briefing', label: 'Briefing', icon: Sparkles },
-    { key: 'plan', label: 'Study Plan', icon: Calendar },
-    { key: 'report', label: 'Report', icon: BarChart3 },
-    { key: 'chat', label: 'Chat', icon: MessageCircle },
-  ];
-
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <Animated.View style={[{ flex: 1 }, { opacity: fadeAnim }]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={styles.aiIconWrap}>
-              <Sparkles size={20} color="#FFB800" />
-            </View>
-            <View>
-              <Text style={styles.headerTitle}>AI Assistant</Text>
-              <Text style={styles.headerSubtitle}>Powered by AI</Text>
-            </View>
-          </View>
-          <TouchableOpacity onPress={onRefresh} style={styles.refreshBtn}>
-            <RefreshCw size={18} color={theme.colors.ink3} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Tab Bar */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar}>
-          {TABS.map(tab => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-              onPress={() => loadTab(tab.key)}
-              activeOpacity={0.7}
-            >
-              <tab.icon size={14} color={activeTab === tab.key ? theme.colors.ink : theme.colors.ink3} />
-              <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Content */}
-        {activeTab === 'chat' ? renderChat() : (
-          <ScrollView
-            style={styles.scrollContent}
-            contentContainerStyle={{ paddingBottom: 40 }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.ink3} />
+    // ── Avatar for chat bubbles ──────────────────────────────
+    const Avatar = ({ role }) => (
+        <View style={{
+            width: 32, height: 32, borderRadius: 8,
+            backgroundColor: role === 'user' ? theme.colors.surface2 : theme.colors.ink,
+            alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+            {role === 'user'
+                ? <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '700', color: theme.colors.ink }}>You</Text>
+                : <Sparkles size={15} color="#fff" />
             }
-          >
-            {activeTab === 'briefing' && renderBriefing()}
-            {activeTab === 'report' && renderReport()}
-            {activeTab === 'plan' && renderStudyPlan()}
-          </ScrollView>
-        )}
-      </Animated.View>
-    </KeyboardAvoidingView>
-  );
+        </View>
+    );
+
+    const Bubble = ({ role, children }) => (
+        <View style={{
+            flexDirection: 'row', gap: 12, marginBottom: 16,
+            flexDirection: role === 'user' ? 'row-reverse' : 'row',
+        }}>
+            <Avatar role={role} />
+            <View style={{
+                maxWidth: '75%',
+                padding: 14, paddingHorizontal: 16,
+                borderRadius: role === 'user' ? 14 : 14,
+                borderTopRightRadius: role === 'user' ? 4 : 14,
+                borderTopLeftRadius:  role === 'user' ? 14 : 4,
+                backgroundColor: role === 'user' ? theme.colors.ink : theme.colors.surface,
+                borderWidth: role === 'user' ? 0 : 1,
+                borderColor: theme.colors.border,
+                ...theme.shadows.sm,
+            }}>
+                {children}
+            </View>
+        </View>
+    );
+
+    return (
+        <View style={{ flex: 1, backgroundColor: theme.colors.bg, flexDirection: 'row' }}>
+
+            {/* ── Left sidebar: chat history (web/desktop only) ── */}
+            {Platform.OS === 'web' && (
+                <View style={{
+                    width: 240, flexShrink: 0,
+                    backgroundColor: theme.colors.surface,
+                    borderRightWidth: 1, borderRightColor: theme.colors.border,
+                    display: 'flex', flexDirection: 'column',
+                }}>
+                    <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                        <Button variant="primary" icon={Plus} onPress={() => setChatMessages([])}>
+                            New conversation
+                        </Button>
+                    </View>
+                    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 8 }}>
+                        <SectionLabel style={{ paddingHorizontal: 10, marginBottom: 4 }}>Recent</SectionLabel>
+                        {chatMessages.length === 0 && [
+                            'Calc BC integration help',
+                            'APUSH essay thesis review',
+                            'Physics momentum review',
+                            'Study plan for midterms',
+                        ].map((title, i) => (
+                            <View key={i} style={{
+                                padding: 10,
+                                borderRadius: 8,
+                                marginBottom: 2,
+                                backgroundColor: i === 0 ? theme.colors.surface2 : 'transparent',
+                            }}>
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: i === 0 ? '600' : '500', color: theme.colors.ink }} numberOfLines={1}>
+                                    {title}
+                                </Text>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 2 }}>
+                                    Sample
+                                </Text>
+                            </View>
+                        ))}
+                    </ScrollView>
+                </View>
+            )}
+
+            {/* ── Main panel ── */}
+            <View style={{ flex: 1, flexDirection: 'column' }}>
+
+                {/* Header with mode pills + status */}
+                <View style={{
+                    padding: 16, paddingHorizontal: 28,
+                    borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                    backgroundColor: theme.colors.surface,
+                    flexDirection: 'row', alignItems: 'center', gap: 12,
+                }}>
+                    <View style={{
+                        width: 38, height: 38, borderRadius: 10,
+                        backgroundColor: theme.colors.ink,
+                        alignItems: 'center', justifyContent: 'center',
+                    }}>
+                        <Sparkles size={18} color="#fff" strokeWidth={2} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '700', color: theme.colors.ink }}>
+                            Option AI Tutor
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={{ color: SEM.green, fontSize: 11 }}>●</Text>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: SEM.green }}>
+                                Online · Knows your grades and schedule
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* Mode pills */}
+                    <View style={{
+                        flexDirection: 'row', gap: 4,
+                        backgroundColor: theme.colors.surface2,
+                        padding: 3, borderRadius: 8,
+                    }}>
+                        {MODES.map((m) => {
+                            const active = mode === m.id;
+                            const Icon = m.icon;
+                            return (
+                                <TouchableOpacity
+                                    key={m.id}
+                                    onPress={() => loadMode(m.id)}
+                                    activeOpacity={0.85}
+                                    style={{
+                                        paddingHorizontal: 12, paddingVertical: 6,
+                                        borderRadius: 6,
+                                        backgroundColor: active ? theme.colors.surface : 'transparent',
+                                        flexDirection: 'row', alignItems: 'center', gap: 5,
+                                        ...(active ? theme.shadows.sm : {}),
+                                    }}
+                                >
+                                    <Icon size={12} color={active ? theme.colors.ink : theme.colors.ink3} />
+                                    <Text style={{
+                                        fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '600',
+                                        color: active ? theme.colors.ink : theme.colors.ink3,
+                                    }}>
+                                        {m.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                    <TouchableOpacity onPress={refreshCurrentMode} style={{ padding: 6 }}>
+                        <RefreshCw size={16} color={theme.colors.ink3} />
+                    </TouchableOpacity>
+                </View>
+
+                {/* Content / Messages */}
+                <ScrollView
+                    ref={bottomRef}
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ padding: 28, paddingBottom: 16 }}
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={{ maxWidth: 760, alignSelf: 'center', width: '100%' }}>
+
+                        {/* CHAT MODE */}
+                        {mode === 'chat' && (
+                            <>
+                                {chatMessages.length === 0 && !chatLoading && (
+                                    <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                                        <View style={{
+                                            width: 56, height: 56, borderRadius: 28,
+                                            backgroundColor: theme.colors.ink,
+                                            alignItems: 'center', justifyContent: 'center',
+                                            marginBottom: 14,
+                                        }}>
+                                            <Sparkles size={26} color="#fff" />
+                                        </View>
+                                        <Text style={{ fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, marginBottom: 6 }}>
+                                            Hi — I'm your Option AI Tutor
+                                        </Text>
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, textAlign: 'center', maxWidth: 420 }}>
+                                            I know your grades, assignments, and study patterns. Ask me anything academic — or pick a mode above.
+                                        </Text>
+                                    </View>
+                                )}
+                                {chatMessages.map((m, i) => (
+                                    <Bubble key={i} role={m.role}>
+                                        <Text style={{
+                                            fontFamily: theme.fonts.m, fontSize: 14, lineHeight: 21,
+                                            color: m.role === 'user' ? theme.colors.bg : theme.colors.ink,
+                                        }}>
+                                            {(m.content || '').split('**').map((part, j) =>
+                                                j % 2 === 1 ? <Text key={j} style={{ fontWeight: '700' }}>{part}</Text> : part
+                                            )}
+                                        </Text>
+                                        {m.suggestions?.length > 0 && (
+                                            <View style={{ marginTop: 10, gap: 6 }}>
+                                                {m.suggestions.map((s, j) => (
+                                                    <TouchableOpacity key={j} onPress={() => handleSendChat(s)} style={{
+                                                        flexDirection: 'row', alignItems: 'center', gap: 6,
+                                                        paddingVertical: 6, paddingHorizontal: 10,
+                                                        backgroundColor: theme.colors.surface2,
+                                                        borderRadius: 8, alignSelf: 'flex-start',
+                                                    }}>
+                                                        <ArrowRight size={11} color={theme.colors.ink3} />
+                                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, color: theme.colors.ink2, fontWeight: '500' }}>
+                                                            {s}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        )}
+                                        {m.tip && (
+                                            <View style={{
+                                                flexDirection: 'row', alignItems: 'flex-start', gap: 6,
+                                                marginTop: 10, padding: 10,
+                                                backgroundColor: SEM.gold + '12',
+                                                borderRadius: 8,
+                                            }}>
+                                                <Sparkles size={12} color={SEM.gold} style={{ marginTop: 2 }} />
+                                                <Text style={{ flex: 1, fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2, lineHeight: 17 }}>
+                                                    {m.tip}
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </Bubble>
+                                ))}
+                                {chatLoading && (
+                                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                                        <Avatar role="ai" />
+                                        <View style={{
+                                            padding: 14, paddingHorizontal: 16,
+                                            backgroundColor: theme.colors.surface,
+                                            borderWidth: 1, borderColor: theme.colors.border,
+                                            borderRadius: 14, borderTopLeftRadius: 4,
+                                            ...theme.shadows.sm,
+                                        }}>
+                                            <View style={{ flexDirection: 'row', gap: 4 }}>
+                                                {[0, 1, 2].map((i) => (
+                                                    <View key={i} style={{
+                                                        width: 6, height: 6, borderRadius: 3,
+                                                        backgroundColor: theme.colors.ink3,
+                                                    }} />
+                                                ))}
+                                            </View>
+                                        </View>
+                                    </View>
+                                )}
+                            </>
+                        )}
+
+                        {/* BRIEFING MODE */}
+                        {mode === 'briefing' && (
+                            <View>
+                                {tabLoading && <LoadingMessage theme={theme} message="Analyzing your day…" />}
+                                {!tabLoading && !briefing && (
+                                    <Bubble role="ai">
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink }}>
+                                            Tap "Briefing" again to load your daily plan.
+                                        </Text>
+                                    </Bubble>
+                                )}
+                                {!tabLoading && briefing && (
+                                    <BriefingView briefing={briefing} theme={theme} />
+                                )}
+                            </View>
+                        )}
+
+                        {/* PLAN MODE */}
+                        {mode === 'plan' && (
+                            <View>
+                                {tabLoading && <LoadingMessage theme={theme} message="Building your study plan…" />}
+                                {!tabLoading && studyPlan && (
+                                    <PlanView plan={studyPlan} theme={theme} />
+                                )}
+                            </View>
+                        )}
+
+                        {/* REPORT MODE */}
+                        {mode === 'report' && (
+                            <View>
+                                {tabLoading && <LoadingMessage theme={theme} message="Generating weekly report…" />}
+                                {!tabLoading && weeklyReport && (
+                                    <ReportView report={weeklyReport} theme={theme} />
+                                )}
+                            </View>
+                        )}
+                    </View>
+                </ScrollView>
+
+                {/* ── Input bar (chat mode only) ── */}
+                {mode === 'chat' && (
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                        <View style={{
+                            padding: 16, paddingHorizontal: 28,
+                            borderTopWidth: 1, borderTopColor: theme.colors.border,
+                            backgroundColor: theme.colors.surface,
+                        }}>
+                            <View style={{ maxWidth: 760, alignSelf: 'center', width: '100%' }}>
+                                {chatMessages.length <= 1 && (
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                                        {SUGGESTIONS.map((s) => (
+                                            <TouchableOpacity
+                                                key={s}
+                                                onPress={() => handleSendChat(s)}
+                                                style={{
+                                                    paddingHorizontal: 12, paddingVertical: 7,
+                                                    backgroundColor: theme.colors.bg,
+                                                    borderWidth: 1, borderColor: theme.colors.border,
+                                                    borderRadius: 9999,
+                                                }}
+                                            >
+                                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2 }}>
+                                                    {s}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
+                                <View style={{
+                                    flexDirection: 'row', alignItems: 'center', gap: 6,
+                                    backgroundColor: theme.colors.bg,
+                                    borderWidth: 1, borderColor: theme.colors.border,
+                                    borderRadius: 12,
+                                    padding: 8, paddingLeft: 14,
+                                }}>
+                                    <Paperclip size={16} color={theme.colors.ink3} />
+                                    <TextInput
+                                        value={chatInput}
+                                        onChangeText={setChatInput}
+                                        onSubmitEditing={() => handleSendChat()}
+                                        placeholder="Ask about grades, assignments, or study tips…"
+                                        placeholderTextColor={theme.colors.ink3}
+                                        style={{
+                                            flex: 1, paddingVertical: 6,
+                                            fontFamily: theme.fonts.m, fontSize: 14,
+                                            color: theme.colors.ink, outline: 'none',
+                                        }}
+                                    />
+                                    <TouchableOpacity
+                                        onPress={() => handleSendChat()}
+                                        disabled={!chatInput.trim() || chatLoading}
+                                        style={{
+                                            width: 32, height: 32, borderRadius: 8,
+                                            backgroundColor: chatInput.trim() ? theme.colors.ink : theme.colors.surface2,
+                                            alignItems: 'center', justifyContent: 'center',
+                                        }}
+                                    >
+                                        <ArrowUp size={14} color={chatInput.trim() ? '#fff' : theme.colors.ink3} />
+                                    </TouchableOpacity>
+                                </View>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 8, textAlign: 'center' }}>
+                                    Option AI can make mistakes. Verify important info.
+                                </Text>
+                            </View>
+                        </View>
+                    </KeyboardAvoidingView>
+                )}
+            </View>
+        </View>
+    );
 }
 
-// ── Loading Indicator Component ─────────────────────────────────
+// ── Loading message helper ──────────────────────────────────
+function LoadingMessage({ theme, message }) {
+    return (
+        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 32, justifyContent: 'center' }}>
+            <ActivityIndicator color={theme.colors.ink3} size="small" />
+            <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 }}>{message}</Text>
+        </View>
+    );
+}
 
-const LoadingIndicator = ({ theme, message }) => (
-  <View style={{ alignItems: 'center', padding: 40 }}>
-    <Sparkles size={24} color="#FFB800" />
-    <Text style={{ fontSize: 13, color: theme.colors.ink3, marginTop: 10, fontFamily: theme.fonts.m }}>
-      {message}
-    </Text>
-    <ActivityIndicator size="small" color={theme.colors.ink3} style={{ marginTop: 8 }} />
-  </View>
-);
+// ── Briefing renderer (chat-bubble style) ──────────────────
+function BriefingView({ briefing, theme }) {
+    const isAI = briefing.source === 'ai';
+    return (
+        <View>
+            {/* AI bubble: greeting */}
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+                <View style={{
+                    width: 32, height: 32, borderRadius: 8, backgroundColor: theme.colors.ink,
+                    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                    <Sparkles size={15} color="#fff" />
+                </View>
+                <View style={{ flex: 1, gap: 12 }}>
+                    <Card padding={16}>
+                        <Text style={{ fontFamily: theme.fonts.d, fontSize: 17, fontWeight: '700', color: theme.colors.ink, marginBottom: 6 }}>
+                            {isAI ? briefing.greeting : (briefing.greeting + '!')}
+                        </Text>
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink2, lineHeight: 19 }}>
+                            {briefing.summary}
+                        </Text>
+                    </Card>
 
-// ── Styles ──────────────────────────────────────────────────────
+                    {isAI && briefing.priorities?.length > 0 && (
+                        <Card padding={16}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                                <Target size={14} color={SEM.purple} />
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>
+                                    Today's priorities
+                                </Text>
+                            </View>
+                            {briefing.priorities.map((p, i) => {
+                                const ucol = p.urgency === 'critical' ? SEM.red : p.urgency === 'high' ? SEM.orange : p.urgency === 'medium' ? SEM.blue : theme.colors.ink3;
+                                return (
+                                    <View key={i} style={{
+                                        marginTop: i > 0 ? 10 : 0,
+                                        padding: 12,
+                                        backgroundColor: theme.colors.surface2 + '70',
+                                        borderRadius: 8,
+                                    }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: ucol }} />
+                                            <Text style={{ flex: 1, fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>
+                                                {p.title}
+                                            </Text>
+                                            <Badge color={ucol}>{p.urgency}</Badge>
+                                        </View>
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginBottom: 6 }}>
+                                            {p.reason}
+                                        </Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <Zap size={11} color={SEM.gold} />
+                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, color: theme.colors.ink2, fontWeight: '600' }}>
+                                                {p.suggestedAction}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                );
+                            })}
+                        </Card>
+                    )}
 
-const getStyles = (theme) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.bg },
+                    {isAI && briefing.studyPlan?.length > 0 && (
+                        <Card padding={16}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                                <Clock size={14} color={SEM.blue} />
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>
+                                    Suggested schedule
+                                </Text>
+                            </View>
+                            {briefing.studyPlan.map((b, i) => (
+                                <View key={i} style={{ flexDirection: 'row', gap: 12, paddingVertical: 8, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: theme.colors.border }}>
+                                    <View style={{ width: 70 }}>
+                                        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, fontWeight: '600', color: theme.colors.ink }}>
+                                            {b.time}
+                                        </Text>
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3 }}>
+                                            {b.duration}
+                                        </Text>
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>
+                                            {b.task}
+                                        </Text>
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>
+                                            {b.tip}
+                                        </Text>
+                                    </View>
+                                </View>
+                            ))}
+                        </Card>
+                    )}
 
-  // Paywall
-  paywallContainer: { justifyContent: 'center', alignItems: 'center', padding: 24 },
-  paywallContent: { maxWidth: 420, alignItems: 'center' },
-  paywallIconWrap: {
-    width: 72, height: 72, borderRadius: 24,
-    backgroundColor: 'rgba(255, 184, 0, 0.12)',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 20,
-  },
-  paywallTitle: { fontSize: 28, fontFamily: theme.fonts.b, fontWeight: '800', color: theme.colors.ink, marginBottom: 8 },
-  paywallSubtitle: { fontSize: 14, fontFamily: theme.fonts.m, color: theme.colors.ink3, textAlign: 'center', lineHeight: 22, marginBottom: 28 },
-  paywallFeatures: { width: '100%', gap: 12, marginBottom: 28 },
-  paywallFeatureRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: theme.colors.surface, padding: 14, borderRadius: theme.radii.r,
-    borderWidth: 1, borderColor: theme.colors.border,
-  },
-  paywallFeatureText: { fontSize: 13, fontFamily: theme.fonts.m, color: theme.colors.ink2, flex: 1 },
-  paywallCta: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: '#FFB800', paddingVertical: 16, borderRadius: 14, width: '100%',
-  },
-  paywallCtaText: { fontSize: 16, fontWeight: '700', color: '#121212' },
-  paywallNote: { fontSize: 12, color: theme.colors.ink4, marginTop: 10 },
+                    {briefing.alerts?.length > 0 && briefing.alerts.map((a, i) => {
+                        const c = a.type === 'danger' ? SEM.red : a.type === 'warning' ? SEM.orange : a.type === 'success' ? SEM.green : SEM.blue;
+                        return (
+                            <View key={i} style={{
+                                flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+                                padding: 12,
+                                borderLeftWidth: 3, borderLeftColor: c,
+                                backgroundColor: c + '12',
+                                borderRadius: 8,
+                            }}>
+                                <AlertCircle size={14} color={c} style={{ marginTop: 2 }} />
+                                <Text style={{ flex: 1, fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2, lineHeight: 17 }}>
+                                    {a.message}
+                                </Text>
+                            </View>
+                        );
+                    })}
 
-  // Header
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 20, paddingBottom: 12,
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  aiIconWrap: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: 'rgba(255, 184, 0, 0.12)',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  headerTitle: { fontSize: 22, fontFamily: theme.fonts.b, fontWeight: '700', color: theme.colors.ink },
-  headerSubtitle: { fontSize: 11, fontFamily: theme.fonts.m, color: '#FFB800', marginTop: 1 },
-  refreshBtn: { padding: 8 },
+                    {(isAI ? briefing.motivation : null) && (
+                        <View style={{
+                            flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+                            padding: 12, backgroundColor: SEM.gold + '12', borderRadius: 8,
+                        }}>
+                            <Sparkles size={14} color={SEM.gold} style={{ marginTop: 1 }} />
+                            <Text style={{ flex: 1, fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink, lineHeight: 18 }}>
+                                {briefing.motivation}
+                            </Text>
+                        </View>
+                    )}
 
-  // Loading
-  loadingWrap: { alignItems: 'center' },
-  loadingTitle: { fontSize: 15, fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.ink, marginTop: 12 },
-  loadingSubtext: { fontSize: 12, fontFamily: theme.fonts.m, color: theme.colors.ink3, marginTop: 4 },
+                    {(isAI ? briefing.topTip : briefing.tips?.[0]) && (
+                        <Card padding={14}>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                                AI Tip
+                            </Text>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink, lineHeight: 18 }}>
+                                {isAI ? briefing.topTip : briefing.tips[0]}
+                            </Text>
+                        </Card>
+                    )}
+                </View>
+            </View>
+        </View>
+    );
+}
 
-  // Tab Bar
-  tabBar: { paddingHorizontal: 16, marginBottom: 4, flexGrow: 0 },
-  tab: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20,
-    backgroundColor: theme.colors.surface, marginRight: 8,
-    borderWidth: 1, borderColor: theme.colors.border,
-  },
-  tabActive: { backgroundColor: theme.colors.accent + '18', borderColor: theme.colors.accent + '40' },
-  tabLabel: { fontSize: 12, fontFamily: theme.fonts.m, color: theme.colors.ink3 },
-  tabLabelActive: { color: theme.colors.ink, fontWeight: '600' },
+// ── Plan renderer ──────────────────────────────────────────
+function PlanView({ plan, theme }) {
+    return (
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+            <View style={{
+                width: 32, height: 32, borderRadius: 8, backgroundColor: theme.colors.ink,
+                alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+                <Sparkles size={15} color="#fff" />
+            </View>
+            <View style={{ flex: 1, gap: 12 }}>
+                <Card padding={16}>
+                    <Text style={{ fontFamily: theme.fonts.d, fontSize: 17, fontWeight: '700', color: theme.colors.ink, marginBottom: 4 }}>
+                        Today's Study Plan
+                    </Text>
+                    {plan.overview && (
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink2, lineHeight: 19 }}>
+                            {plan.overview}
+                        </Text>
+                    )}
+                    {plan.totalStudyTime && (
+                        <View style={{ marginTop: 8 }}>
+                            <Badge color={SEM.blue}>{plan.totalStudyTime} total</Badge>
+                        </View>
+                    )}
+                </Card>
 
-  scrollContent: { flex: 1 },
-  tabContent: { padding: 16, gap: 14 },
+                {plan.blocks?.length > 0 && (
+                    <Card padding={16}>
+                        {plan.blocks.map((b, i) => (
+                            <View key={i} style={{
+                                flexDirection: 'row', gap: 12, paddingVertical: 10,
+                                borderTopWidth: i > 0 ? 1 : 0, borderTopColor: theme.colors.border,
+                            }}>
+                                <View style={{ width: 80 }}>
+                                    <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, fontWeight: '600', color: theme.colors.ink }}>
+                                        {b.startTime}
+                                    </Text>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 1 }}>
+                                        → {b.endTime}
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>
+                                        {b.task}
+                                    </Text>
+                                    {b.technique && (
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>
+                                            🧠 {b.technique}
+                                        </Text>
+                                    )}
+                                    {b.reason && (
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>
+                                            {b.reason}
+                                        </Text>
+                                    )}
+                                    {b.breakAfter && (
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: SEM.orange, marginTop: 4 }}>
+                                            {b.breakAfter}
+                                        </Text>
+                                    )}
+                                </View>
+                            </View>
+                        ))}
+                    </Card>
+                )}
 
-  // Greeting
-  greetingCard: {
-    backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-    padding: 18, borderWidth: 1, borderColor: theme.colors.border,
-  },
-  aiBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(255, 184, 0, 0.12)',
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start', marginBottom: 10,
-  },
-  aiBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFB800' },
-  greetingText: { fontSize: 16, fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.ink, lineHeight: 24, marginBottom: 6 },
-  summaryText: { fontSize: 13, fontFamily: theme.fonts.m, color: theme.colors.ink2, lineHeight: 20 },
+                {plan.tips?.length > 0 && (
+                    <Card padding={14}>
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+                            Tips
+                        </Text>
+                        {plan.tips.map((t, i) => (
+                            <Text key={i} style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2, marginBottom: 4 }}>
+                                • {t}
+                            </Text>
+                        ))}
+                    </Card>
+                )}
+            </View>
+        </View>
+    );
+}
 
-  // Sections
-  section: { gap: 8 },
-  sectionTitle: { fontSize: 14, fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.ink, marginBottom: 4 },
+// ── Report renderer ────────────────────────────────────────
+function ReportView({ report, theme }) {
+    const isAI = report.source === 'ai';
+    return (
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+            <View style={{
+                width: 32, height: 32, borderRadius: 8, backgroundColor: theme.colors.ink,
+                alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+                <Sparkles size={15} color="#fff" />
+            </View>
+            <View style={{ flex: 1, gap: 12 }}>
+                <Card padding={20}>
+                    {isAI && report.overallGrade && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 12 }}>
+                            <View style={{
+                                width: 56, height: 56, borderRadius: 12,
+                                backgroundColor: SEM.green + '18',
+                                alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                <Text style={{ fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: SEM.green }}>
+                                    {report.overallGrade}
+                                </Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1 }}>
+                                    Week grade
+                                </Text>
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink, marginTop: 4 }}>
+                                    {isAI ? report.headline : report.assessment}
+                                </Text>
+                            </View>
+                        </View>
+                    )}
+                    {!isAI && (
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink, lineHeight: 18 }}>
+                            {report.assessment}
+                        </Text>
+                    )}
+                </Card>
 
-  // Priority Cards
-  priorityCard: {
-    backgroundColor: theme.colors.surface, borderRadius: theme.radii.r,
-    padding: 14, borderWidth: 1, borderColor: theme.colors.border,
-  },
-  priorityHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  urgencyDot: { width: 8, height: 8, borderRadius: 4 },
-  priorityTitle: { fontSize: 14, fontFamily: theme.fonts.m, fontWeight: '600', color: theme.colors.ink, flex: 1 },
-  urgencyBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  urgencyText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  priorityReason: { fontSize: 12, fontFamily: theme.fonts.m, color: theme.colors.ink3, lineHeight: 18, marginBottom: 6 },
-  actionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 4 },
-  actionText: { fontSize: 12, fontFamily: theme.fonts.m, color: theme.colors.accent, lineHeight: 18, flex: 1 },
+                {isAI && report.wins?.length > 0 && (
+                    <Card padding={16}>
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink, marginBottom: 10 }}>
+                            Wins this week
+                        </Text>
+                        {report.wins.map((w, i) => (
+                            <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: i > 0 ? 8 : 0 }}>
+                                <CheckCircle size={14} color={SEM.green} style={{ marginTop: 2 }} />
+                                <Text style={{ flex: 1, fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2, lineHeight: 17 }}>
+                                    {w}
+                                </Text>
+                            </View>
+                        ))}
+                    </Card>
+                )}
 
-  // Blocks
-  blockCard: {
-    flexDirection: 'row', gap: 12,
-    backgroundColor: theme.colors.surface, borderRadius: theme.radii.r,
-    padding: 12, borderWidth: 1, borderColor: theme.colors.border,
-  },
-  blockTime: { alignItems: 'center', width: 50 },
-  blockTimeText: { fontSize: 12, fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.accent },
-  blockDuration: { fontSize: 10, fontFamily: theme.fonts.m, color: theme.colors.ink3 },
-  blockInfo: { flex: 1 },
-  blockTask: { fontSize: 13, fontFamily: theme.fonts.m, fontWeight: '500', color: theme.colors.ink },
-  blockTip: { fontSize: 11, fontFamily: theme.fonts.m, color: theme.colors.ink3, marginTop: 3, fontStyle: 'italic' },
+                {isAI && report.improvements?.length > 0 && (
+                    <Card padding={16}>
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink, marginBottom: 10 }}>
+                            Areas to improve
+                        </Text>
+                        {report.improvements.map((imp, i) => (
+                            <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: i > 0 ? 8 : 0 }}>
+                                <ArrowRight size={14} color={SEM.orange} style={{ marginTop: 2 }} />
+                                <Text style={{ flex: 1, fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2, lineHeight: 17 }}>
+                                    {imp}
+                                </Text>
+                            </View>
+                        ))}
+                    </Card>
+                )}
 
-  // Alerts
-  alertCard: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: theme.colors.surface, borderRadius: theme.radii.r,
-    padding: 12, borderLeftWidth: 3, borderWidth: 1, borderColor: theme.colors.border,
-  },
-  alertText: { fontSize: 12, fontFamily: theme.fonts.m, color: theme.colors.ink2, lineHeight: 18, flex: 1 },
-
-  // Motivation
-  motivationCard: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    backgroundColor: 'rgba(255, 184, 0, 0.06)', borderRadius: theme.radii.lg,
-    padding: 16, borderWidth: 1, borderColor: 'rgba(255, 184, 0, 0.15)',
-  },
-  motivationText: { fontSize: 13, fontFamily: theme.fonts.m, color: theme.colors.ink, lineHeight: 20, flex: 1 },
-
-  // Tips
-  tipCard: {
-    backgroundColor: theme.colors.surface2, borderRadius: theme.radii.lg,
-    padding: 16, borderWidth: 1, borderColor: theme.colors.border,
-  },
-  tipLabel: { fontSize: 12, fontFamily: theme.fonts.s, fontWeight: '600', color: '#FFB800', marginBottom: 6 },
-  tipText: { fontSize: 12, fontFamily: theme.fonts.m, color: theme.colors.ink2, lineHeight: 18, marginBottom: 4 },
-
-  // Report
-  reportGradeCard: {
-    alignItems: 'center', padding: 20,
-    backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg,
-    borderWidth: 1, borderColor: theme.colors.border,
-  },
-  reportGradeLabel: { fontSize: 11, fontFamily: theme.fonts.m, color: theme.colors.ink3, marginBottom: 4 },
-  reportGradeValue: { fontSize: 48, fontFamily: theme.fonts.b, fontWeight: '800', color: theme.colors.ink },
-  reportHeadline: { fontSize: 14, fontFamily: theme.fonts.m, color: theme.colors.ink2, lineHeight: 22, textAlign: 'center' },
-
-  winRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  winText: { fontSize: 13, fontFamily: theme.fonts.m, color: theme.colors.ink2, lineHeight: 20, flex: 1 },
-
-  analysisCard: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    backgroundColor: theme.colors.surface, borderRadius: theme.radii.r,
-    padding: 14, borderWidth: 1, borderColor: theme.colors.border,
-  },
-  analysisText: { fontSize: 12, fontFamily: theme.fonts.m, color: theme.colors.ink2, lineHeight: 18, flex: 1 },
-
-  goalCard: {
-    backgroundColor: theme.colors.surface, borderRadius: theme.radii.r,
-    padding: 12, borderWidth: 1, borderColor: theme.colors.border,
-  },
-  goalTitle: { fontSize: 13, fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.ink },
-  goalAction: { fontSize: 12, fontFamily: theme.fonts.m, color: theme.colors.ink3, marginTop: 3, lineHeight: 18 },
-
-  // Study Plan
-  planHeader: { gap: 8, marginBottom: 8 },
-  planOverview: { fontSize: 14, fontFamily: theme.fonts.m, color: theme.colors.ink2, lineHeight: 22 },
-  planTimeBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-    backgroundColor: theme.colors.accent + '18', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
-  },
-  planTimeText: { fontSize: 13, fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.accent },
-
-  studyBlock: {
-    flexDirection: 'row', gap: 12,
-    backgroundColor: theme.colors.surface, borderRadius: theme.radii.r,
-    padding: 14, borderWidth: 1, borderColor: theme.colors.border, borderLeftWidth: 3,
-    borderLeftColor: theme.colors.accent,
-  },
-  studyBlockTime: { alignItems: 'center', width: 55, gap: 4 },
-  studyBlockTimeText: { fontSize: 12, fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.accent },
-  studyBlockLine: { width: 1, height: 12, backgroundColor: theme.colors.border },
-  studyBlockEndText: { fontSize: 11, fontFamily: theme.fonts.m, color: theme.colors.ink3 },
-  studyBlockContent: { flex: 1 },
-  studyBlockTask: { fontSize: 14, fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.ink },
-  techniqueRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  techniqueText: { fontSize: 11, fontFamily: theme.fonts.m, color: theme.colors.purple },
-  studyBlockReason: { fontSize: 11, fontFamily: theme.fonts.m, color: theme.colors.ink3, marginTop: 4, lineHeight: 16 },
-  breakText: { fontSize: 11, fontFamily: theme.fonts.m, color: theme.colors.green, marginTop: 6, fontStyle: 'italic' },
-
-  // Chat
-  chatContainer: { flex: 1 },
-  chatScroll: { flex: 1 },
-  chatContent: { padding: 16, gap: 10 },
-  chatEmpty: { alignItems: 'center', paddingTop: 40, gap: 8 },
-  chatEmptyTitle: { fontSize: 16, fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.ink },
-  chatEmptyText: { fontSize: 13, fontFamily: theme.fonts.m, color: theme.colors.ink3, textAlign: 'center', lineHeight: 20, paddingHorizontal: 20 },
-  chatSuggestions: { gap: 8, marginTop: 16, width: '100%' },
-  chatSuggestionChip: {
-    backgroundColor: theme.colors.surface, borderRadius: theme.radii.r,
-    padding: 12, borderWidth: 1, borderColor: theme.colors.border,
-  },
-  chatSuggestionText: { fontSize: 13, fontFamily: theme.fonts.m, color: theme.colors.ink2 },
-
-  chatBubble: { maxWidth: '85%', borderRadius: 16, padding: 14 },
-  chatBubbleUser: {
-    alignSelf: 'flex-end', backgroundColor: theme.colors.accent,
-    borderBottomRightRadius: 4,
-  },
-  chatBubbleAI: {
-    alignSelf: 'flex-start', backgroundColor: theme.colors.surface,
-    borderBottomLeftRadius: 4, borderWidth: 1, borderColor: theme.colors.border,
-  },
-  chatBubbleText: { fontSize: 14, fontFamily: theme.fonts.m, color: theme.colors.ink, lineHeight: 22 },
-  chatBubbleTextUser: { color: theme.colors.bg },
-  chatAILabel: {
-    flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6,
-  },
-  chatAILabelText: { fontSize: 10, fontWeight: '700', color: '#FFB800' },
-  chatSuggestionsInline: { marginTop: 10, gap: 4 },
-  chatSuggestionInline: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  chatSuggestionInlineText: { fontSize: 12, fontFamily: theme.fonts.m, color: theme.colors.accent, lineHeight: 18 },
-  chatTipInline: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 8,
-    borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8,
-  },
-  chatTipInlineText: { fontSize: 11, fontFamily: theme.fonts.m, color: '#FFB800', lineHeight: 16, flex: 1 },
-
-  typingIndicator: { flexDirection: 'row', gap: 4, paddingVertical: 4 },
-  typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.ink3 },
-
-  chatInputRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 12, paddingBottom: 16, borderTopWidth: 1, borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.bg,
-  },
-  chatInput: {
-    flex: 1, backgroundColor: theme.colors.surface, borderRadius: 20,
-    paddingHorizontal: 16, paddingVertical: 10, fontSize: 14,
-    fontFamily: theme.fonts.m, color: theme.colors.ink,
-    borderWidth: 1, borderColor: theme.colors.border,
-  },
-  sendBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: '#FFB800', justifyContent: 'center', alignItems: 'center',
-  },
-  sendBtnDisabled: { backgroundColor: theme.colors.surface },
-});
+                {report.encouragement && (
+                    <View style={{
+                        flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+                        padding: 12, backgroundColor: SEM.gold + '12', borderRadius: 8,
+                    }}>
+                        <Sparkles size={14} color={SEM.gold} style={{ marginTop: 1 }} />
+                        <Text style={{ flex: 1, fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink, lineHeight: 18 }}>
+                            {report.encouragement}
+                        </Text>
+                    </View>
+                )}
+            </View>
+        </View>
+    );
+}

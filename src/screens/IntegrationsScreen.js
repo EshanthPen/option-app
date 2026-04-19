@@ -7,13 +7,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
 import DistrictPickerModal from '../components/DistrictPickerModal';
 import { syncAssignmentsToCalendar } from '../utils/googleCalendarAPI';
-import { ChevronDown, RefreshCw, Database, Calendar, BookOpen, Plus, Check, X, Layers, GraduationCap, FileText } from 'lucide-react-native';
+import { ChevronDown, RefreshCw, Database, Calendar, BookOpen, Plus, Check, X, Layers, GraduationCap, FileText, Code, Copy } from 'lucide-react-native';
 import { loadMockGradebookData } from '../utils/mockStudentData';
 import ICAL from 'ical.js';
 import { useTheme } from '../context/ThemeContext';
 import { parseStudentVueGradebook } from '../utils/studentVueParser';
 import { parseFocusSISGrades } from '../utils/focusSISParser';
 import { getDeviceId } from '../utils/auth';
+import { TopBar, Card, Button, Badge, SEM } from '../components/DesignKit';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -477,72 +478,144 @@ export default function IntegrationsScreen() {
 
     return (
         <View style={S.root}>
-            <ScrollView style={S.container} showsVerticalScrollIndicator={false}>
-                <View style={S.headerContainer}>
-                    <Text style={S.header}>Integrations</Text>
-                    <Text style={S.subtitle}>Connect your school platforms and tools</Text>
-                </View>
+            <TopBar title="Integrations" subtitle="Connect your school's systems to sync grades and assignments" />
+            <ScrollView contentContainerStyle={{ padding: 28, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                <View style={{ maxWidth: 900, alignSelf: 'center', width: '100%' }}>
 
-                {/* Grid of integration cards */}
-                <View style={S.grid}>
-                    {INTEGRATIONS.map((item) => {
-                        const connected = connectedIds.includes(item.id);
-                        const iconColor = theme.colors[item.color] || theme.colors.ink2;
-                        return (
-                            <TouchableOpacity
-                                key={item.id}
-                                style={[S.tile, connected && S.tileConnected]}
-                                onPress={() => !item.soon && openModal(item.id)}
-                                activeOpacity={item.soon ? 1 : 0.7}
-                            >
-                                <View style={S.tileTop}>
-                                    <View style={[S.tileIcon, { backgroundColor: iconColor + '12' }]}>
-                                        <item.Icon size={20} color={iconColor} strokeWidth={1.8} />
+                    {/* ── Integration cards grid ── */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 20 }}>
+                        {INTEGRATIONS.map((item) => {
+                            const connected = connectedIds.includes(item.id);
+                            const iconColor = theme.colors[item.color] || theme.colors.ink2;
+                            const handleConnect = () => !item.soon && openModal(item.id);
+                            const handleDisconnect = async () => {
+                                const ok = Platform.OS === 'web'
+                                    ? window.confirm(`Disconnect ${item.name}?`)
+                                    : await new Promise(res => Alert.alert('Disconnect?', `Disconnect ${item.name}?`, [{ text: 'Cancel', onPress: () => res(false) }, { text: 'Disconnect', style: 'destructive', onPress: () => res(true) }]));
+                                if (!ok) return;
+                                if (item.id === 'google') { await AsyncStorage.removeItem('googleAccessToken'); setAccessToken(null); }
+                                if (item.id === 'classroom') { await AsyncStorage.removeItem('classroomAccessToken'); setClassroomToken(null); }
+                                if (item.id === 'studentvue') { await AsyncStorage.removeItem('svUsername'); await AsyncStorage.removeItem('svPassword'); }
+                                if (item.id === 'schoology') { await AsyncStorage.removeItem('schoologyUrl'); setSchoologyUrl(''); }
+                                setConnectedIds(prev => prev.filter(c => c !== item.id));
+                            };
+                            const handleSync = () => {
+                                if (item.id === 'google') return syncGoogleCalendarManual();
+                                if (item.id === 'classroom') return handleClassroomSync();
+                                if (item.id === 'schoology') return handleSchoologySync();
+                                openModal(item.id);
+                            };
+
+                            return (
+                                <Card key={item.id} padding={20} style={{ width: '47%', flexGrow: 1, minWidth: 280 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
+                                        <View style={{
+                                            width: 48, height: 48, borderRadius: 10,
+                                            backgroundColor: iconColor + '18',
+                                            alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                        }}>
+                                            <item.Icon size={22} color={iconColor} strokeWidth={1.8} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink }}>
+                                                    {item.name}
+                                                </Text>
+                                                {connected && <Badge color={SEM.green}>● Connected</Badge>}
+                                                {item.soon && <Badge color={theme.colors.ink3}>Soon</Badge>}
+                                            </View>
+                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 4, lineHeight: 17 }}>
+                                                {item.desc}
+                                            </Text>
+                                        </View>
                                     </View>
-                                    {connected ? (
-                                        <View style={[S.statusDot, { backgroundColor: theme.colors.green }]}>
-                                            <Check size={10} color="#fff" strokeWidth={3} />
-                                        </View>
-                                    ) : item.soon ? (
-                                        <View style={S.soonBadge}>
-                                            <Text style={S.soonText}>Soon</Text>
-                                        </View>
-                                    ) : (
-                                        <View style={S.addDot}>
-                                            <Plus size={14} color={theme.colors.ink3} strokeWidth={2} />
-                                        </View>
-                                    )}
-                                </View>
-                                <Text style={S.tileName}>{item.name}</Text>
-                                <Text style={S.tileDesc}>{connected ? 'Connected' : item.desc}</Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
+                                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+                                        {item.soon ? null : connected ? (
+                                            <>
+                                                <Button variant="secondary" size="sm" icon={RefreshCw} onPress={handleSync}>Sync now</Button>
+                                                <Button variant="ghost" size="sm" onPress={handleDisconnect}>Disconnect</Button>
+                                            </>
+                                        ) : (
+                                            <Button variant="primary" size="sm" icon={Plus} onPress={handleConnect}>Connect</Button>
+                                        )}
+                                    </View>
+                                </Card>
+                            );
+                        })}
+                    </View>
 
-                {/* Demo data loader */}
-                <View style={S.demoCard}>
-                    <Text style={S.demoLabel}>Beta Testing</Text>
-                    <Text style={S.demoDesc}>Load sample grade data to explore the app without real credentials.</Text>
-                    <TouchableOpacity style={S.demoBtn} onPress={async () => {
-                        setIsMockLoading(true);
-                        try {
-                            const { classCount, assignmentCount } = await loadMockGradebookData();
-                            setConnectedIds(prev => prev.includes('studentvue') ? prev : [...prev, 'studentvue']);
-                            if (Platform.OS === 'web') window.alert(`Demo loaded: ${classCount} classes, ${assignmentCount} assignments`);
-                            else Alert.alert('Demo Loaded', `${classCount} classes, ${assignmentCount} assignments`);
-                        } catch (e) {
-                            if (Platform.OS === 'web') window.alert(`Failed: ${e.message}`);
-                            else Alert.alert('Error', e.message);
-                        } finally { setIsMockLoading(false); }
-                    }} disabled={isMockLoading}>
-                        {isMockLoading ? <ActivityIndicator size="small" color={theme.colors.purple} /> : (
-                            <Text style={S.demoBtnText}>Load Demo Data</Text>
-                        )}
-                    </TouchableOpacity>
-                </View>
+                    {/* ── Demo data loader ── */}
+                    <Card padding={20} style={{ marginBottom: 20 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                            <View style={{
+                                width: 40, height: 40, borderRadius: 10,
+                                backgroundColor: SEM.purple + '18',
+                                alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                <Database size={18} color={SEM.purple} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink }}>
+                                    Beta Testing
+                                </Text>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 3 }}>
+                                    Load sample grade data to explore the app without real credentials.
+                                </Text>
+                            </View>
+                        </View>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            loading={isMockLoading}
+                            onPress={async () => {
+                                setIsMockLoading(true);
+                                try {
+                                    const { classCount, assignmentCount } = await loadMockGradebookData();
+                                    setConnectedIds(prev => prev.includes('studentvue') ? prev : [...prev, 'studentvue']);
+                                    if (Platform.OS === 'web') window.alert(`Demo loaded: ${classCount} classes, ${assignmentCount} assignments`);
+                                    else Alert.alert('Demo Loaded', `${classCount} classes, ${assignmentCount} assignments`);
+                                } catch (e) {
+                                    if (Platform.OS === 'web') window.alert(`Failed: ${e.message}`);
+                                    else Alert.alert('Error', e.message);
+                                } finally { setIsMockLoading(false); }
+                            }}
+                        >
+                            Load demo data
+                        </Button>
+                    </Card>
 
-                <View style={{ height: 60 }} />
+                    {/* ── Developer API placeholder (matches design) ── */}
+                    <Card padding={20}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                            <View style={{
+                                width: 40, height: 40, borderRadius: 10,
+                                backgroundColor: theme.colors.surface2,
+                                alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                <Code size={18} color={theme.colors.ink2} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink }}>
+                                    Developer API
+                                </Text>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 3 }}>
+                                    Build your own integrations
+                                </Text>
+                            </View>
+                        </View>
+                        <View style={{
+                            backgroundColor: theme.colors.surface2,
+                            paddingVertical: 10, paddingHorizontal: 14,
+                            borderRadius: 8,
+                            flexDirection: 'row', alignItems: 'center', gap: 10,
+                        }}>
+                            <Text style={{ flex: 1, fontFamily: theme.fonts.mono, fontSize: 12, color: theme.colors.ink2 }} numberOfLines={1}>
+                                Coming soon — request early access
+                            </Text>
+                            <Copy size={14} color={theme.colors.ink3} />
+                        </View>
+                    </Card>
+                </View>
             </ScrollView>
 
             {/* ── StudentVUE Modal ── */}

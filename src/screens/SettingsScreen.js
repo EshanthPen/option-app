@@ -1,46 +1,69 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, Platform, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Moon, Sun, Crown, ChevronRight } from 'lucide-react-native';
+import {
+    User, Palette, Bell, Shield, CreditCard, Crown, Camera, Pencil,
+    LogOut, Download, Eraser, Trash2, Check, Moon, Sun, Plus,
+} from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { usePremium } from '../context/PremiumContext';
+import { THEME_PRESETS } from '../utils/theme';
 import WorkingHoursGraph from '../components/WorkingHoursGraph';
+import { TopBar, Card, Button, Badge, Switch, SectionLabel, SEM } from '../components/DesignKit';
 
-export default function SettingsScreen({ navigation }) {
-    const { theme, toggleTheme, isDarkMode } = useTheme();
-    const { isPro } = usePremium();
-    const styles = getStyles(theme);
+const TABS = [
+    { id: 'account',       label: 'Account',       icon: User },
+    { id: 'appearance',    label: 'Appearance',    icon: Palette },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'schedule',      label: 'Schedule',      icon: Camera }, // smart hours
+    { id: 'privacy',       label: 'Privacy',       icon: Shield },
+    { id: 'billing',       label: 'Billing',       icon: CreditCard },
+];
+
+export default function SettingsScreen({ navigation, isGuest, onSignOut }) {
+    const { theme, toggleTheme, isDarkMode, themePreset, changePreset } = useTheme();
+    const { isPro, subscription } = usePremium();
+    const [tab, setTab] = useState('account');
     const [userName, setUserName] = useState('');
-
+    const [userEmail, setUserEmail] = useState('');
+    const [editingName, setEditingName] = useState(false);
     const [smartHours, setSmartHours] = useState({
-        0: { start: 15, end: 22 },
-        1: { start: 15, end: 22 },
-        2: { start: 15, end: 22 },
-        3: { start: 15, end: 22 },
-        4: { start: 15, end: 22 },
-        5: { start: 10, end: 23 },
+        0: { start: 15, end: 22 }, 1: { start: 15, end: 22 },
+        2: { start: 15, end: 22 }, 3: { start: 15, end: 22 },
+        4: { start: 15, end: 22 }, 5: { start: 10, end: 23 },
         6: { start: 10, end: 22 },
     });
 
+    const [notifs, setNotifs] = useState({
+        grades: true, ai: true, focus: false, leaderboard: true, weekly: true,
+    });
+
+    const [privacyToggles, setPrivacyToggles] = useState({
+        leaderboard: true, streak: true, aiHistory: false,
+    });
+
     useEffect(() => {
-        const loadSettings = async () => {
+        (async () => {
             const savedName = await AsyncStorage.getItem('userName');
             if (savedName) setUserName(savedName);
+            const savedEmail = await AsyncStorage.getItem('userEmail');
+            if (savedEmail) setUserEmail(savedEmail);
 
             const savedHours = await AsyncStorage.getItem('smartScheduleHours');
             if (savedHours) {
-                try { setSmartHours(JSON.parse(savedHours)); } catch (e) { console.error(e); }
-            } else {
-                const oldStart = await AsyncStorage.getItem('workingStartHour');
-                const oldEnd = await AsyncStorage.getItem('workingEndHour');
-                if (oldStart && oldEnd) {
-                    const s = parseInt(oldStart) || 15;
-                    const e = parseInt(oldEnd) || 22;
-                    setSmartHours({ 0: { start: s, end: e }, 1: { start: s, end: e }, 2: { start: s, end: e }, 3: { start: s, end: e }, 4: { start: s, end: e }, 5: { start: s, end: e }, 6: { start: s, end: e } });
-                }
+                try { setSmartHours(JSON.parse(savedHours)); } catch {}
             }
-        };
-        loadSettings();
+
+            const savedNotifs = await AsyncStorage.getItem('notifPrefs');
+            if (savedNotifs) {
+                try { setNotifs(JSON.parse(savedNotifs)); } catch {}
+            }
+
+            const savedPrivacy = await AsyncStorage.getItem('privacyPrefs');
+            if (savedPrivacy) {
+                try { setPrivacyToggles(JSON.parse(savedPrivacy)); } catch {}
+            }
+        })();
     }, []);
 
     const handleSaveName = async (name) => {
@@ -56,144 +79,405 @@ export default function SettingsScreen({ navigation }) {
         } catch (error) { console.error(error); }
     };
 
+    const toggleNotif = async (key) => {
+        const next = { ...notifs, [key]: !notifs[key] };
+        setNotifs(next);
+        await AsyncStorage.setItem('notifPrefs', JSON.stringify(next));
+    };
+
+    const togglePrivacy = async (key) => {
+        const next = { ...privacyToggles, [key]: !privacyToggles[key] };
+        setPrivacyToggles(next);
+        await AsyncStorage.setItem('privacyPrefs', JSON.stringify(next));
+    };
+
+    const handleSignOut = () => {
+        if (Platform.OS === 'web') {
+            if (window.confirm('Sign out of all devices?')) onSignOut?.();
+        } else {
+            Alert.alert('Sign Out', 'Sign out of all devices?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Sign out', style: 'destructive', onPress: () => onSignOut?.() },
+            ]);
+        }
+    };
+
+    const initials = (userName || 'U').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase();
+
     return (
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-            <View style={styles.headerContainer}>
-                <Text style={styles.header}>Settings</Text>
-                <Text style={styles.subtitle}>Preferences & configuration</Text>
-            </View>
+        <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+            <TopBar title="Settings" subtitle={isPro ? 'Option Pro · all features unlocked' : 'Free plan'} />
 
-            {/* Premium Upgrade Card */}
-            {!isPro && (
-                <TouchableOpacity
-                    style={{
-                        backgroundColor: 'rgba(255, 184, 0, 0.08)',
-                        borderRadius: 14,
-                        padding: 16,
-                        marginBottom: 20,
-                        borderWidth: 1,
-                        borderColor: 'rgba(255, 184, 0, 0.2)',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                    }}
-                    onPress={() => navigation?.navigate('Premium')}
-                    activeOpacity={0.7}
-                >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <View style={{
-                            width: 40, height: 40, borderRadius: 12,
-                            backgroundColor: 'rgba(255, 184, 0, 0.15)',
-                            justifyContent: 'center', alignItems: 'center',
-                        }}>
-                            <Crown size={20} color="#FFB800" />
-                        </View>
-                        <View>
-                            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.ink, fontFamily: theme.fonts.s }}>
-                                Upgrade to Pro
-                            </Text>
-                            <Text style={{ fontSize: 12, color: theme.colors.ink3, fontFamily: theme.fonts.m, marginTop: 2 }}>
-                                Unlock all features · 7-day free trial
-                            </Text>
-                        </View>
+            <ScrollView contentContainerStyle={{ padding: 28, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                <View style={{ flexDirection: 'row', gap: 28, maxWidth: 1000, alignSelf: 'center', width: '100%' }}>
+
+                    {/* ── Tabs sidebar ── */}
+                    <View style={{ width: 220, flexShrink: 0 }}>
+                        {TABS.map((t) => {
+                            const active = tab === t.id;
+                            const Icon = t.icon;
+                            return (
+                                <TouchableOpacity
+                                    key={t.id}
+                                    onPress={() => setTab(t.id)}
+                                    activeOpacity={0.7}
+                                    style={{
+                                        flexDirection: 'row', alignItems: 'center', gap: 10,
+                                        padding: 12, marginBottom: 2,
+                                        borderRadius: 10,
+                                        backgroundColor: active ? theme.colors.surface : 'transparent',
+                                        borderWidth: 1,
+                                        borderColor: active ? theme.colors.border : 'transparent',
+                                        ...(active ? theme.shadows.sm : {}),
+                                    }}
+                                >
+                                    <Icon size={16} color={active ? theme.colors.ink : theme.colors.ink3} strokeWidth={active ? 2.4 : 2} />
+                                    <Text style={{
+                                        fontFamily: theme.fonts.s, fontSize: 13,
+                                        fontWeight: active ? '600' : '500',
+                                        color: active ? theme.colors.ink : theme.colors.ink2,
+                                    }}>
+                                        {t.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
-                    <ChevronRight size={18} color="#FFB800" />
-                </TouchableOpacity>
-            )}
 
-            {isPro && (
-                <View style={{
-                    flexDirection: 'row', alignItems: 'center', gap: 8,
-                    marginBottom: 20, paddingHorizontal: 4,
-                }}>
-                    <Crown size={16} color="#FFB800" />
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#FFB800', fontFamily: theme.fonts.s }}>
-                        Option Pro Active
-                    </Text>
-                </View>
-            )}
+                    {/* ── Content ── */}
+                    <View style={{ flex: 1, minWidth: 0 }}>
 
-            {/* Profile */}
-            <Text style={styles.sectionTitle}>Profile</Text>
-            <View style={styles.card}>
-                <Text style={styles.label}>Display Name</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="What should we call you?"
-                    placeholderTextColor={theme.colors.ink3}
-                    value={userName}
-                    onChangeText={handleSaveName}
-                />
-            </View>
+                        {/* ── ACCOUNT ── */}
+                        {tab === 'account' && (
+                            <>
+                                <Card padding={24} style={{ marginBottom: 16 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                                        <View style={{
+                                            width: 64, height: 64, borderRadius: 32,
+                                            backgroundColor: theme.colors.ink,
+                                            alignItems: 'center', justifyContent: 'center',
+                                        }}>
+                                            <Text style={{ fontFamily: theme.fonts.d, fontSize: 24, fontWeight: '700', color: theme.colors.bg }}>
+                                                {initials}
+                                            </Text>
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink }}>
+                                                {userName || 'Set your name'}
+                                            </Text>
+                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginTop: 2 }}>
+                                                {userEmail || 'No email on file'}
+                                            </Text>
+                                            <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+                                                {isPro
+                                                    ? <Badge color={SEM.purple}>{subscription?.isBeta ? 'Beta Tester' : 'Premium'}</Badge>
+                                                    : <Badge color={theme.colors.ink3}>Free</Badge>
+                                                }
+                                                {!isGuest && <Badge color={SEM.green}>Verified student</Badge>}
+                                            </View>
+                                        </View>
+                                    </View>
+                                </Card>
 
-            {/* Appearance */}
-            <Text style={styles.sectionTitle}>Appearance</Text>
-            <TouchableOpacity style={styles.settingRow} onPress={toggleTheme} activeOpacity={0.7}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <View style={[styles.iconBox, { backgroundColor: theme.colors.surface2 }]}>
-                        {isDarkMode ? <Moon size={20} color={theme.colors.purple} /> : <Sun size={20} color={theme.colors.orange} />}
+                                <Card padding={0} style={{ marginBottom: 16, overflow: 'hidden' }}>
+                                    {/* Editable display name */}
+                                    <View style={{
+                                        padding: 16, paddingHorizontal: 20,
+                                        borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                                    }}>
+                                        <SectionLabel style={{ marginBottom: 6 }}>Display Name</SectionLabel>
+                                        <TextInput
+                                            value={userName}
+                                            onChangeText={handleSaveName}
+                                            placeholder="What should we call you?"
+                                            placeholderTextColor={theme.colors.ink3}
+                                            style={{
+                                                fontFamily: theme.fonts.s, fontSize: 15,
+                                                color: theme.colors.ink,
+                                                paddingVertical: 4,
+                                            }}
+                                        />
+                                    </View>
+
+                                    {/* Static rows */}
+                                    {[
+                                        { label: 'Email',   value: userEmail || '—' },
+                                        { label: 'Status',  value: isPro ? 'Premium' : 'Free' },
+                                        { label: 'Account', value: isGuest ? 'Guest' : 'Student' },
+                                    ].map((r, i, arr) => (
+                                        <View key={i} style={{
+                                            flexDirection: 'row', alignItems: 'center',
+                                            paddingHorizontal: 20, paddingVertical: 14,
+                                            borderBottomWidth: i < arr.length - 1 ? 1 : 0,
+                                            borderBottomColor: theme.colors.border,
+                                        }}>
+                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, width: 140 }}>{r.label}</Text>
+                                            <Text style={{ flex: 1, fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink }}>{r.value}</Text>
+                                        </View>
+                                    ))}
+                                </Card>
+
+                                {!isGuest && (
+                                    <Button variant="danger" icon={LogOut} onPress={handleSignOut}>Sign out</Button>
+                                )}
+                            </>
+                        )}
+
+                        {/* ── APPEARANCE ── */}
+                        {tab === 'appearance' && (
+                            <>
+                                <Card padding={20} style={{ marginBottom: 16 }}>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink, marginBottom: 4 }}>
+                                        Color theme
+                                    </Text>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginBottom: 14 }}>
+                                        Changes the accent color and surface tones across the app.
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                                        {Object.entries(THEME_PRESETS).map(([key, preset]) => {
+                                            const t = isDarkMode ? preset.dark : preset.light;
+                                            const active = themePreset === key;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={key}
+                                                    onPress={() => changePreset?.(key)}
+                                                    activeOpacity={0.85}
+                                                    style={{
+                                                        width: '31%',
+                                                        borderWidth: 2,
+                                                        borderColor: active ? t.accent : theme.colors.border,
+                                                        borderRadius: 12, overflow: 'hidden',
+                                                        backgroundColor: t.bg,
+                                                    }}
+                                                >
+                                                    <View style={{
+                                                        padding: 12, paddingVertical: 10,
+                                                        flexDirection: 'row', alignItems: 'center', gap: 8,
+                                                        backgroundColor: t.surface,
+                                                        borderBottomWidth: 1, borderBottomColor: t.border,
+                                                    }}>
+                                                        <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: t.accent }} />
+                                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: t.ink, flex: 1 }} numberOfLines={1}>
+                                                            {preset.name}
+                                                        </Text>
+                                                        {active && <Check size={14} color={t.accent} strokeWidth={2.5} />}
+                                                    </View>
+                                                    <View style={{ padding: 10, flexDirection: 'row', gap: 4 }}>
+                                                        {[t.surface, t.surface2, t.border, t.ink, t.accent].map((c, i) => (
+                                                            <View key={i} style={{
+                                                                width: 14, height: 14, borderRadius: 3,
+                                                                backgroundColor: c,
+                                                                borderWidth: 1, borderColor: t.border,
+                                                            }} />
+                                                        ))}
+                                                    </View>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </View>
+                                </Card>
+
+                                <Card padding={0} style={{ overflow: 'hidden' }}>
+                                    <ToggleRow
+                                        label="Dark mode"
+                                        desc="Switch to dark surfaces and high-contrast text"
+                                        on={isDarkMode}
+                                        onToggle={toggleTheme}
+                                    />
+                                </Card>
+                            </>
+                        )}
+
+                        {/* ── NOTIFICATIONS ── */}
+                        {tab === 'notifications' && (
+                            <Card padding={0} style={{ overflow: 'hidden' }}>
+                                {[
+                                    { key: 'grades',      label: 'Grade alerts',         desc: 'Notify when a new grade is posted or a class drops' },
+                                    { key: 'ai',          label: 'AI suggestions',       desc: 'Smart nudges about what to study and when' },
+                                    { key: 'focus',       label: 'Focus reminders',      desc: 'Remind you to start your daily focus session' },
+                                    { key: 'leaderboard', label: 'Leaderboard updates',  desc: "Let me know when I'm passed or pass others" },
+                                    { key: 'weekly',      label: 'Weekly summary',       desc: "Sunday email with the week's performance" },
+                                ].map((r, i, arr) => (
+                                    <ToggleRow
+                                        key={r.key}
+                                        label={r.label}
+                                        desc={r.desc}
+                                        on={notifs[r.key]}
+                                        onToggle={() => toggleNotif(r.key)}
+                                        isLast={i === arr.length - 1}
+                                    />
+                                ))}
+                            </Card>
+                        )}
+
+                        {/* ── SCHEDULE (Smart Hours) ── */}
+                        {tab === 'schedule' && (
+                            <Card padding={20}>
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink, marginBottom: 4 }}>
+                                    Smart scheduling hours
+                                </Text>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginBottom: 16 }}>
+                                    Drag the nodes to set your available hours per day. Tasks will only be scheduled between start and end times.
+                                </Text>
+                                <View style={{ marginBottom: 16 }}>
+                                    <WorkingHoursGraph data={smartHours} onChange={setSmartHours} theme={theme} />
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: SEM.green }} />
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 }}>Start</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: SEM.blue }} />
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 }}>End</Text>
+                                    </View>
+                                </View>
+                                <Button variant="primary" onPress={handleSaveWorkingHours}>Save hours</Button>
+                            </Card>
+                        )}
+
+                        {/* ── PRIVACY ── */}
+                        {tab === 'privacy' && (
+                            <>
+                                <Card padding={0} style={{ overflow: 'hidden', marginBottom: 16 }}>
+                                    {[
+                                        { key: 'leaderboard', label: 'Show me on leaderboard', desc: 'Others see your name; hide to go anonymous' },
+                                        { key: 'streak',      label: 'Share focus streak',     desc: 'Friends see your daily streak' },
+                                        { key: 'aiHistory',   label: 'Allow AI to use chat history', desc: 'Improves tutor responses over time' },
+                                    ].map((r, i, arr) => (
+                                        <ToggleRow
+                                            key={r.key}
+                                            label={r.label}
+                                            desc={r.desc}
+                                            on={privacyToggles[r.key]}
+                                            onToggle={() => togglePrivacy(r.key)}
+                                            isLast={i === arr.length - 1}
+                                        />
+                                    ))}
+                                </Card>
+
+                                <Card padding={20}>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink, marginBottom: 10 }}>
+                                        Data controls
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                                        <Button variant="secondary" size="sm" icon={Download}>Download my data</Button>
+                                        <Button variant="secondary" size="sm" icon={Eraser} onPress={async () => {
+                                            await AsyncStorage.removeItem('aiChatHistory');
+                                            Alert.alert('Cleared', 'AI chat history cleared.');
+                                        }}>Clear chat history</Button>
+                                        <Button variant="danger" size="sm" icon={Trash2}>Delete account</Button>
+                                    </View>
+                                </Card>
+                            </>
+                        )}
+
+                        {/* ── BILLING ── */}
+                        {tab === 'billing' && (
+                            <>
+                                <View style={{
+                                    padding: 24, marginBottom: 16,
+                                    borderRadius: theme.radii.lg,
+                                    backgroundColor: theme.colors.ink,
+                                }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        <Crown size={20} color={SEM.gold} strokeWidth={2.5} />
+                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '700', color: SEM.gold, textTransform: 'uppercase', letterSpacing: 1 }}>
+                                            {isPro ? 'Option Premium' : 'Free Plan'}
+                                        </Text>
+                                    </View>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: '#fff', marginTop: 10, lineHeight: 22 }}>
+                                        {isPro
+                                            ? subscription?.isBeta
+                                                ? "You're a beta tester — Pro access free until Sept 1, 2026."
+                                                : "You're on Pro — thanks for supporting Option!"
+                                            : "Upgrade to unlock the AI Tutor, unlimited tasks, and more."}
+                                    </Text>
+                                    {isPro ? (
+                                        <View style={{
+                                            flexDirection: 'row', gap: 24, marginTop: 18,
+                                            padding: 14, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10,
+                                        }}>
+                                            <View>
+                                                <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 1 }}>Plan</Text>
+                                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: '#fff', marginTop: 4 }}>
+                                                    {subscription?.plan_id === 'beta' ? 'Beta' : subscription?.plan_id || 'Annual'}
+                                                </Text>
+                                            </View>
+                                            {subscription?.current_period_end && (
+                                                <View>
+                                                    <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 1 }}>Renews</Text>
+                                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: '#fff', marginTop: 4 }}>
+                                                        {new Date(subscription.current_period_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                    ) : (
+                                        <View style={{ marginTop: 16 }}>
+                                            <Button variant="gold" onPress={() => navigation?.navigate('Premium')}>
+                                                Upgrade to Pro
+                                            </Button>
+                                        </View>
+                                    )}
+                                </View>
+
+                                {isPro && (
+                                    <Card padding={0} style={{ overflow: 'hidden' }}>
+                                        <View style={{
+                                            padding: 14, paddingHorizontal: 20,
+                                            borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                                            backgroundColor: theme.colors.surface2 + '60',
+                                        }}>
+                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>
+                                                Billing history
+                                            </Text>
+                                        </View>
+                                        {subscription?.isBeta ? (
+                                            <View style={{ padding: 20 }}>
+                                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, textAlign: 'center' }}>
+                                                    No charges — beta tester access.
+                                                </Text>
+                                            </View>
+                                        ) : (
+                                            <View style={{ padding: 20 }}>
+                                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, textAlign: 'center' }}>
+                                                    Manage billing in your Stripe portal.
+                                                </Text>
+                                                <View style={{ marginTop: 12, alignItems: 'center' }}>
+                                                    <Button variant="secondary" size="sm">Open billing portal</Button>
+                                                </View>
+                                            </View>
+                                        )}
+                                    </Card>
+                                )}
+                            </>
+                        )}
                     </View>
-                    <View>
-                        <Text style={styles.settingLabel}>Dark Mode</Text>
-                        <Text style={styles.settingSub}>{isDarkMode ? 'Enabled' : 'Disabled'}</Text>
-                    </View>
                 </View>
-                <View style={[styles.toggleContainer, isDarkMode && { backgroundColor: theme.colors.accent }]}>
-                    <View style={[styles.toggleCircle, isDarkMode && { transform: [{ translateX: 20 }] }]} />
-                </View>
-            </TouchableOpacity>
-
-            {/* Smart Scheduling */}
-            <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Smart Scheduling</Text>
-            <View style={styles.card}>
-                <Text style={styles.cardDesc}>Drag the nodes to set your available hours per day. Tasks will only be scheduled between start and end times.</Text>
-                <View style={{ marginTop: 16, marginBottom: 10 }}>
-                    <WorkingHoursGraph data={smartHours} onChange={setSmartHours} theme={theme} />
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.green }} />
-                        <Text style={styles.legendText}>Start</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.blue }} />
-                        <Text style={styles.legendText}>End</Text>
-                    </View>
-                </View>
-                <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveWorkingHours}>
-                    <Text style={styles.primaryBtnText}>Save Hours</Text>
-                </TouchableOpacity>
-            </View>
-
-            <View style={{ height: 60 }} />
-        </ScrollView>
+            </ScrollView>
+        </View>
     );
 }
 
-const getStyles = (theme) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40, paddingHorizontal: 20 },
-    headerContainer: { marginBottom: 24 },
-    header: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
-    subtitle: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginTop: 4 },
-
-    sectionTitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 10 },
-
-    card: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 20, marginBottom: 16, ...theme.shadows.sm },
-    cardTitle: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink },
-    cardDesc: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, lineHeight: 18 },
-
-    label: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 },
-    input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink },
-
-    settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.colors.surface, padding: 16, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 12, ...theme.shadows.sm },
-    iconBox: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-    settingLabel: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink },
-    settingSub: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginTop: 2 },
-    toggleContainer: { width: 44, height: 24, borderRadius: 12, backgroundColor: theme.colors.surface2, padding: 2, justifyContent: 'center' },
-    toggleCircle: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
-
-    legendText: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 },
-
-    primaryBtn: { backgroundColor: theme.colors.ink, borderRadius: theme.radii.r, paddingVertical: 12, paddingHorizontal: 20, alignItems: 'center', ...theme.shadows.sm },
-    primaryBtnText: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.bg },
-});
+function ToggleRow({ label, desc, on, onToggle, isLast }) {
+    const { theme } = useTheme();
+    return (
+        <View style={{
+            flexDirection: 'row', alignItems: 'center', gap: 14,
+            paddingHorizontal: 20, paddingVertical: 14,
+            borderBottomWidth: isLast ? 0 : 1,
+            borderBottomColor: theme.colors.border,
+        }}>
+            <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '500', color: theme.colors.ink }}>
+                    {label}
+                </Text>
+                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>
+                    {desc}
+                </Text>
+            </View>
+            <Switch on={on} onToggle={onToggle} />
+        </View>
+    );
+}

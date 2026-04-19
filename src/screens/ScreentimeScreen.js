@@ -1,464 +1,509 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-    View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated, Platform
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { LineChart, BarChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { theme as staticTheme } from '../utils/theme';
+import {
+    Play, Pause, RotateCcw, Coffee, BookOpen, Flame, Clock, TrendingUp,
+    Download, X, Target, Smartphone, Shield, CheckCircle2, History,
+    Camera, Globe, MessageCircle, Video,
+} from 'lucide-react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
-import { Play, Pause, RotateCcw, Coffee, BookOpen, Flame, Clock, TrendingUp, Download, X } from 'lucide-react-native';
-import { recordPomodoroSession, getWeeklyPomodoroData, computeFocusScore, getScoreLabel, getStreak } from '../utils/focusScoreEngine';
+import {
+    recordPomodoroSession, getWeeklyPomodoroData, computeFocusScore,
+    getScoreLabel, getStreak,
+} from '../utils/focusScoreEngine';
 import BlacklistManager from '../components/BlacklistManager';
 import { supabase } from '../utils/auth';
+import { TopBar, Card, Button, Badge, SectionLabel, SEM, gradeColor } from '../components/DesignKit';
 
-const screenWidth = Dimensions.get('window').width;
-
+const PRESETS = [15, 25, 45, 60];
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-const scoreColor = (s, theme) => s >= 80 ? theme.colors.green : s >= 60 ? theme.colors.blue : s >= 40 ? theme.colors.orange : theme.colors.red;
-
 export default function ScreentimeScreen() {
-    const { theme, isDarkMode } = useTheme();
-    const styles = getStyles(theme);
-    const [timeLeft, setTimeLeft] = useState(25 * 60);
+    const { theme } = useTheme();
+    const [preset, setPreset] = useState(25);
+    const [seconds, setSeconds] = useState(25 * 60);
     const [isActive, setIsActive] = useState(false);
     const [mode, setMode] = useState('Work');
-    const [sessionsCompleted, setSessionsCompleted] = useState(0);
-    const [weeklyHours, setWeeklyHours] = useState([0, 0, 0, 0, 0, 0, 0]);
+
     const [score, setScore] = useState(0);
-    const [scoreText, setScoreText] = useState('');
-    const [blacklist, setBlacklist] = useState([]);
+    const [scoreLabel, setScoreLabel] = useState('');
     const [streak, setStreak] = useState(0);
+    const [weeklyHours, setWeeklyHours] = useState([0, 0, 0, 0, 0, 0, 0]);
     const [weeklyTotalMin, setWeeklyTotalMin] = useState(0);
-    const [monthlyMinutes, setMonthlyMinutes] = useState(0);
-    const [lastMonthMinutes, setLastMonthMinutes] = useState(0);
+    const [todaySessions, setTodaySessions] = useState([]);
+
+    const [blacklist, setBlacklist] = useState([]);
     const [showBanner, setShowBanner] = useState(Platform.OS === 'web');
-    
-    // Load Blacklist
+
+    const intervalRef = useRef();
+
+    const focusColor = score >= 70 ? SEM.green : score >= 50 ? SEM.orange : SEM.red;
+
+    // ── Blacklist & block sync ──────────────────────────────────
     useEffect(() => {
-        const loadBlacklist = async () => {
+        (async () => {
             try {
                 const stored = await AsyncStorage.getItem('@focus_blacklist');
                 if (stored) setBlacklist(JSON.parse(stored));
-            } catch (e) { console.error('Error loading blacklist', e); }
-        };
-        loadBlacklist();
-        // Ensure unblocked on mount
+            } catch {}
+        })();
         syncToDB(false);
-        
-        return () => { syncToDB(false); }; // cleanup
+        return () => syncToDB(false);
     }, []);
 
-    const saveBlacklist = async (newList) => {
-        try {
-            setBlacklist(newList);
-            await AsyncStorage.setItem('@focus_blacklist', JSON.stringify(newList));
-        } catch (e) { console.error('Error saving blacklist', e); }
+    const saveBlacklist = async (next) => {
+        setBlacklist(next);
+        await AsyncStorage.setItem('@focus_blacklist', JSON.stringify(next));
     };
 
-    const handleAddDomain = (domain) => saveBlacklist([...blacklist, domain]);
-    const handleRemoveDomain = (domain) => saveBlacklist(blacklist.filter(d => d !== domain));
-
-    const syncToDB = async (focusedState) => {
+    const syncToDB = async (focused) => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return; // not logged in
-
-            const { error } = await supabase
-                .from('profiles')
-                .update({ 
-                     is_focused: focusedState, 
-                     blacklist: blacklist 
-                })
-                .eq('id', user.id);
-            
-            if (error) console.error('Error syncing focus state:', error);
-
-            // If we're on the web, also dispatch a window event so the Chrome Extension can catch it immediately
+            if (!user) return;
+            await supabase.from('profiles').update({ is_focused: focused, blacklist }).eq('id', user.id);
             if (Platform.OS === 'web' && window) {
-                window.postMessage({ type: 'SYNC_BLOCKER', payload: { isFocused: focusedState, blacklist } }, '*');
+                window.postMessage({ type: 'SYNC_BLOCKER', payload: { isFocused: focused, blacklist } }, '*');
             }
-        } catch (e) { console.error('Failed db sync:', e); }
+        } catch {}
     };
 
-
-    const ringAnim = useRef(new Animated.Value(0)).current;
-
-    // Load real pomodoro data on screen focus
+    // ── Load focus data ─────────────────────────────────────────
     useFocusEffect(
         useCallback(() => {
-            const loadData = async () => {
+            (async () => {
                 try {
                     const pomData = await getWeeklyPomodoroData();
                     setWeeklyHours(pomData.dailyHours);
                     setWeeklyTotalMin(pomData.totalMinutes);
 
-                    const { score: focusScore } = await computeFocusScore();
-                    setScore(focusScore);
-                    setScoreText(getScoreLabel(focusScore));
+                    const { score: s } = await computeFocusScore();
+                    setScore(s);
+                    setScoreLabel(getScoreLabel(s));
 
-                    // Load streak
-                    const streakData = await getStreak();
-                    setStreak(streakData.currentStreak || 0);
+                    const sd = await getStreak();
+                    setStreak(sd.currentStreak || 0);
 
-                    // Load monthly pomodoro data
+                    // Today's pomodoro sessions
                     const raw = await AsyncStorage.getItem('@pomodoro_sessions');
-                    const sessions = raw ? JSON.parse(raw) : [];
-                    const now = new Date();
-                    const thisMonthStr = now.toISOString().slice(0, 7); // "YYYY-MM"
-                    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                    const lastMonthStr = lastMonth.toISOString().slice(0, 7);
-
-                    const thisMonthMin = sessions
-                        .filter(s => s.date.startsWith(thisMonthStr))
-                        .reduce((sum, s) => sum + s.minutes, 0);
-                    const lastMonthMin = sessions
-                        .filter(s => s.date.startsWith(lastMonthStr))
-                        .reduce((sum, s) => sum + s.minutes, 0);
-
-                    setMonthlyMinutes(thisMonthMin);
-                    setLastMonthMinutes(lastMonthMin);
-                } catch (err) {
-                    console.error('ScreentimeScreen load error:', err);
-                }
-            };
-            loadData();
+                    const all = raw ? JSON.parse(raw) : [];
+                    const today = new Date().toISOString().slice(0, 10);
+                    const ts = all
+                        .filter(s => s.date === today)
+                        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                        .slice(0, 5);
+                    setTodaySessions(ts);
+                } catch (e) { console.error('Focus load:', e); }
+            })();
         }, [])
     );
 
+    // ── Timer ───────────────────────────────────────────────────
     useEffect(() => {
-        Animated.timing(ringAnim, {
-            toValue: score / 100,
-            duration: 1200,
-            useNativeDriver: false,
-        }).start();
-    }, [score]);
+        if (isActive && seconds > 0) {
+            intervalRef.current = setInterval(() => setSeconds(s => s > 0 ? s - 1 : 0), 1000);
+        } else {
+            clearInterval(intervalRef.current);
+        }
+        return () => clearInterval(intervalRef.current);
+    }, [isActive, seconds]);
 
     useEffect(() => {
-        let interval = null;
-        if (isActive && timeLeft > 0) {
-            interval = setInterval(() => setTimeLeft(t => t - 1), 1000);
-        } else if (timeLeft === 0) {
-            clearInterval(interval);
+        if (seconds === 0 && isActive) {
             if (mode === 'Work') {
-                setSessionsCompleted(s => s + 1);
-                // Persist completed pomodoro session
-                recordPomodoroSession(25).then(async () => {
+                recordPomodoroSession(preset).then(async () => {
                     const pomData = await getWeeklyPomodoroData();
                     setWeeklyHours(pomData.dailyHours);
-                    const { score: newScore } = await computeFocusScore(true);
-                    setScore(newScore);
-                    setScoreText(getScoreLabel(newScore));
-                }).catch(err => console.error('Failed to record session:', err));
+                    setWeeklyTotalMin(pomData.totalMinutes);
+                    const { score: ns } = await computeFocusScore(true);
+                    setScore(ns);
+                    setScoreLabel(getScoreLabel(ns));
+                }).catch(console.error);
                 setMode('Break');
-                setTimeLeft(5 * 60);
+                setSeconds(5 * 60);
             } else {
                 setMode('Work');
-                setTimeLeft(25 * 60);
+                setSeconds(preset * 60);
             }
             setIsActive(false);
+            syncToDB(false);
         }
-        return () => clearInterval(interval);
-    }, [isActive, timeLeft, mode]);
+    }, [seconds, isActive, mode, preset]);
 
-    const toggleTimer = () => {
-        if (!isActive && mode === 'Work') {
-            blockWebsites();
-        } else if (isActive) {
-            unblockWebsites();
-        }
+    const toggle = () => {
+        if (!isActive && mode === 'Work') syncToDB(true);
+        else if (isActive) syncToDB(false);
         setIsActive(a => !a);
     };
 
-    const resetTimer = () => {
+    const reset = () => {
         setIsActive(false);
-        unblockWebsites();
-        setTimeLeft(mode === 'Work' ? 25 * 60 : 5 * 60);
+        syncToDB(false);
+        setSeconds(mode === 'Work' ? preset * 60 : 5 * 60);
     };
 
-    const switchMode = () => {
+    const setPresetAndReset = (p) => {
         setIsActive(false);
-        unblockWebsites();
-        const next = mode === 'Work' ? 'Break' : 'Work';
-        setMode(next);
-        setTimeLeft(next === 'Work' ? 25 * 60 : 5 * 60);
+        setPreset(p);
+        setSeconds(p * 60);
+        setMode('Work');
     };
 
-    const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-    const progress = timeLeft / (mode === 'Work' ? 25 * 60 : 5 * 60);
+    const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
+    const secs = String(seconds % 60).padStart(2, '0');
+    const totalSec = (mode === 'Work' ? preset * 60 : 5 * 60);
+    const progress = 1 - seconds / totalSec;
 
-    const chartData = {
-        labels: DAY_LABELS,
-        datasets: [{ data: weeklyHours.some(h => h > 0) ? weeklyHours : [0, 0, 0, 0, 0, 0, 0.1] }],
-    };
+    // ── Mock screen-time apps (would come from native screen-time API) ──
+    const apps = [
+        { name: 'Instagram', time: '2h 14m', color: SEM.red,    icon: Camera,         pct: 85 },
+        { name: 'YouTube',   time: '1h 32m', color: SEM.orange, icon: Play,           pct: 65 },
+        { name: 'Safari',    time: '48m',    color: SEM.blue,   icon: Globe,          pct: 35 },
+        { name: 'Messages',  time: '24m',    color: SEM.green,  icon: MessageCircle,  pct: 18 },
+        { name: 'TikTok',    time: '18m',    color: SEM.purple, icon: Video,          pct: 12 },
+    ];
 
     return (
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-            {showBanner && (
-                <View style={styles.banner}>
-                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <View style={styles.bannerIcon}><Download size={18} color="#fff" /></View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.bannerTitle}>Get the Chrome Extension</Text>
-                            <Text style={styles.bannerDesc}>The actual website blocker requires our official Chrome Extension to safely lock your browser.</Text>
-                        </View>
-                    </View>
-                    <TouchableOpacity style={styles.bannerClose} onPress={() => setShowBanner(false)}>
-                        <X size={16} color={theme.colors.ink3} />
-                    </TouchableOpacity>
-                </View>
-            )}
-
-            <View style={styles.headerContainer}>
-                <Text style={styles.header}>Focus</Text>
-                <Text style={styles.subtitle}>Study time & productivity tracking</Text>
-            </View>
-
-            {/* Focus Score Ring */}
-            <View style={styles.scoreCard}>
-                <View style={styles.scoreLeft}>
-                    <Text style={styles.scoreNum} adjustsFontSizeToFit numberOfLines={1}>
-                        {score}
-                    </Text>
-                    <Text style={[styles.scoreLabel, { color: scoreColor(score, theme) }]}>
-                        {scoreText || getScoreLabel(score)}
-                    </Text>
-                    <Text style={styles.scoreDesc}>Focus Score this week</Text>
-                </View>
-                <View style={styles.scoreRight}>
-                    {/* Simple ring-like progress bar */}
-                    <View style={styles.ringWrap}>
-                        <View style={[styles.ringTrack, { borderColor: theme.colors.border }]}>
-                            <View style={[styles.ringFill, {
-                                borderColor: scoreColor(score, theme),
-                                // approximate arc using borderRadius trick
-                                opacity: score / 100,
-                            }]} />
-                        </View>
-                        <Text style={[styles.ringPct, { color: scoreColor(score, theme) }]}>{score}%</Text>
-                    </View>
-                    <View style={styles.sessionRow}>
-                        {[...Array(4)].map((_, i) => (
-                            <View key={i} style={[styles.sessionDot, i < sessionsCompleted && { backgroundColor: theme.colors.ink }]} />
-                        ))}
-                    </View>
-                    <Text style={styles.sessionLabel}>{sessionsCompleted}/4 sessions today</Text>
-                </View>
-            </View>
-
-            {/* Pomodoro Timer */}
-            <View style={styles.card}>
-                <View style={styles.timerHeaderRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        {mode === 'Work'
-                            ? <BookOpen size={16} color={theme.colors.ink} />
-                            : <Coffee size={16} color={theme.colors.orange} />}
-                        <Text style={styles.cardTitle}>{mode === 'Work' ? 'Work Session' : 'Break Time'}</Text>
-                    </View>
-                    <TouchableOpacity onPress={switchMode} style={styles.switchBtn}>
-                        <Text style={styles.switchBtnText}>{mode === 'Work' ? '→ Break' : '→ Work'}</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Progress arc (simplified as a horizontal bar) */}
-                <View style={styles.timerProgressTrack}>
-                    <View style={[styles.timerProgressFill, {
-                        width: `${progress * 100}%`,
-                        backgroundColor: mode === 'Work' ? theme.colors.ink : theme.colors.orange,
-                    }]} />
-                </View>
-
-                <Text style={styles.timeDisplay}>{fmt(timeLeft)}</Text>
-
-                <View style={styles.timerButtonRow}>
-                    <TouchableOpacity
-                        style={[styles.timerBtn, { backgroundColor: isActive ? theme.colors.orange : theme.colors.green }]}
-                        onPress={toggleTimer}
-                    >
-                        {isActive ? <Pause size={18} color="#fff" /> : <Play size={18} color="#fff" />}
-                        <Text style={styles.timerBtnText}>{isActive ? 'Pause' : 'Start'}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.timerBtnOut} onPress={resetTimer}>
-                        <RotateCcw size={16} color={theme.colors.ink2} />
-                        <Text style={styles.timerBtnOutText}>Reset</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            {/* Weekly Stats Card */}
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>Weekly Stats</Text>
-                <View style={styles.statsRow}>
-                    <View style={styles.statItem}>
-                        <Clock size={16} color={theme.colors.blue} />
-                        <Text style={styles.statValue}>
-                            {Math.floor(weeklyTotalMin / 60)}h {weeklyTotalMin % 60}m
-                        </Text>
-                        <Text style={styles.statLabel}>Total Focus</Text>
-                    </View>
-                    <View style={styles.statDivider} />
-                    <View style={styles.statItem}>
-                        <TrendingUp size={16} color={theme.colors.green} />
-                        <Text style={styles.statValue}>
-                            {(weeklyTotalMin / 7 / 60).toFixed(1)}h
-                        </Text>
-                        <Text style={styles.statLabel}>Daily Avg</Text>
-                    </View>
-                    <View style={styles.statDivider} />
-                    <View style={styles.statItem}>
-                        <Flame size={16} color={theme.colors.orange} />
-                        <Text style={styles.statValue}>{streak}</Text>
-                        <Text style={styles.statLabel}>{streak === 1 ? 'Day Streak' : 'Day Streak'}</Text>
-                    </View>
-                </View>
-                <BarChart
-                    data={{
-                        labels: DAY_LABELS,
-                        datasets: [{ data: weeklyHours.some(h => h > 0) ? weeklyHours : [0, 0, 0, 0, 0, 0, 0.1] }],
-                    }}
-                    width={screenWidth - 100}
-                    height={160}
-                    yAxisSuffix="h"
-                    withInnerLines={false}
-                    showValuesOnTopOfBars={false}
-                    fromZero
-                    chartConfig={{
-                        backgroundColor: theme.colors.surface,
-                        backgroundGradientFrom: theme.colors.surface,
-                        backgroundGradientTo: theme.colors.surface,
-                        decimalPlaces: 1,
-                        color: (o = 1) => theme.colors.accent,
-                        labelColor: () => theme.colors.ink3,
-                        barPercentage: 0.5,
-                        propsForBackgroundLines: { stroke: theme.colors.border },
-                    }}
-                    style={{ borderRadius: 8, marginTop: 12 }}
-                />
-            </View>
-
-            {/* Monthly Overview */}
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>Monthly Overview</Text>
-                <Text style={styles.monthlyValue}>
-                    {(monthlyMinutes / 60).toFixed(1)} hours
-                </Text>
-                <Text style={styles.monthlyLabel}>this month</Text>
-                {lastMonthMinutes > 0 ? (
-                    <Text style={[styles.monthlyCompare, {
-                        color: monthlyMinutes >= lastMonthMinutes ? theme.colors.green : theme.colors.orange,
-                    }]}>
-                        {monthlyMinutes >= lastMonthMinutes
-                            ? `+${((monthlyMinutes - lastMonthMinutes) / 60).toFixed(1)}h from last month`
-                            : `${((monthlyMinutes - lastMonthMinutes) / 60).toFixed(1)}h from last month`}
-                    </Text>
-                ) : (
-                    <Text style={styles.monthlyCompare}>No data from last month</Text>
-                )}
-            </View>
-
-            {/* Website Blocker Manager */}
-            <BlacklistManager
-                blacklist={blacklist}
-                onAdd={handleAddDomain}
-                onRemove={handleRemoveDomain}
+        <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+            <TopBar
+                title="Focus"
+                subtitle="Stay locked in · Today's sessions, screen time, and your focus score"
+                actions={<Button variant="primary" icon={Play} onPress={toggle}>{isActive ? 'Pause' : 'Start session'}</Button>}
             />
 
-            {/* Weekly chart */}
-            <View style={styles.card}>
-                <Text style={styles.cardTitle}>Study Hours This Week</Text>
-                <Text style={styles.cardSub}>
-                    {weeklyHours.reduce((a, b) => a + b, 0).toFixed(1)} hrs total ·{' '}
-                    {(weeklyHours.reduce((a, b) => a + b, 0) / 7).toFixed(1)} avg / day
-                </Text>
-                <LineChart
-                    data={chartData}
-                    width={screenWidth - 100}
-                    height={150}
-                    yAxisSuffix="h"
-                    withDots
-                    withInnerLines={false}
-                    chartConfig={{
-                        backgroundColor: theme.colors.surface,
-                        backgroundGradientFrom: theme.colors.surface,
-                        backgroundGradientTo: theme.colors.surface,
-                        decimalPlaces: 1,
-                        color: (o = 1) => `rgba(13,12,10,${o})`,
-                        labelColor: (o = 1) => theme.colors.ink3,
-                        propsForDots: { r: '4', strokeWidth: '2', stroke: theme.colors.blue },
-                    }}
-                    bezier
-                    style={{ borderRadius: 8, marginTop: 10 }}
-                />
-            </View>
+            <ScrollView contentContainerStyle={{ padding: 28, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                <View style={{ maxWidth: 1200, alignSelf: 'center', width: '100%' }}>
 
-            <View style={{ height: 60 }} />
-        </ScrollView>
+                    {/* ── Chrome extension banner (web only, dismissable) ── */}
+                    {showBanner && (
+                        <View style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 12,
+                            padding: 14,
+                            backgroundColor: theme.colors.surface,
+                            borderRadius: theme.radii.lg,
+                            borderWidth: 1, borderColor: theme.colors.border,
+                            marginBottom: 20,
+                        }}>
+                            <View style={{
+                                width: 36, height: 36, borderRadius: 9,
+                                backgroundColor: SEM.blue + '18',
+                                alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                <Download size={18} color={SEM.blue} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>
+                                    Get the Chrome extension
+                                </Text>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 2 }}>
+                                    The website blocker requires our official Chrome extension to safely lock your browser.
+                                </Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setShowBanner(false)}>
+                                <X size={16} color={theme.colors.ink3} />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {/* ── Top row: Pomodoro + Score ── */}
+                    <View style={{ flexDirection: 'row', gap: 24, marginBottom: 24 }}>
+
+                        {/* Pomodoro Card */}
+                        <Card padding={32} style={{ flex: 1.2, alignItems: 'center' }}>
+                            <Text style={{
+                                fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '700',
+                                color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5,
+                                marginBottom: 20,
+                            }}>
+                                Pomodoro
+                            </Text>
+
+                            {/* Circular progress */}
+                            <View style={{ position: 'relative', width: 240, height: 240 }}>
+                                <Svg width="240" height="240" style={{ transform: [{ rotate: '-90deg' }] }}>
+                                    <Circle cx="120" cy="120" r="100" fill="none" stroke={theme.colors.surface2} strokeWidth="10" />
+                                    <Circle
+                                        cx="120" cy="120" r="100" fill="none"
+                                        stroke={mode === 'Work' ? SEM.green : SEM.orange}
+                                        strokeWidth="10"
+                                        strokeDasharray={2 * Math.PI * 100}
+                                        strokeDashoffset={2 * Math.PI * 100 * (1 - progress)}
+                                        strokeLinecap="round"
+                                    />
+                                </Svg>
+                                <View style={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Text style={{
+                                        fontFamily: theme.fonts.mono, fontSize: 56, fontWeight: '500',
+                                        color: theme.colors.ink, letterSpacing: -2,
+                                    }}>
+                                        {mins}:{secs}
+                                    </Text>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 4 }}>
+                                        {isActive ? `${mode === 'Work' ? 'Focusing' : 'On break'}…` : mode === 'Work' ? 'Ready to focus' : 'Break paused'}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            {/* Preset row */}
+                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 24 }}>
+                                {PRESETS.map((p) => {
+                                    const active = preset === p;
+                                    return (
+                                        <TouchableOpacity
+                                            key={p}
+                                            onPress={() => setPresetAndReset(p)}
+                                            activeOpacity={0.85}
+                                            style={{
+                                                paddingHorizontal: 14, paddingVertical: 7,
+                                                borderRadius: 8,
+                                                backgroundColor: active ? theme.colors.ink : theme.colors.surface2,
+                                            }}
+                                        >
+                                            <Text style={{
+                                                fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600',
+                                                color: active ? theme.colors.bg : theme.colors.ink2,
+                                            }}>
+                                                {p} min
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+
+                            {/* Action buttons */}
+                            <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: 20 }}>
+                                <Button
+                                    variant={isActive ? 'danger' : 'primary'}
+                                    size="lg"
+                                    icon={isActive ? Pause : Play}
+                                    onPress={toggle}
+                                >
+                                    {isActive ? 'Pause' : 'Start focus'}
+                                </Button>
+                                <Button variant="secondary" size="lg" icon={RotateCcw} onPress={reset}>
+                                    Reset
+                                </Button>
+                            </View>
+
+                            {/* Blocking apps indicator */}
+                            {isActive && mode === 'Work' && (
+                                <View style={{
+                                    flexDirection: 'row', alignItems: 'center', gap: 8,
+                                    padding: 10, paddingHorizontal: 14,
+                                    backgroundColor: SEM.red + '12', borderRadius: 8,
+                                    marginTop: 20,
+                                }}>
+                                    <Shield size={14} color={SEM.red} />
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, color: SEM.red, fontWeight: '600' }}>
+                                        Blocking distracting apps
+                                    </Text>
+                                </View>
+                            )}
+                        </Card>
+
+                        {/* Focus Score breakdown */}
+                        <Card padding={24} style={{ flex: 1 }}>
+                            <Text style={{
+                                fontFamily: theme.fonts.s, fontSize: 11, color: theme.colors.ink3,
+                                textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: '700',
+                            }}>
+                                Focus Score · This Week
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 10 }}>
+                                <Text style={{ fontFamily: theme.fonts.d, fontSize: 56, fontWeight: '700', color: focusColor, letterSpacing: -2 }}>
+                                    {score}
+                                </Text>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 15, color: theme.colors.ink3 }}>/ 100</Text>
+                                <View style={{
+                                    marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 4,
+                                    backgroundColor: focusColor + '15', borderRadius: 6,
+                                }}>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, color: focusColor, fontWeight: '600' }}>
+                                        {scoreLabel || 'Keep going'}
+                                    </Text>
+                                </View>
+                            </View>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, marginTop: 6 }}>
+                                Your focus score is computed from study time, streak, and consistency.
+                            </Text>
+
+                            {/* Sub-metrics */}
+                            <View style={{ marginTop: 22, gap: 14 }}>
+                                {[
+                                    { label: 'Weekly study',   val: Math.min(100, Math.round(weeklyTotalMin / 6)), total: `${Math.floor(weeklyTotalMin / 60)}h ${weeklyTotalMin % 60}m`, icon: Clock,        color: SEM.blue,   desc: weeklyTotalMin > 300 ? 'Target met' : 'Target: 5h+/week' },
+                                    { label: 'Daily streak',   val: Math.min(100, streak * 10),                    total: `${streak}d`,                                                  icon: Flame,        color: SEM.orange, desc: streak >= 7 ? 'Excellent consistency' : 'Keep going!' },
+                                    { label: 'Sessions today', val: Math.min(100, todaySessions.length * 25),       total: String(todaySessions.length),                                  icon: CheckCircle2, color: SEM.green,  desc: todaySessions.length >= 3 ? 'Great progress' : 'Aim for 3+ sessions' },
+                                    { label: 'Apps blocked',   val: Math.min(100, blacklist.length * 10),           total: String(blacklist.length),                                       icon: Shield,       color: SEM.purple, desc: 'Apps in your blocklist' },
+                                ].map((m, i) => {
+                                    const Icon = m.icon;
+                                    return (
+                                        <View key={i}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                                <View style={{
+                                                    width: 24, height: 24, borderRadius: 6,
+                                                    backgroundColor: m.color + '15',
+                                                    alignItems: 'center', justifyContent: 'center',
+                                                }}>
+                                                    <Icon size={13} color={m.color} />
+                                                </View>
+                                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink, fontWeight: '500' }}>
+                                                    {m.label}
+                                                </Text>
+                                                <Text style={{ marginLeft: 'auto', fontFamily: theme.fonts.mono, fontSize: 12, color: theme.colors.ink }}>
+                                                    {m.total}
+                                                </Text>
+                                            </View>
+                                            <View style={{ height: 6, backgroundColor: theme.colors.surface2, borderRadius: 3, overflow: 'hidden' }}>
+                                                <View style={{ width: `${m.val}%`, height: '100%', backgroundColor: m.color, borderRadius: 3 }} />
+                                            </View>
+                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 3 }}>
+                                                {m.desc}
+                                            </Text>
+                                        </View>
+                                    );
+                                })}
+                            </View>
+                        </Card>
+                    </View>
+
+                    {/* ── Bottom row: Today's sessions + Screen time ── */}
+                    <View style={{ flexDirection: 'row', gap: 24, marginBottom: 24 }}>
+
+                        {/* Today's sessions */}
+                        <Card padding={20} style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                                <History size={16} color={theme.colors.ink} strokeWidth={2.4} />
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink, flex: 1 }}>
+                                    Today's sessions
+                                </Text>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 }}>
+                                    {todaySessions.length} · {todaySessions.reduce((sum, s) => sum + (s.minutes || 0), 0)} min total
+                                </Text>
+                            </View>
+                            {todaySessions.length === 0 ? (
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, padding: 12, textAlign: 'center' }}>
+                                    No sessions yet today. Hit Start to log your first one.
+                                </Text>
+                            ) : todaySessions.map((s, i, arr) => {
+                                const t = new Date(s.timestamp || Date.now());
+                                const when = t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                                return (
+                                    <View key={i} style={{
+                                        flexDirection: 'row', alignItems: 'center', gap: 12,
+                                        paddingVertical: 10,
+                                        borderBottomWidth: i < arr.length - 1 ? 1 : 0,
+                                        borderBottomColor: theme.colors.border,
+                                    }}>
+                                        <View style={{
+                                            width: 32, height: 32, borderRadius: 8,
+                                            backgroundColor: SEM.green + '18',
+                                            alignItems: 'center', justifyContent: 'center',
+                                        }}>
+                                            <CheckCircle2 size={16} color={SEM.green} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>
+                                                {s.label || 'Pomodoro'}
+                                            </Text>
+                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>
+                                                {when} · Pomodoro
+                                            </Text>
+                                        </View>
+                                        <Badge color={SEM.green}>{s.minutes}m</Badge>
+                                    </View>
+                                );
+                            })}
+                        </Card>
+
+                        {/* Screen time */}
+                        <Card padding={20} style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                                <Smartphone size={16} color={theme.colors.ink} strokeWidth={2.4} />
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink, flex: 1 }}>
+                                    Screen time · today
+                                </Text>
+                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink4, fontStyle: 'italic' }}>
+                                    Sample
+                                </Text>
+                            </View>
+                            {apps.map((a, i) => {
+                                const Icon = a.icon;
+                                return (
+                                    <View key={i} style={{ marginBottom: i < apps.length - 1 ? 12 : 0 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                                            <View style={{
+                                                width: 24, height: 24, borderRadius: 6,
+                                                backgroundColor: a.color + '18',
+                                                alignItems: 'center', justifyContent: 'center',
+                                            }}>
+                                                <Icon size={12} color={a.color} />
+                                            </View>
+                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '500', color: theme.colors.ink, flex: 1 }}>
+                                                {a.name}
+                                            </Text>
+                                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 11, color: theme.colors.ink3 }}>
+                                                {a.time}
+                                            </Text>
+                                        </View>
+                                        <View style={{ height: 4, backgroundColor: theme.colors.surface2, borderRadius: 2, overflow: 'hidden', marginLeft: 34 }}>
+                                            <View style={{ width: `${a.pct}%`, height: '100%', backgroundColor: a.color, borderRadius: 2 }} />
+                                        </View>
+                                    </View>
+                                );
+                            })}
+                        </Card>
+                    </View>
+
+                    {/* ── Weekly bar chart (simple SVG) ── */}
+                    <Card padding={20} style={{ marginBottom: 24 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                            <TrendingUp size={16} color={theme.colors.ink} strokeWidth={2.4} />
+                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink, flex: 1 }}>
+                                This week
+                            </Text>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 }}>
+                                {Math.floor(weeklyTotalMin / 60)}h {weeklyTotalMin % 60}m total
+                            </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, height: 100 }}>
+                            {weeklyHours.map((h, i) => {
+                                const maxH = Math.max(...weeklyHours, 1);
+                                const heightPct = h / maxH;
+                                return (
+                                    <View key={i} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
+                                        <View style={{
+                                            width: '100%', height: `${heightPct * 100}%`,
+                                            backgroundColor: h > 0 ? SEM.green : theme.colors.surface2,
+                                            borderRadius: 4,
+                                            minHeight: 4,
+                                        }} />
+                                        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.ink3 }}>
+                                            {DAY_LABELS[i]}
+                                        </Text>
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    </Card>
+
+                    {/* ── Blocked sites manager ── */}
+                    <Card padding={20}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                            <Shield size={16} color={theme.colors.ink} strokeWidth={2.4} />
+                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink, flex: 1 }}>
+                                Blocked sites
+                            </Text>
+                        </View>
+                        <BlacklistManager
+                            blacklist={blacklist}
+                            onAdd={(d) => saveBlacklist([...blacklist, d])}
+                            onRemove={(d) => saveBlacklist(blacklist.filter(x => x !== d))}
+                            theme={theme}
+                        />
+                    </Card>
+                </View>
+            </ScrollView>
+        </View>
     );
 }
-
-const getStyles = (theme) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg, paddingTop: 40, paddingHorizontal: 20 },
-    headerContainer: { marginBottom: 20 },
-    header: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
-    subtitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginTop: 3 },
-
-    scoreCard: {
-        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: theme.radii.lg, padding: 20, flexDirection: 'row', alignItems: 'center',
-        marginBottom: 16, gap: 20, ...theme.shadows.sm
-    },
-    scoreLeft: { flex: 1 },
-    scoreNum: { fontFamily: theme.fonts.d, fontSize: 42, fontWeight: '700', color: theme.colors.ink, letterSpacing: -2, lineHeight: 50 },
-    scoreLabel: { fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '700', marginTop: 2 },
-    scoreDesc: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 },
-    scoreRight: { alignItems: 'center', gap: 10 },
-    ringWrap: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center' },
-    ringTrack: { width: 70, height: 70, borderRadius: 35, borderWidth: 6, alignItems: 'center', justifyContent: 'center' },
-    ringFill: { position: 'absolute', width: 70, height: 70, borderRadius: 35, borderWidth: 6, borderTopColor: 'transparent', borderBottomColor: 'transparent' },
-    ringPct: { fontFamily: theme.fonts.m, fontSize: 13, fontWeight: '700' },
-    sessionRow: { flexDirection: 'row', gap: 6 },
-    sessionDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: theme.colors.ink, backgroundColor: theme.colors.surface2 },
-    sessionLabel: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.8 },
-
-    card: {
-        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: theme.radii.lg, padding: 20, marginBottom: 16, ...theme.shadows.sm
-    },
-    cardTitle: { fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink, marginBottom: 4 },
-    cardSub: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
-
-    timerHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-    switchBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: theme.radii.r, borderWidth: 1, borderColor: theme.colors.border },
-    switchBtnText: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3 },
-    timerProgressTrack: { height: 4, backgroundColor: theme.colors.surface2, borderRadius: 2, marginBottom: 16, overflow: 'hidden' },
-    timerProgressFill: { height: 4, borderRadius: 2 },
-    timeDisplay: { fontFamily: theme.fonts.d, fontSize: 64, fontWeight: '300', color: theme.colors.ink, textAlign: 'center', letterSpacing: -2, marginBottom: 20 },
-    timerButtonRow: { flexDirection: 'row', gap: 12, justifyContent: 'center' },
-    timerBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 24, borderRadius: theme.radii.lg, gap: 8, ...theme.shadows.sm },
-    timerBtnText: { fontFamily: theme.fonts.s, color: '#fff', fontSize: 15 },
-    timerBtnOut: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 20, borderRadius: theme.radii.lg, gap: 8, borderWidth: 1, borderColor: theme.colors.border },
-    timerBtnOutText: { fontFamily: theme.fonts.s, color: theme.colors.ink2, fontSize: 14 },
-
-    tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 10 },
-    tipEmoji: { fontSize: 16, width: 22 },
-    tipText: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, flex: 1, lineHeight: 20 },
-
-    // Weekly Stats
-    statsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
-    statItem: { flex: 1, alignItems: 'center', gap: 4 },
-    statValue: { fontFamily: theme.fonts.d, fontSize: 20, fontWeight: '700', color: theme.colors.ink },
-    statLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 0.8 },
-    statDivider: { width: 1, height: 36, backgroundColor: theme.colors.border },
-
-    // Monthly Overview
-    monthlyValue: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, marginTop: 8 },
-    monthlyLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 },
-    monthlyCompare: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink3, marginTop: 8 },
-
-    banner: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: theme.colors.border, borderRadius: theme.radii.m, padding: 16, marginBottom: 20, shadowColor: theme.colors.border, shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, elevation: 3 },
-    bannerIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.colors.ink, alignItems: 'center', justifyContent: 'center' },
-    bannerTitle: { fontFamily: theme.fonts.b, fontSize: 15, color: theme.colors.ink, marginBottom: 2 },
-    bannerDesc: { fontFamily: theme.fonts.s, fontSize: 12, color: theme.colors.ink2, lineHeight: 18 },
-    bannerClose: { padding: 4, marginLeft: 8 },
-});
