@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Home, CalendarDays, BookOpen, Settings, Timer, Trophy, Plug, Crown, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DashboardScreen from '../screens/DashboardScreen';
 import MatrixScreen from '../screens/MatrixScreen';
 import GradebookScreen from '../screens/GradebookScreen';
@@ -11,8 +12,9 @@ import LeaderboardScreen from '../screens/LeaderboardScreen';
 import IntegrationsScreen from '../screens/IntegrationsScreen';
 import PremiumScreen from '../screens/PremiumScreen';
 import AIAssistantScreen from '../screens/AIAssistantScreen';
-import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
+import { usePremium } from '../context/PremiumContext';
+import { supabase } from '../supabaseClient';
 
 const Tab = createBottomTabNavigator();
 
@@ -33,12 +35,17 @@ const ACCOUNT_ITEMS = [
     { name: 'Settings',     label: 'Settings',    icon: Settings },
 ];
 
-const ALL_NAV = [...WORKSPACE_ITEMS, ...ACCOUNT_ITEMS];
+const COLLAPSE_KEY = '@sidebarCollapsed';
 
-function CustomSidebar({ state, descriptors, navigation }) {
+function CustomSidebar({ state, navigation, collapsed, setCollapsed, userName, userEmail }) {
     const { theme } = useTheme();
-    const [collapsed, setCollapsed] = useState(false);
-    const W = isWeb ? (collapsed ? 68 : 220) : 68;
+    const { isPro, subscription } = usePremium();
+
+    const initials = (userName || 'U')
+        .split(' ').filter(Boolean).map(s => s[0]).join('').slice(0, 2).toUpperCase() || 'U';
+
+    const proLabel = subscription?.isBeta ? 'Beta' : isPro ? 'Premium' : 'Free';
+    const proColor = isPro ? '#7C3AED' : theme.colors.ink3;
 
     const renderItem = (n) => {
         const routeIndex = state.routes.findIndex(r => r.name === n.name);
@@ -65,8 +72,10 @@ function CustomSidebar({ state, descriptors, navigation }) {
                     styles.navItem(theme),
                     isFocused && styles.navItemFocused(theme),
                     !isWeb && { justifyContent: 'center' },
+                    collapsed && { justifyContent: 'center', paddingHorizontal: 8 },
                 ]}
                 activeOpacity={0.7}
+                title={collapsed ? n.label : undefined}
             >
                 {/* Active indicator bar */}
                 {isFocused && (
@@ -102,11 +111,13 @@ function CustomSidebar({ state, descriptors, navigation }) {
         );
     };
 
+    const W = isWeb ? (collapsed ? 68 : 220) : 68;
+
     return (
         <View style={[styles.sidebar(theme, W)]}>
 
             {/* Logo */}
-            <View style={styles.logoRow(W)}>
+            <View style={[styles.logoRow, collapsed && { justifyContent: 'center', paddingLeft: 0 }]}>
                 <View style={styles.logoMark(theme)} />
                 {isWeb && !collapsed && (
                     <Text style={styles.logoText(theme)}>Option</Text>
@@ -148,24 +159,43 @@ function CustomSidebar({ state, descriptors, navigation }) {
                 </TouchableOpacity>
             )}
 
-            {/* User pill (web only, expanded) */}
+            {/* User pill (web only, expanded) — wired to real session */}
             {isWeb && !collapsed && (
-                <View style={styles.userPill(theme)}>
+                <TouchableOpacity
+                    onPress={() => {
+                        const route = state.routes.find(r => r.name === 'Settings');
+                        if (route) navigation.navigate('Settings');
+                    }}
+                    activeOpacity={0.7}
+                    style={styles.userPill(theme)}
+                >
                     <View style={styles.userAvatar(theme)}>
                         <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '700', color: theme.colors.bg }}>
-                            {/* Initials placeholder — could be wired to real user data */}
-                            U
+                            {initials}
                         </Text>
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink }} numberOfLines={1}>
-                            My Account
+                            {userName || 'My Account'}
                         </Text>
-                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: '#7C3AED', fontWeight: '600' }}>
-                            Premium
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: proColor, fontWeight: '600' }}>
+                            {proLabel}
                         </Text>
                     </View>
-                </View>
+                </TouchableOpacity>
+            )}
+
+            {/* Collapsed mode: just the avatar */}
+            {isWeb && collapsed && (
+                <TouchableOpacity
+                    onPress={() => navigation.navigate('Settings')}
+                    activeOpacity={0.7}
+                    style={[styles.userAvatar(theme), { marginTop: 8 }]}
+                >
+                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '700', color: theme.colors.bg }}>
+                        {initials}
+                    </Text>
+                </TouchableOpacity>
             )}
         </View>
     );
@@ -174,12 +204,60 @@ function CustomSidebar({ state, descriptors, navigation }) {
 export default function TabNavigator({ isGuest, onSignOut }) {
     const { theme } = useTheme();
     const [collapsed, setCollapsed] = useState(false);
+    const [userName, setUserName] = useState('');
+    const [userEmail, setUserEmail] = useState('');
+
+    // Load saved collapse preference + user info
+    useEffect(() => {
+        (async () => {
+            try {
+                const saved = await AsyncStorage.getItem(COLLAPSE_KEY);
+                if (saved === 'true') setCollapsed(true);
+
+                const name = await AsyncStorage.getItem('userName');
+                if (name) setUserName(name);
+
+                const email = await AsyncStorage.getItem('userEmail');
+                if (email) setUserEmail(email);
+
+                // Fall back to Supabase session for email/display name
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                    if (!name && session.user.user_metadata?.full_name) {
+                        const n = session.user.user_metadata.full_name;
+                        setUserName(n);
+                        await AsyncStorage.setItem('userName', n);
+                    }
+                    if (!email && session.user.email) {
+                        setUserEmail(session.user.email);
+                        await AsyncStorage.setItem('userEmail', session.user.email);
+                    }
+                }
+            } catch {}
+        })();
+    }, []);
+
+    // Persist collapse preference
+    const toggleCollapsed = (next) => {
+        const v = typeof next === 'function' ? next(collapsed) : next;
+        setCollapsed(v);
+        AsyncStorage.setItem(COLLAPSE_KEY, v ? 'true' : 'false').catch(() => {});
+    };
+
     const SIDEBAR_WIDTH = isWeb ? (collapsed ? 68 : 220) : 68;
 
     return (
         <Tab.Navigator
             initialRouteName="Home"
-            tabBar={(props) => <CustomSidebar {...props} />}
+            tabBar={(props) => (
+                <CustomSidebar
+                    {...props}
+                    collapsed={collapsed}
+                    setCollapsed={toggleCollapsed}
+                    userName={userName}
+                    userEmail={userEmail}
+                />
+            )}
             screenOptions={{
                 headerShown: false,
                 sceneStyle: { backgroundColor: theme.colors.bg, paddingLeft: SIDEBAR_WIDTH },
@@ -200,7 +278,7 @@ export default function TabNavigator({ isGuest, onSignOut }) {
     );
 }
 
-// ── Styles (functions so they get live theme values) ─────────────
+// ── Styles ──────────────────────────────────────────────────────
 
 const styles = {
     sidebar: (theme, W) => ({
@@ -211,10 +289,10 @@ const styles = {
         alignItems: 'center',
         zIndex: 100,
     }),
-    logoRow: (W) => ({
+    logoRow: {
         flexDirection: 'row', alignItems: 'center', gap: 10,
         marginBottom: 28, width: '100%', paddingLeft: 4,
-    }),
+    },
     logoMark: (theme) => ({
         width: 28, height: 28, backgroundColor: theme.colors.ink, borderRadius: 7, flexShrink: 0,
     }),

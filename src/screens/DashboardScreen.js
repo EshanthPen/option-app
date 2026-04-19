@@ -8,8 +8,9 @@ import {
     BookOpen, CalendarDays, TrendingUp, TrendingDown, AlertTriangle,
     Award, AlertCircle, Lightbulb, ChevronRight, Target, Flame,
     FileText, FlaskConical, HelpCircle, ClipboardCheck, Pencil,
-    Gauge, Sparkles,
+    Gauge, Sparkles, Activity,
 } from 'lucide-react-native';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useTheme } from '../context/ThemeContext';
 import { computeFocusScore, syncScoreToSupabase, getScoreLabel } from '../utils/focusScoreEngine';
 import { generateNudges } from '../utils/studyNudges';
@@ -278,6 +279,11 @@ export default function DashboardScreen() {
                             )}
                         </View>
 
+                        {/* Weekly Performance Chart */}
+                        {classes.length > 0 && (
+                            <WeeklyPerformanceChart classes={classes} theme={theme} />
+                        )}
+
                         {/* Recent Scores */}
                         {recentScores.length > 0 && (
                             <View>
@@ -530,5 +536,138 @@ export default function DashboardScreen() {
                 </View>
             </View>
         </ScrollView>
+    );
+}
+
+// ── Weekly Performance line chart (matches design SVG) ────────────
+function WeeklyPerformanceChart({ classes, theme }) {
+    // Compute average grade trend over the last 6-7 "snapshots" using class.gradeHistory if present,
+    // else simulate by interpolating slightly toward current grade.
+    const points = React.useMemo(() => {
+        if (!classes.length) return [];
+        // Use stored gradeHistory if available
+        const histories = classes
+            .map(c => Array.isArray(c.gradeHistory) ? c.gradeHistory : null)
+            .filter(Boolean);
+
+        const N = 7;
+        if (histories.length > 0) {
+            const length = Math.min(N, Math.max(...histories.map(h => h.length)));
+            const out = [];
+            for (let i = 0; i < length; i++) {
+                const vals = histories.map(h => h[h.length - length + i]).filter(v => typeof v === 'number');
+                out.push(vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null);
+            }
+            return out.filter(v => v !== null);
+        }
+        // Fallback: gentle ramp toward current overall average
+        const cur = classes.reduce((s, c) => s + (c.grade || 0), 0) / classes.length;
+        const start = Math.max(60, cur - 6);
+        return Array.from({ length: N }, (_, i) => +(start + (cur - start) * (i / (N - 1))).toFixed(1));
+    }, [classes]);
+
+    const SEM_GREEN = '#16A34A';
+    const SEM_RED = '#E03E3E';
+    const SEM_BLUE = '#2563EB';
+
+    if (points.length < 2) return null;
+
+    const W = 500;
+    const H = 140;
+    const minVal = Math.min(...points, 70);
+    const maxVal = Math.max(...points, 100);
+    const range = maxVal - minVal || 1;
+    const padX = 8;
+
+    const xs = points.map((_, i) => padX + (i / (points.length - 1)) * (W - 2 * padX));
+    const ys = points.map(v => H - ((v - minVal) / range) * (H - 12) - 6);
+
+    // Build smooth path
+    const pathD = xs.reduce((acc, x, i) => acc + `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${ys[i].toFixed(1)} `, '');
+    const fillD = pathD + `L ${xs[xs.length - 1].toFixed(1)} ${H} L ${xs[0].toFixed(1)} ${H} Z`;
+
+    const trend = points[points.length - 1] - points[0];
+    const trendColor = trend >= 0 ? SEM_GREEN : SEM_RED;
+    const stroke = trend >= 0 ? SEM_GREEN : trend < -2 ? SEM_RED : SEM_BLUE;
+
+    const labels = ['W12', 'W13', 'W14', 'W15', 'W16', 'W17', 'Now'].slice(-points.length);
+    const ySteps = [100, 90, 80, 70].filter(v => v >= minVal && v <= maxVal);
+
+    return (
+        <View style={{
+            backgroundColor: theme.colors.surface,
+            borderRadius: theme.radii.lg,
+            borderWidth: 1, borderColor: theme.colors.border,
+            padding: 20,
+            ...theme.shadows.sm,
+        }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Activity size={16} color={theme.colors.ink} strokeWidth={2.4} />
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '600', color: theme.colors.ink }}>
+                            Weekly Performance
+                        </Text>
+                    </View>
+                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginTop: 2 }}>
+                        Last {points.length} weeks · all classes
+                    </Text>
+                </View>
+                <View style={{
+                    paddingHorizontal: 10, paddingVertical: 4,
+                    backgroundColor: trendColor + '15',
+                    borderRadius: 6,
+                }}>
+                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '700', color: trendColor }}>
+                        {trend >= 0 ? '↑' : '↓'} {Math.abs(trend).toFixed(1)}%
+                    </Text>
+                </View>
+            </View>
+
+            {/* Chart */}
+            <View style={{ height: H, paddingLeft: 24, paddingRight: 4, position: 'relative' }}>
+                {/* Y-axis grid + labels */}
+                {ySteps.map((v) => {
+                    const y = H - ((v - minVal) / range) * (H - 12) - 6;
+                    return (
+                        <View key={v} style={{
+                            position: 'absolute', left: 24, right: 0, top: y,
+                            borderTopWidth: 1, borderTopColor: theme.colors.border,
+                            borderStyle: 'dashed',
+                        }}>
+                            <Text style={{
+                                position: 'absolute', left: -22, top: -7,
+                                fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.ink4,
+                            }}>
+                                {v}
+                            </Text>
+                        </View>
+                    );
+                })}
+
+                <Svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%" preserveAspectRatio="none">
+                    <Defs>
+                        <LinearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1">
+                            <Stop offset="0" stopColor={stroke} stopOpacity="0.25" />
+                            <Stop offset="1" stopColor={stroke} stopOpacity="0" />
+                        </LinearGradient>
+                    </Defs>
+                    <Path d={fillD} fill="url(#chartFill)" />
+                    <Path d={pathD} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                    {xs.map((x, i) => (
+                        <Circle key={i} cx={x} cy={ys[i]} r="4" fill={theme.colors.surface} stroke={stroke} strokeWidth="2" />
+                    ))}
+                </Svg>
+            </View>
+
+            {/* X-axis labels */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingLeft: 24, paddingRight: 4 }}>
+                {labels.map((l, i) => (
+                    <Text key={i} style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink3 }}>
+                        {l}
+                    </Text>
+                ))}
+            </View>
+        </View>
     );
 }

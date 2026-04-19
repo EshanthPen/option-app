@@ -1,9 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, TextInput,
     Alert, ScrollView, Modal, ActivityIndicator, Platform,
     KeyboardAvoidingView, Pressable, Dimensions
 } from 'react-native';
+
+const IS_WIDE = Platform.OS === 'web' && Dimensions.get('window').width > 1100;
 import { LineChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -134,6 +136,13 @@ export default function GradebookScreen() {
     }, []));
 
     const allClasses = [...svClasses, ...manClasses];
+
+    // On wide web screens, keep a class always selected so the right-pane detail is never empty.
+    useEffect(() => {
+        if (IS_WIDE && !selectedClass && allClasses.length > 0) {
+            setSelectedClass(allClasses[0]);
+        }
+    }, [IS_WIDE, allClasses.length]);
 
     // ── Sync quarter ──────────────────────────────────────────
     const syncPeriod = async (periodIndex) => {
@@ -546,8 +555,8 @@ export default function GradebookScreen() {
                 </View>
             )}
 
-            {/* Quarter tabs */}
-            {!cls && periods.length > 0 && (
+            {/* Quarter tabs (only when list is visible) */}
+            {(!cls || IS_WIDE) && periods.length > 0 && (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={S.tabsScroll} contentContainerStyle={S.tabsContent}>
                     {periods.map(p => {
                         const active = p.index === curPeriodIdx;
@@ -561,9 +570,19 @@ export default function GradebookScreen() {
                 </ScrollView>
             )}
 
+            {/* Two-panel container for wide web */}
+            <View style={{ flex: 1, flexDirection: IS_WIDE ? 'row' : 'column' }}>
+
             {/* CLASS LIST */}
-            {!cls && (
-                <ScrollView style={{ flex: 1 }} contentContainerStyle={S.listContent} showsVerticalScrollIndicator={false}>
+            {(!cls || IS_WIDE) && (
+                <ScrollView
+                    style={IS_WIDE
+                        ? { width: 320, flexShrink: 0, borderRightWidth: 1, borderRightColor: theme.colors.border, backgroundColor: theme.colors.surface }
+                        : { flex: 1 }
+                    }
+                    contentContainerStyle={S.listContent}
+                    showsVerticalScrollIndicator={false}
+                >
                     {allClasses.length > 0 && (
                         <View style={S.gpaBanner}>
                             <View>
@@ -977,8 +996,10 @@ export default function GradebookScreen() {
                 </View>
             )}
 
+            </View>{/* close two-panel container */}
+
             {/* FAB: Add class */}
-            {!cls && (
+            {(!cls || IS_WIDE) && (
                 <TouchableOpacity style={S.fab} onPress={() => setShowAddClass(true)} activeOpacity={0.85}>
                     <Plus size={22} color="#fff" />
                 </TouchableOpacity>
