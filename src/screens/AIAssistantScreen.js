@@ -335,12 +335,12 @@ export default function AIAssistantScreen() {
                     borderRightWidth: 1, borderRightColor: theme.colors.border,
                     display: 'flex', flexDirection: 'column',
                 }}>
-                    <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                    <View style={{ paddingVertical: 20, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
                         <Button variant="primary" icon={Plus} onPress={startNewChat}>
                             New conversation
                         </Button>
                     </View>
-                    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 8 }}>
+                    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 8 }}>
                         <SectionLabel style={{ paddingHorizontal: 10, marginBottom: 4 }}>Recent</SectionLabel>
                         {chatHistory.length === 0 ? (
                             <Text style={{
@@ -409,7 +409,7 @@ export default function AIAssistantScreen() {
 
                 {/* Header with mode pills + status */}
                 <View style={{
-                    paddingVertical: 12, paddingHorizontal: 20,
+                    paddingVertical: 16, paddingHorizontal: 32,
                     borderBottomWidth: 1, borderBottomColor: theme.colors.border,
                     backgroundColor: theme.colors.surface,
                     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -475,7 +475,7 @@ export default function AIAssistantScreen() {
                 <ScrollView
                     ref={bottomRef}
                     style={{ flex: 1 }}
-                    contentContainerStyle={{ padding: 20, paddingBottom: 12 }}
+                    contentContainerStyle={{ paddingVertical: 24, paddingHorizontal: 32 }}
                     showsVerticalScrollIndicator={false}
                 >
                     <View style={{ maxWidth: 760, alignSelf: 'center', width: '100%' }}>
@@ -483,27 +483,16 @@ export default function AIAssistantScreen() {
                         {/* CHAT MODE */}
                         {mode === 'chat' && (
                             <>
+                                {/* Default greeting message — matches design (page is never empty) */}
                                 {chatMessages.length === 0 && !chatLoading && (
-                                    <View style={{
-                                        alignItems: 'center', justifyContent: 'center',
-                                        minHeight: 360,
-                                        paddingVertical: 24,
-                                    }}>
-                                        <View style={{
-                                            width: 56, height: 56, borderRadius: 28,
-                                            backgroundColor: theme.colors.ink,
-                                            alignItems: 'center', justifyContent: 'center',
-                                            marginBottom: 14,
+                                    <Bubble role="ai">
+                                        <Text style={{
+                                            fontFamily: theme.fonts.m, fontSize: 14, lineHeight: 21,
+                                            color: theme.colors.ink,
                                         }}>
-                                            <Sparkles size={26} color="#fff" />
-                                        </View>
-                                        <Text style={{ fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, marginBottom: 6 }}>
-                                            Hi — I'm your Option AI Tutor
+                                            Hi! I'm your Option AI tutor. I can help with study plans, grade strategy, and homework. What's on your mind?
                                         </Text>
-                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, textAlign: 'center', maxWidth: 420 }}>
-                                            I know your grades, assignments, and study patterns. Ask me anything academic — or pick a mode above.
-                                        </Text>
-                                    </View>
+                                    </Bubble>
                                 )}
                                 {chatMessages.map((m, i) => (
                                     <Bubble key={i} role={m.role}>
@@ -614,7 +603,7 @@ export default function AIAssistantScreen() {
                 {mode === 'chat' && (
                     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                         <View style={{
-                            padding: 16, paddingHorizontal: 28,
+                            paddingTop: 16, paddingBottom: 24, paddingHorizontal: 32,
                             borderTopWidth: 1, borderTopColor: theme.colors.border,
                             backgroundColor: theme.colors.surface,
                         }}>

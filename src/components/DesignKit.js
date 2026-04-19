@@ -180,7 +180,7 @@ export function TopBar({
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                paddingHorizontal: 20, paddingTop: 14, paddingBottom: 14,
+                paddingHorizontal: 32, paddingTop: 20, paddingBottom: 20,
                 borderBottomWidth: 1,
                 borderBottomColor: theme.colors.border,
                 backgroundColor: theme.colors.surface,

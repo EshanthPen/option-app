@@ -218,7 +218,7 @@ export default function LeaderboardScreen() {
                 }
             />
 
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ paddingVertical: 28, paddingHorizontal: 32 }} showsVerticalScrollIndicator={false}>
                 <View style={{ maxWidth: 1200, alignSelf: 'center', width: '100%' }}>
 
                     {/* Scope tabs (large, design-style with count badges) */}

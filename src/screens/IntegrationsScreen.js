@@ -479,7 +479,7 @@ export default function IntegrationsScreen() {
     return (
         <View style={S.root}>
             <TopBar title="Integrations" subtitle="Connect your school's systems to sync grades and assignments" />
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={{ paddingVertical: 28, paddingHorizontal: 32 }} showsVerticalScrollIndicator={false}>
                 <View style={{ maxWidth: 900, alignSelf: 'center', width: '100%' }}>
 
                     {/* ── Integration cards grid ── */}
