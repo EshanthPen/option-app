@@ -147,6 +147,7 @@ const buildQuarterClasses = (courseSelection, basePcts, quarterIdx) => {
             teacher: TEACHERS[i % TEACHERS.length],
             assignments: makeAssignments(course.type, rounded, qDate),
             isAP: course.type === 'AP',
+            isDemo: true,
         };
     }).sort((a, b) => parseInt(a.period) - parseInt(b.period));
 };

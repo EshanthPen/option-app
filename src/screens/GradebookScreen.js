@@ -88,6 +88,7 @@ export default function GradebookScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
     const [gradeChanges, setGradeChanges] = useState(null);
+    const [chartWidth, setChartWidth] = useState(0);
 
     // Navigation
     const [selectedClass, setSelectedClass] = useState(null);
@@ -117,14 +118,24 @@ export default function GradebookScreen() {
     useFocusEffect(useCallback(() => {
         (async () => {
             try {
-                const [svRaw, perRaw, pName, pIdx, manRaw] = await Promise.all([
+                const [svRaw, perRaw, pName, pIdx, manRaw, isDemo] = await Promise.all([
                     AsyncStorage.getItem('studentVueGrades'),
                     AsyncStorage.getItem('studentVuePeriods'),
                     AsyncStorage.getItem('studentVuePeriodName'),
                     AsyncStorage.getItem('studentVuePeriodIndex'),
                     AsyncStorage.getItem(MANUAL_KEY),
+                    AsyncStorage.getItem('isDemoData'),
                 ]);
-                if (svRaw) setSvClasses(JSON.parse(svRaw));
+                const isDemoData = isDemo === 'true';
+                
+                if (svRaw) {
+                    const g = JSON.parse(svRaw);
+                    if (g.length > 0 && g[0].isDemo && !isDemoData) {
+                        setSvClasses([]);
+                    } else {
+                        setSvClasses(g);
+                    }
+                }
                 if (perRaw) setPeriods(JSON.parse(perRaw));
                 if (pName) setCurPeriodName(pName);
                 if (pIdx !== null) setCurPeriodIdx(parseInt(pIdx));
@@ -148,6 +159,7 @@ export default function GradebookScreen() {
     // ── Sync quarter ──────────────────────────────────────────
     const switchPeriod = async (periodIndex) => {
         try {
+            const isDemoData = await AsyncStorage.getItem('isDemoData') === 'true';
             const raw = await AsyncStorage.getItem(`studentVueGradesQ${periodIndex}`);
             const perRaw = await AsyncStorage.getItem('studentVuePeriods');
             const ps = JSON.parse(perRaw || '[]');
@@ -155,11 +167,20 @@ export default function GradebookScreen() {
             
             if (raw) {
                 const g = JSON.parse(raw);
-                setSvClasses(g);
-                await AsyncStorage.setItem('studentVueGrades', raw);
+                if (g.length > 0 && g[0].isDemo && !isDemoData) {
+                    // Ignore old demo data if beta mode is off
+                    setSvClasses([]);
+                } else {
+                    setSvClasses(g);
+                    await AsyncStorage.setItem('studentVueGrades', raw);
+                }
             } else if (periodIndex === 0) {
                 const currentGrades = await AsyncStorage.getItem('studentVueGrades');
-                if (currentGrades) setSvClasses(JSON.parse(currentGrades));
+                if (currentGrades) {
+                    const g = JSON.parse(currentGrades);
+                    if (g.length > 0 && g[0].isDemo && !isDemoData) setSvClasses([]);
+                    else setSvClasses(g);
+                }
             } else {
                 setSvClasses([]); 
             }
@@ -696,7 +717,7 @@ export default function GradebookScreen() {
 
             {/* CLASS DETAIL */}
             {cls && (
-                <View style={{ flex: 1 }}>
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
                     {/* Detail header (matches design): color dot + type badge + title + teacher | actions */}
                     <View style={{
                         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
@@ -876,41 +897,41 @@ export default function GradebookScreen() {
                                 ? (a.date ? a.date.replace(/\/\d{4}$/, '') : `${i + 1}`)
                                 : ''
                         );
-                        const chartWidth = Dimensions.get('window').width - 56;
                         return (
-                            <View style={S.gradeTrendCard}>
+                            <View style={S.gradeTrendCard} onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}>
                                 <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 }}>
                                     GRADE TREND
                                 </Text>
-                                <LineChart
-                                    data={{
-                                        labels,
-                                        datasets: [{ data: runningGrades, strokeWidth: 2 }],
-                                    }}
-                                    width={chartWidth}
-                                    height={140}
-                                    yAxisSuffix="%"
-                                    fromZero={false}
-                                    withInnerLines={false}
-                                    withOuterLines={false}
-                                    withDots={runningGrades.length <= 15}
-                                    chartConfig={{
-                                        backgroundColor: 'transparent',
-                                        backgroundGradientFrom: theme.colors.surface,
-                                        backgroundGradientTo: theme.colors.surface,
-                                        decimalPlaces: 0,
-                                        color: () => gColor,
-                                        labelColor: () => theme.colors.ink3,
-                                        propsForLabels: { fontFamily: theme.fonts.m, fontSize: 10 },
-                                        propsForDots: { r: '3', strokeWidth: '0', fill: gColor },
-                                        fillShadowGradientFrom: gColor,
-                                        fillShadowGradientFromOpacity: 0.15,
-                                        fillShadowGradientTo: gColor,
-                                        fillShadowGradientToOpacity: 0,
-                                    }}
-                                    bezier
-                                    style={{ borderRadius: 8, marginLeft: -8 }}
-                                />
+                                {chartWidth > 0 && (
+                                    <LineChart
+                                        data={{
+                                            labels,
+                                            datasets: [{ data: runningGrades, strokeWidth: 2 }],
+                                        }}
+                                        width={chartWidth - 28}
+                                        height={140}
+                                        yAxisSuffix="%"
+                                        fromZero={false}
+                                        withInnerLines={false}
+                                        withOuterLines={false}
+                                        withDots={runningGrades.length <= 15}
+                                        chartConfig={{
+                                            backgroundColor: 'transparent',
+                                            backgroundGradientFrom: theme.colors.surface,
+                                            backgroundGradientTo: theme.colors.surface,
+                                            decimalPlaces: 1,
+                                            color: () => gColor,
+                                            labelColor: () => theme.colors.ink3,
+                                            propsForLabels: { fontFamily: theme.fonts.m, fontSize: 10 },
+                                            propsForDots: { r: '3', strokeWidth: '0', fill: gColor },
+                                            fillShadowGradientFrom: gColor,
+                                            fillShadowGradientFromOpacity: 0.15,
+                                            fillShadowGradientTo: gColor,
+                                            fillShadowGradientToOpacity: 0,
+                                        }}
+                                        style={{ borderRadius: 8, paddingRight: 20 }}
+                                    />
+                                )}
                             </View>
                         );
                     })()}
@@ -948,7 +969,7 @@ export default function GradebookScreen() {
                     </ScrollView>
 
                     {/* Assignment list */}
-                    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+                    <View style={{ flex: 1, paddingBottom: 120 }}>
                         {renderAssignments.length === 0 && (
                             <View style={S.emptyState}>
                                 <Text style={S.emptyIcon}>📝</Text>
@@ -1322,7 +1343,7 @@ export default function GradebookScreen() {
                                 );
                             })
                         }
-                    </ScrollView>
+                    </View>
 
                     {cls.isManual && (
                         <TouchableOpacity style={S.deleteClassBtn} onPress={() => Alert.alert('Delete class?', `Remove "${cls.name}"?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => deleteManualClass(cls.id) }])}>
@@ -1330,7 +1351,7 @@ export default function GradebookScreen() {
                             <Text style={[S.deleteClassTxt]}>Delete Class</Text>
                         </TouchableOpacity>
                     )}
-                </View>
+                </ScrollView>
             )}
 
             </View>{/* close two-panel container */}
