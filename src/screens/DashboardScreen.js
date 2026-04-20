@@ -373,22 +373,24 @@ export default function DashboardScreen() {
                     {/* Right: Focus Widget + Classes + Needs Attention + Nudges */}
                     <View style={{ flex: 1, gap: 24 }}>
 
-                        {/* Focus Score Widget (dark gradient) */}
+                        {/* Focus Score Widget */}
                         <TouchableOpacity
                             onPress={() => navigation.navigate('Focus')}
                             activeOpacity={0.85}
                             style={{
                                 padding: 20, borderRadius: theme.radii.lg,
-                                backgroundColor: theme.colors.ink,
+                                backgroundColor: theme.colors.surface,
+                                borderWidth: 1, borderColor: theme.colors.border,
+                                ...theme.shadows.sm,
                                 overflow: 'hidden',
                             }}
                         >
                             <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
                                 <View>
-                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 1.2 }}>Today's Focus Score</Text>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.2 }}>Today's Focus Score</Text>
                                     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
-                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 48, fontWeight: '700', color: '#fff', letterSpacing: -2 }}>{focusScoreNum}</Text>
-                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>/ 100</Text>
+                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 48, fontWeight: '700', color: theme.colors.ink, letterSpacing: -2 }}>{focusScoreNum}</Text>
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink4 }}>/ 100</Text>
                                     </View>
                                     <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, color: focusScoreColor, marginTop: 4, fontWeight: '600' }}>
                                         {focusScoreNum >= 70 ? '↑ ' : focusScoreNum >= 50 ? '→ ' : '↓ '}{focusLabel || 'Keep going'}
@@ -396,8 +398,8 @@ export default function DashboardScreen() {
                                 </View>
                                 <View style={{
                                     width: 52, height: 52, borderRadius: 26,
-                                    backgroundColor: focusScoreColor + '25',
-                                    borderWidth: 2, borderColor: focusScoreColor,
+                                    backgroundColor: focusScoreColor + '18',
+                                    borderWidth: 2, borderColor: focusScoreColor + '40',
                                     alignItems: 'center', justifyContent: 'center'
                                 }}>
                                     <Target size={22} color={focusScoreColor} strokeWidth={2.4} />
@@ -411,10 +413,10 @@ export default function DashboardScreen() {
                                 ].map((m, i) => (
                                     <View key={i} style={{ flex: 1 }}>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>{m.label}</Text>
-                                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: '#fff', fontWeight: '600' }}>{m.val}</Text>
+                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3 }}>{m.label}</Text>
+                                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink, fontWeight: '600' }}>{m.val}</Text>
                                         </View>
-                                        <View style={{ height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+                                        <View style={{ height: 4, backgroundColor: theme.colors.surface2, borderRadius: 2, overflow: 'hidden' }}>
                                             <View style={{ width: `${m.val}%`, height: '100%', backgroundColor: m.color, borderRadius: 2 }} />
                                         </View>
                                     </View>

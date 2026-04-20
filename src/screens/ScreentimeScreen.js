@@ -43,6 +43,12 @@ export default function ScreentimeScreen() {
 
     // ── Blacklist & block sync ──────────────────────────────────
     useEffect(() => {
+        if (Platform.OS === 'web' && window) {
+            window.postMessage({ type: 'SYNC_THEME', payload: { theme: theme.colors } }, '*');
+        }
+    }, [theme]);
+
+    useEffect(() => {
         (async () => {
             try {
                 const stored = await AsyncStorage.getItem('@focus_blacklist');
@@ -58,16 +64,47 @@ export default function ScreentimeScreen() {
         await AsyncStorage.setItem('@focus_blacklist', JSON.stringify(next));
     };
 
-    const syncToDB = async (focused) => {
+    const syncToDB = async (focused, explicitStart = null) => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
             await supabase.from('profiles').update({ is_focused: focused, blacklist }).eq('id', user.id);
             if (Platform.OS === 'web' && window) {
-                window.postMessage({ type: 'SYNC_BLOCKER', payload: { isFocused: focused, blacklist } }, '*');
+                window.postMessage({ type: 'SYNC_BLOCKER', payload: { isFocused: focused, blacklist, sessionStart: focused ? (explicitStart || Date.now()) : null } }, '*');
             }
         } catch {}
     };
+
+    // ── Extension message listener ──────────────────────────────
+    useEffect(() => {
+        if (Platform.OS !== 'web' || !window) return;
+        
+        const handleMessage = (event) => {
+            if (event.data?.type === 'EXT_STATE_CHANGE') {
+                const { isFocused, sessionStart } = event.data.payload;
+                
+                // If extension says focused but app isn't active
+                if (isFocused && !isActive) {
+                    setMode('Work');
+                    setIsActive(true);
+                    
+                    // Sync timer with sessionStart if provided
+                    if (sessionStart) {
+                        const elapsedSecs = Math.floor((Date.now() - sessionStart) / 1000);
+                        const newSecs = Math.max(0, preset * 60 - elapsedSecs);
+                        setSeconds(newSecs);
+                    }
+                } 
+                // If extension says not focused but app is active
+                else if (!isFocused && isActive) {
+                    setIsActive(false);
+                }
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, [isActive, preset]);
 
     // ── Load focus data ─────────────────────────────────────────
     useFocusEffect(

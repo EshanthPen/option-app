@@ -233,10 +233,41 @@ export const parseStudentVueGradebook = (xmlString) => {
             }
 
             // Put it all together into the format GradebookScreen expects
+            let finalGrade = currentGrade;
+            
+            // Fallback calculation if the school reports 0 but there are assignments
+            if (finalGrade === 0 && formattedAssignments.length > 0) {
+                const cats = { Summative: { e: 0, p: 0 }, Formative: { e: 0, p: 0 }, Final: { e: 0, p: 0 } };
+                let hasGraded = false;
+                formattedAssignments.forEach(a => {
+                    if (!a.isGraded || a.score === null || a.total <= 0) return;
+                    hasGraded = true;
+                    const cat = a.category || 'Formative';
+                    if (cats[cat]) {
+                        cats[cat].e += a.score;
+                        cats[cat].p += a.total;
+                    } else {
+                        cats.Formative.e += a.score;
+                        cats.Formative.p += a.total;
+                    }
+                });
+
+                if (hasGraded) {
+                    const sAvg = cats.Summative.p > 0 ? (cats.Summative.e / cats.Summative.p) * 100 : null;
+                    const fAvg = cats.Formative.p > 0 ? (cats.Formative.e / cats.Formative.p) * 100 : null;
+                    const feAvg = cats.Final.p > 0 ? (cats.Final.e / cats.Final.p) * 100 : null;
+                    
+                    let w = sAvg !== null && fAvg !== null ? sAvg * 0.7 + fAvg * 0.3 : sAvg ?? fAvg ?? null;
+                    if (w !== null) {
+                        finalGrade = feAvg !== null ? w * 0.8 + feAvg * 0.2 : w;
+                    }
+                }
+            }
+
             formattedClasses.push({
                 id: course['@_ClassID'] || courseTitle,
                 name: courseTitle,
-                grade: currentGrade,
+                grade: finalGrade,
                 period: course['@_Period'] || '',
                 teacher: course['@_Staff'] || '',
                 room: course['@_Room'] || '',

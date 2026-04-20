@@ -80,11 +80,15 @@ export const diffGrades = (oldClasses, newClasses) => {
 /**
  * Save current grades as the "previous" snapshot before syncing new ones.
  */
-export const saveGradeSnapshot = async () => {
+export const saveGradeSnapshot = async (periodIndex) => {
     try {
-        const currentRaw = await AsyncStorage.getItem('studentVueGrades');
+        let pIdx = periodIndex;
+        if (pIdx === undefined) {
+            pIdx = await AsyncStorage.getItem('studentVuePeriodIndex') || '0';
+        }
+        const currentRaw = await AsyncStorage.getItem(`studentVueGradesQ${pIdx}`) || await AsyncStorage.getItem('studentVueGrades');
         if (currentRaw) {
-            await AsyncStorage.setItem(PREV_GRADES_KEY, currentRaw);
+            await AsyncStorage.setItem(`${PREV_GRADES_KEY}_${pIdx}`, currentRaw);
         }
     } catch (err) {
         console.error('saveGradeSnapshot error:', err);
@@ -95,10 +99,14 @@ export const saveGradeSnapshot = async () => {
  * After syncing new grades, diff against previous snapshot.
  * Returns the list of changes and saves them for UI display.
  */
-export const checkForGradeChanges = async () => {
+export const checkForGradeChanges = async (periodIndex, newGradesRaw) => {
     try {
-        const prevRaw = await AsyncStorage.getItem(PREV_GRADES_KEY);
-        const currentRaw = await AsyncStorage.getItem('studentVueGrades');
+        let pIdx = periodIndex;
+        if (pIdx === undefined) {
+            pIdx = await AsyncStorage.getItem('studentVuePeriodIndex') || '0';
+        }
+        const prevRaw = await AsyncStorage.getItem(`${PREV_GRADES_KEY}_${pIdx}`);
+        const currentRaw = newGradesRaw || await AsyncStorage.getItem(`studentVueGradesQ${pIdx}`) || await AsyncStorage.getItem('studentVueGrades');
 
         if (!prevRaw || !currentRaw) return [];
 
@@ -108,8 +116,17 @@ export const checkForGradeChanges = async () => {
         const changes = diffGrades(prevClasses, currentClasses);
 
         if (changes.length > 0) {
+            const existingRaw = await AsyncStorage.getItem(GRADE_CHANGES_KEY);
+            let allChanges = changes;
+            if (existingRaw) {
+                try {
+                    const existing = JSON.parse(existingRaw);
+                    allChanges = [...existing.changes, ...changes];
+                } catch(e) {}
+            }
+
             await AsyncStorage.setItem(GRADE_CHANGES_KEY, JSON.stringify({
-                changes,
+                changes: allChanges,
                 detectedAt: Date.now(),
             }));
         }

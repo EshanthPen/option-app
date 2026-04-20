@@ -1,13 +1,20 @@
 // Listens for messages from the popup or external sites
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'SYNC_BLOCKER') {
-        const { isFocused, blacklist } = request.payload;
+        const { isFocused, blacklist, sessionStart } = request.payload;
         
-        chrome.storage.local.set({ isFocused, blacklist }, () => {
+        chrome.storage.local.set({ isFocused, blacklist, sessionStart }, () => {
              updateBlockingRules(isFocused, blacklist);
-             sendResponse({ success: true });
+             if (sendResponse) sendResponse({ success: true });
         });
         return true; 
+    }
+
+    if (request.type === 'SYNC_THEME') {
+        chrome.storage.local.set({ theme: request.payload.theme }, () => {
+             if (sendResponse) sendResponse({ success: true });
+        });
+        return true;
     }
 });
 
@@ -29,10 +36,13 @@ async function updateBlockingRules(isFocused, blacklist) {
         return {
             id: index + 1, // Rule IDs must be 1 or greater
             priority: 1,
-            action: { type: 'block' },
+            action: { 
+                type: 'redirect',
+                redirect: { extensionPath: '/blocked.html' }
+            },
             condition: {
                 urlFilter: `*://${cleanedDomain}/*`,
-                resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest', 'script', 'image']
+                resourceTypes: ['main_frame']
             }
         };
     });
