@@ -92,10 +92,13 @@ export default function SettingsScreen({ navigation, isGuest, onSignOut }) {
     };
 
     const handleSignOut = () => {
+        const title = isGuest ? 'Create Account' : 'Sign Out';
+        const message = isGuest ? 'Sign out of guest mode to create an account?' : 'Sign out of all devices?';
+        
         if (Platform.OS === 'web') {
-            if (window.confirm('Sign out of all devices?')) onSignOut?.();
+            if (window.confirm(message)) onSignOut?.();
         } else {
-            Alert.alert('Sign Out', 'Sign out of all devices?', [
+            Alert.alert(title, message, [
                 { text: 'Cancel', style: 'cancel' },
                 { text: 'Sign out', style: 'destructive', onPress: () => onSignOut?.() },
             ]);
@@ -555,8 +558,10 @@ function AccountTab({ theme, userName, setUserName, userEmail, initials, isPro, 
                 })}
             </Card>
 
-            {!isGuest && (
+            {!isGuest ? (
                 <Button variant="danger" icon={LogOut} onPress={onSignOut}>Sign out of all devices</Button>
+            ) : (
+                <Button variant="primary" icon={LogOut} onPress={onSignOut}>Create account / Sign out</Button>
             )}
         </>
     );
