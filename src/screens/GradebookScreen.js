@@ -89,6 +89,7 @@ export default function GradebookScreen() {
     const [isSyncing, setIsSyncing] = useState(false);
     const [gradeChanges, setGradeChanges] = useState(null);
     const [chartWidth, setChartWidth] = useState(0);
+    const [fetchError, setFetchError] = useState(false);
 
     // Navigation
     const [selectedClass, setSelectedClass] = useState(null);
@@ -130,7 +131,8 @@ export default function GradebookScreen() {
                 
                 if (svRaw) {
                     const g = JSON.parse(svRaw);
-                    if (g.length > 0 && g[0].isDemo && !isDemoData) {
+                    const isOldDemo = g.length > 0 && g[0].name === 'Physical Education' && g[0].teacher === 'Dr. Sarah Okonkwo';
+                    if ((g.length > 0 && g[0].isDemo && !isDemoData) || (isOldDemo && !isDemoData)) {
                         setSvClasses([]);
                     } else {
                         setSvClasses(g);
@@ -159,30 +161,31 @@ export default function GradebookScreen() {
     // ── Sync quarter ──────────────────────────────────────────
     const switchPeriod = async (periodIndex) => {
         try {
+            setFetchError(false);
             const isDemoData = await AsyncStorage.getItem('isDemoData') === 'true';
             const raw = await AsyncStorage.getItem(`studentVueGradesQ${periodIndex}`);
             const perRaw = await AsyncStorage.getItem('studentVuePeriods');
             const ps = JSON.parse(perRaw || '[]');
             const pName = ps.find(p => p.index === periodIndex)?.name || `Quarter ${periodIndex + 1}`;
             
+            let g = null;
             if (raw) {
-                const g = JSON.parse(raw);
-                if (g.length > 0 && g[0].isDemo && !isDemoData) {
-                    // Ignore old demo data if beta mode is off
-                    setSvClasses([]);
-                } else {
-                    setSvClasses(g);
-                    await AsyncStorage.setItem('studentVueGrades', raw);
+                g = JSON.parse(raw);
+                const isOldDemo = g.length > 0 && g[0].name === 'Physical Education' && g[0].teacher === 'Dr. Sarah Okonkwo';
+                if ((g.length > 0 && g[0].isDemo && !isDemoData) || (isOldDemo && !isDemoData)) {
+                    g = null;
                 }
-            } else if (periodIndex === 0) {
+            }
+
+            if (!g && periodIndex === 0) {
                 const currentGrades = await AsyncStorage.getItem('studentVueGrades');
                 if (currentGrades) {
-                    const g = JSON.parse(currentGrades);
-                    if (g.length > 0 && g[0].isDemo && !isDemoData) setSvClasses([]);
-                    else setSvClasses(g);
+                    const cg = JSON.parse(currentGrades);
+                    const isOldDemo = cg.length > 0 && cg[0].name === 'Physical Education' && cg[0].teacher === 'Dr. Sarah Okonkwo';
+                    if (!((cg.length > 0 && cg[0].isDemo && !isDemoData) || (isOldDemo && !isDemoData))) {
+                        g = cg;
+                    }
                 }
-            } else {
-                setSvClasses([]); 
             }
             
             setCurPeriodName(pName);
@@ -190,8 +193,53 @@ export default function GradebookScreen() {
             await AsyncStorage.setItem('studentVuePeriodName', pName);
             await AsyncStorage.setItem('studentVuePeriodIndex', String(periodIndex));
             setSelectedClass(null);
+
+            if (g) {
+                setSvClasses(g);
+                await AsyncStorage.setItem('studentVueGrades', JSON.stringify(g));
+            } else {
+                setSvClasses([]);
+                if (!isDemoData) {
+                    const [svUser, svPass, svUrl] = await Promise.all([
+                        AsyncStorage.getItem('svUsername'),
+                        AsyncStorage.getItem('svPassword'),
+                        AsyncStorage.getItem('svDistrictUrl'),
+                    ]);
+                    
+                    if (svUser && svPass && svUrl) {
+                        setIsSyncing(true);
+                        try {
+                            const finalUrl = svUrl.endsWith('Service/PXPCommunication.asmx') ? svUrl : `${svUrl}/Service/PXPCommunication.asmx`;
+                            const base = Platform.OS === 'web' ? '' : 'https://optionapp.online';
+                            const soap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser}</userID><password>${svPass}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;${periodIndex}&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
+                            
+                            const res = await fetch(`${base}/api/studentvue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalUrl, soapPayload: soap }) });
+                            if (!res.ok) throw new Error('Network error');
+                            const xml = await res.text();
+                            if (!xml.includes('Gradebook') && xml.includes('RT_ERROR')) throw new Error('API error');
+                            
+                            const { classes: parsed } = parseStudentVueGradebook(xml);
+                            if (parsed && parsed.length > 0) {
+                                const parsedStr = JSON.stringify(parsed);
+                                await AsyncStorage.setItem(`studentVueGradesQ${periodIndex}`, parsedStr);
+                                await AsyncStorage.setItem('studentVueGrades', parsedStr);
+                                setSvClasses(parsed);
+                            } else {
+                                throw new Error('No grades found');
+                            }
+                        } catch (err) {
+                            setFetchError(true);
+                        } finally {
+                            setIsSyncing(false);
+                        }
+                    } else {
+                        setFetchError(true);
+                    }
+                }
+            }
         } catch (e) {
             console.error(e);
+            setFetchError(true);
         }
     };
 
@@ -676,7 +724,15 @@ export default function GradebookScreen() {
                         </TouchableOpacity>
                     )}
 
-                    {allClasses.length === 0 && (
+                    {allClasses.length === 0 && fetchError && (
+                        <View style={S.emptyState}>
+                            <Text style={S.emptyIcon}>⚠️</Text>
+                            <Text style={S.emptyTitle}>Sync Failed</Text>
+                            <Text style={S.emptySub}>Could not pull grades for {curPeriodName}. Please check your connection or try signing in again.</Text>
+                        </View>
+                    )}
+
+                    {allClasses.length === 0 && !fetchError && !isSyncing && (
                         <View style={S.emptyState}>
                             <Text style={S.emptyIcon}>📚</Text>
                             <Text style={S.emptyTitle}>No grades yet</Text>
