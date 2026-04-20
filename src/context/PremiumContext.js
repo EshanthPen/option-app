@@ -16,6 +16,8 @@ const BETA_TESTERS = [
   'eshanthpenumatsa@gmail.com',
   'joshua.umapathi@gmail.com',
   'ramineni.aarav@gmail.com',
+  'shaunakkanagal@gmail.com',
+  'talk2rithiks@gmail.com',
 ];
 const BETA_ACCESS_UNTIL = '2026-09-01T00:00:00Z'; // ISO date when beta access expires
 
