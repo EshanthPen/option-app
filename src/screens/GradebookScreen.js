@@ -15,7 +15,7 @@ import * as Notifications from 'expo-notifications';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useTheme } from '../context/ThemeContext';
-import { parseStudentVueGradebook } from '../utils/studentVueParser';
+import { parseStudentVueGradebook, parseStudentVuePeriods } from '../utils/studentVueParser';
 import { getRecentGradeChanges, dismissGradeChanges, isAssignmentNew, isClassGradeChanged, saveGradeSnapshot, checkForGradeChanges, formatChangeMessage } from '../utils/gradeNotifications';
 import { scheduleGradeChangeNotification } from '../utils/notificationService';
 
@@ -177,15 +177,27 @@ export default function GradebookScreen() {
             const finalUrl = svUrl.endsWith('Service/PXPCommunication.asmx') ? svUrl : `${svUrl}/Service/PXPCommunication.asmx`;
             const base = Platform.OS === 'web' ? '' : 'https://optionapp.online';
 
-            // ReportPeriod 0 always fetches the active/current marking period
-            const soap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser}</userID><password>${svPass}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;0&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
+            // 1. Fetch periods list to find the active period
+            const periodsSoap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser}</userID><password>${svPass}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;0&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
             
-            const res = await fetch(`${base}/api/studentvue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalUrl, soapPayload: soap }) });
-            if (!res.ok) throw new Error('Network error');
-            const xml = await res.text();
-            if (!xml.includes('Gradebook') && xml.includes('RT_ERROR')) throw new Error('API error');
+            const periodsRes = await fetch(`${base}/api/studentvue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalUrl, soapPayload: periodsSoap }) });
+            if (!periodsRes.ok) throw new Error('Network error');
+            const periodsXml = await periodsRes.text();
+            if (!periodsXml.includes('Gradebook') && periodsXml.includes('RT_ERROR')) throw new Error('API error');
             
-            const { classes: parsed } = parseStudentVueGradebook(xml);
+            const { currentPeriodIndex } = parseStudentVuePeriods(periodsXml);
+            let finalXml = periodsXml;
+            
+            // 2. If the active period is not 0 (e.g. FCPS returning 1st quarter when passing 0), fetch the active period specifically
+            if (currentPeriodIndex !== 0) {
+                const gradesSoap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser}</userID><password>${svPass}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;${currentPeriodIndex}&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
+                const gradesRes = await fetch(`${base}/api/studentvue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalUrl, soapPayload: gradesSoap }) });
+                if (gradesRes.ok) {
+                    finalXml = await gradesRes.text();
+                }
+            }
+            
+            const { classes: parsed } = parseStudentVueGradebook(finalXml);
             if (parsed && parsed.length > 0) {
                 const parsedStr = JSON.stringify(parsed);
                 

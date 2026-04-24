@@ -11,7 +11,7 @@ import { ChevronDown, RefreshCw, Database, Calendar, BookOpen, Plus, Check, X, L
 import { loadMockGradebookData } from '../utils/mockStudentData';
 import ICAL from 'ical.js';
 import { useTheme } from '../context/ThemeContext';
-import { parseStudentVueGradebook } from '../utils/studentVueParser';
+import { parseStudentVueGradebook, parseStudentVuePeriods } from '../utils/studentVueParser';
 import { parseFocusSISGrades } from '../utils/focusSISParser';
 import { getDeviceId } from '../utils/auth';
 import { TopBar, Card, Button, Badge, SEM } from '../components/DesignKit';
@@ -330,12 +330,28 @@ export default function IntegrationsScreen() {
             await AsyncStorage.setItem('svPassword', svPass);
             await AsyncStorage.setItem('svDistrictUrl', baseUrl);
             const finalTargetUrl = baseUrl.endsWith('Service/PXPCommunication.asmx') ? baseUrl : `${baseUrl}/Service/PXPCommunication.asmx`;
-            const soapPayload = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</userID><password>${svPass.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;0&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
-            const resp = await fetch('/api/studentvue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload }) });
-            if (!resp.ok) { const errData = await resp.json().catch(() => ({})); throw new Error(errData?.cause || resp.statusText); }
-            const xmlText = await resp.text();
-            if (xmlText.includes('Gradebook') || !xmlText.includes('RT_ERROR')) {
-                const { classes: formattedClasses } = parseStudentVueGradebook(xmlText);
+            // 1. Fetch periods list to find the active period
+            const periodsSoap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</userID><password>${svPass.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;0&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
+            const periodsResp = await fetch('/api/studentvue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload: periodsSoap }) });
+            if (!periodsResp.ok) { const errData = await periodsResp.json().catch(() => ({})); throw new Error(errData?.cause || periodsResp.statusText); }
+            const periodsXml = await periodsResp.text();
+            
+            if (!periodsXml.includes('Gradebook') && periodsXml.includes('RT_ERROR')) throw new Error('API error');
+            
+            const { currentPeriodIndex } = parseStudentVuePeriods(periodsXml);
+            let finalXml = periodsXml;
+            
+            // 2. If the active period is not 0, fetch the active period specifically
+            if (currentPeriodIndex !== 0) {
+                const gradesSoap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</userID><password>${svPass.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;${currentPeriodIndex}&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
+                const gradesResp = await fetch('/api/studentvue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload: gradesSoap }) });
+                if (gradesResp.ok) {
+                    finalXml = await gradesResp.text();
+                }
+            }
+
+            if (finalXml.includes('Gradebook') || !finalXml.includes('RT_ERROR')) {
+                const { classes: formattedClasses } = parseStudentVueGradebook(finalXml);
                 if (formattedClasses?.length > 0) {
                     await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
                     await AsyncStorage.setItem('isDemoData', 'false');
