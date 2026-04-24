@@ -125,21 +125,21 @@ export const parseStudentVueGradebook = (xmlString) => {
             let marks = course?.Marks?.Mark;
             let currentGrade = 0;
             let targetMark = null;
+            const formattedAssignments = [];
 
             if (marks) {
                 const marksList = Array.isArray(marks) ? marks : [marks];
 
-                // Try to find the most "relevant" active term.
-                // We prioritize marks that have a score and assignments.
+                // 1) Find targetMark for the OVERALL GRADE.
+                // We prioritize marks that have a score.
                 for (let i = marksList.length - 1; i >= 0; i--) {
                     const m = marksList[i];
                     if (!m) continue;
 
                     const hasScore = m['@_CalculatedScoreRaw'] || m['@_CalculatedScoreString'];
-                    const hasAssignments = m.Assignments?.Assignment;
                     const markName = (m['@_MarkName'] || '').toUpperCase();
 
-                    if (hasScore && hasAssignments && !markName.includes('EXAM') && !markName.includes('SEMESTER')) {
+                    if (hasScore && !markName.includes('EXAM') && !markName.includes('SEMESTER')) {
                         targetMark = m;
                         break;
                     }
@@ -173,17 +173,35 @@ export const parseStudentVueGradebook = (xmlString) => {
                         currentGrade = parseFloat(raw);
                     }
                 }
-            }
 
-            // Extract Assignments
-            const formattedAssignments = [];
+                // 2) Aggregate assignments from ALL valid marks
+                let allAssignments = [];
+                const seenAssignmentIds = new Set();
+                
+                for (let i = 0; i < marksList.length; i++) {
+                    const m = marksList[i];
+                    if (!m) continue;
 
-            if (targetMark) {
-                let assignments = targetMark?.Assignments?.Assignment;
-                if (assignments) {
-                    if (!Array.isArray(assignments)) assignments = [assignments];
+                    const markName = (m['@_MarkName'] || '').toUpperCase();
+                    // Skip semester/exam marks if we only want the quarter's assignments
+                    if (markName.includes('EXAM') || markName.includes('SEMESTER')) continue;
 
-                    assignments.forEach((asm, index) => {
+                    let mAssignments = m.Assignments?.Assignment;
+                    if (mAssignments) {
+                        if (!Array.isArray(mAssignments)) mAssignments = [mAssignments];
+                        mAssignments.forEach(asm => {
+                            const asmId = asm['@_GradebookID'] || `${courseTitle}-${asm['@_Measure'] || asm['@_Type']}`;
+                            if (!seenAssignmentIds.has(asmId)) {
+                                seenAssignmentIds.add(asmId);
+                                allAssignments.push(asm);
+                            }
+                        });
+                    }
+                }
+
+                // Extract Assignments
+                if (allAssignments.length > 0) {
+                    allAssignments.forEach((asm, index) => {
                         // StudentVUE sends points in several shapes depending on the district:
                         //   "45.00 / 50.0000"   → graded (45 earned, 50 possible)
                         //   "0 / 50.0000"       → zero grade (still valid, must show up)
@@ -216,8 +234,9 @@ export const parseStudentVueGradebook = (xmlString) => {
                         }
 
                         // @_Score fallback — may be "45", "45%", or "Not Graded"
-                        if (!isGraded && scoreStr && typeof scoreStr === 'string') {
-                            const cleanScore = scoreStr.replace('%', '').trim();
+                        if (!isGraded && scoreStr != null) {
+                            const strVal = String(scoreStr);
+                            const cleanScore = strVal.replace('%', '').trim();
                             const scoreNum = parseFloat(cleanScore);
                             if (!isNaN(scoreNum) && cleanScore.toLowerCase() !== 'not graded') {
                                 if (scoreTypeStr === 'Percentage' && !isNaN(total) && total > 0) {
