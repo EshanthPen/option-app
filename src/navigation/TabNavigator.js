@@ -167,7 +167,7 @@ function CustomSidebar({ state, navigation, collapsed, setCollapsed, userName, u
                         : <ChevronLeft size={14} color={theme.colors.ink3} />
                     }
                     {!collapsed && (
-                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 }}>Collapse</Text>
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 }}>Collapse</Text>
                     )}
                 </TouchableOpacity>
             )}
@@ -319,7 +319,7 @@ const styles = {
     },
     sectionLabel: (theme) => ({
         fontFamily: theme.fonts.m,
-        fontSize: 10, fontWeight: '600',
+        fontSize: 11, fontWeight: '600',
         color: theme.colors.ink4,
         textTransform: 'uppercase', letterSpacing: 1.2,
         paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4,
@@ -331,9 +331,14 @@ const styles = {
     }),
     navItemFocused: (theme) => ({
         backgroundColor: theme.colors.surface2,
+        shadowColor: theme.colors.ink,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 2,
     }),
     navLabel: (theme) => ({
-        fontFamily: theme.fonts.m, fontSize: 13, fontWeight: '500',
+        fontFamily: theme.fonts.m, fontSize: 14, fontWeight: '500',
         color: theme.colors.ink3, flex: 1,
     }),
     navLabelFocused: (theme) => ({

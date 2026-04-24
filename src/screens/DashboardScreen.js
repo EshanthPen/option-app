@@ -177,7 +177,7 @@ export default function DashboardScreen() {
 
     const urgentCount = upcoming.filter(a => (daysUntil(a.isoDate) || 0) <= 3).length;
 
-    const focusScoreColor = focusScoreNum >= 70 ? SEM.green : focusScoreNum >= 50 ? SEM.orange : SEM.red;
+    const focusScoreColor = focusScoreNum >= 70 ? SEM.green : focusScoreNum >= 40 ? SEM.orange : SEM.red;
 
     // Stat sub-texts matching the design's richer copy
     const apCount = classes.filter(c => c.type === 'AP').length;
@@ -313,13 +313,17 @@ export default function DashboardScreen() {
                                 );
                             }) : (
                                 <View style={{
-                                    padding: 32, alignItems: 'center',
+                                    padding: 42, alignItems: 'center',
                                     backgroundColor: theme.colors.surface,
                                     borderRadius: theme.radii.lg,
                                     borderWidth: 1, borderColor: theme.colors.border,
                                     ...theme.shadows.sm,
                                 }}>
-                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink3 }}>All caught up! No upcoming assignments.</Text>
+                                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: theme.colors.surface2, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                                        <Sparkles size={24} color={theme.colors.ink3} strokeWidth={1.5} />
+                                    </View>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink, marginBottom: 6 }}>All Caught Up</Text>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3, textAlign: 'center' }}>You have no upcoming assignments. Take a deep breath and enjoy the moment.</Text>
                                 </View>
                             )}
                         </View>
@@ -390,7 +394,6 @@ export default function DashboardScreen() {
                                     <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.2 }}>Today's Focus Score</Text>
                                     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
                                         <Text style={{ fontFamily: theme.fonts.s, fontSize: 48, fontWeight: '700', color: theme.colors.ink, letterSpacing: -2 }}>{focusScoreNum}</Text>
-                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink4 }}>/ 100</Text>
                                     </View>
                                     <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, color: focusScoreColor, marginTop: 4, fontWeight: '600' }}>
                                         {focusScoreNum >= 70 ? '↑ ' : focusScoreNum >= 50 ? '→ ' : '↓ '}{focusLabel || 'Keep going'}
@@ -445,20 +448,20 @@ export default function DashboardScreen() {
                                 {classes.slice(0, 6).map((c, i) => (
                                     <TouchableOpacity key={i} onPress={() => navigation.navigate('Gradebook')} style={{
                                         flexDirection: 'row', alignItems: 'center', gap: 12,
-                                        paddingVertical: 10,
+                                        paddingVertical: 14,
                                         borderTopWidth: i > 0 ? 1 : 0, borderTopColor: theme.colors.border,
                                     }}>
                                         <View style={{ width: 6, height: 28, backgroundColor: gradeColor(c.grade), borderRadius: 3, flexShrink: 0 }} />
                                         <View style={{ flex: 1, minWidth: 0 }}>
-                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }} numberOfLines={1}>{c.name}</Text>
-                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 1 }}>{c.type || 'REG'} · {c.teacher || ''}</Text>
+                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink }} numberOfLines={1}>{c.name}</Text>
+                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>{c.type || 'REG'} · {c.teacher || ''}</Text>
                                         </View>
                                         <View style={{ flex: 1, height: 5, backgroundColor: theme.colors.surface2, borderRadius: 3, overflow: 'hidden', maxWidth: 70 }}>
                                             <View style={{ width: `${c.grade}%`, height: '100%', backgroundColor: gradeColor(c.grade), borderRadius: 3 }} />
                                         </View>
                                         <View style={{ alignItems: 'flex-end', minWidth: 44 }}>
                                             <Text style={{ fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '700', color: gradeColor(c.grade) }}>{gradeLetter(c.grade)}</Text>
-                                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.ink3 }}>{c.grade}%</Text>
+                                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink3 }}>{Number(c.grade).toFixed(1)}%</Text>
                                         </View>
                                     </TouchableOpacity>
                                 ))}
@@ -499,7 +502,7 @@ export default function DashboardScreen() {
                                                 <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>Needs {(83 - c.grade).toFixed(1)}% to reach B</Text>
                                             </View>
                                             <View style={{ backgroundColor: col + '18', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-                                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '700', color: col }}>{c.grade}%</Text>
+                                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '700', color: col }}>{Number(c.grade).toFixed(1)}%</Text>
                                             </View>
                                         </View>
                                     );
@@ -696,12 +699,12 @@ function WeeklyPerformanceChart({ classes, theme }) {
                 <Svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%" preserveAspectRatio="none">
                     <Defs>
                         <LinearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1">
-                            <Stop offset="0" stopColor={stroke} stopOpacity="0.25" />
-                            <Stop offset="1" stopColor={stroke} stopOpacity="0" />
+                            <Stop offset="0" stopColor={stroke} stopOpacity="0.4" />
+                            <Stop offset="1" stopColor={stroke} stopOpacity="0.05" />
                         </LinearGradient>
                     </Defs>
                     <Path d={fillD} fill="url(#chartFill)" />
-                    <Path d={pathD} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                    <Path d={pathD} fill="none" stroke={stroke} strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
                     {xs.map((x, i) => (
                         <Circle key={i} cx={x} cy={ys[i]} r="4" fill={theme.colors.surface} stroke={stroke} strokeWidth="2" />
                     ))}

@@ -135,7 +135,7 @@ export const parseStudentVueGradebook = (xmlString) => {
                     const m = marksList[i];
                     if (!m) continue;
 
-                    const hasScore = m['@_CalculatedScoreRaw'];
+                    const hasScore = m['@_CalculatedScoreRaw'] || m['@_CalculatedScoreString'];
                     const hasAssignments = m.Assignments?.Assignment;
                     const markName = (m['@_MarkName'] || '').toUpperCase();
 
@@ -150,8 +150,28 @@ export const parseStudentVueGradebook = (xmlString) => {
                     targetMark = marksList[marksList.length - 1];
                 }
 
-                if (targetMark?.['@_CalculatedScoreRaw']) {
-                    currentGrade = parseFloat(targetMark['@_CalculatedScoreRaw']);
+                if (targetMark) {
+                    const raw = targetMark['@_CalculatedScoreRaw'];
+                    const str = targetMark['@_CalculatedScoreString'];
+                    
+                    let parsedStr = NaN;
+                    if (str) {
+                        // Extract percentage if present, e.g. "B+ (86.7%)" -> 86.7
+                        const pctMatch = str.match(/(\d{1,3}(?:\.\d+)?)%/);
+                        if (pctMatch) {
+                            parsedStr = parseFloat(pctMatch[1]);
+                        } else {
+                            // Otherwise look for a standalone number like "86.7" (avoiding "1st")
+                            const numMatch = str.match(/(?:^|\s|\()(\d{1,3}(?:\.\d+)?)(?:$|\s|\))/);
+                            if (numMatch) parsedStr = parseFloat(numMatch[1]);
+                        }
+                    }
+
+                    if (!isNaN(parsedStr) && parsedStr >= 0) {
+                        currentGrade = parsedStr;
+                    } else if (raw && !isNaN(parseFloat(raw))) {
+                        currentGrade = parseFloat(raw);
+                    }
                 }
             }
 
@@ -179,19 +199,20 @@ export const parseStudentVueGradebook = (xmlString) => {
                         let total = NaN;
                         let isGraded = false;
 
+                        // Prioritize explicitly labeled total points possible
+                        if (pointsPossibleStr && !isNaN(parseFloat(pointsPossibleStr))) {
+                            total = parseFloat(pointsPossibleStr);
+                        }
+
                         if (pointsStr && typeof pointsStr === 'string' && pointsStr.includes('/')) {
                             const parts = pointsStr.split('/');
                             const e = parseFloat(parts[0]);
                             const t = parseFloat(parts[1]);
                             if (!isNaN(t)) total = t;
                             if (!isNaN(e)) { earned = e; isGraded = true; }
-                        } else if (pointsStr && !isNaN(parseFloat(pointsStr))) {
-                            // Single number — treat as total points possible only
+                        } else if (isNaN(total) && pointsStr && !isNaN(parseFloat(pointsStr))) {
+                            // Single number and total not yet known — treat as total points possible
                             total = parseFloat(pointsStr);
-                        }
-
-                        if (isNaN(total) && pointsPossibleStr && !isNaN(parseFloat(pointsPossibleStr))) {
-                            total = parseFloat(pointsPossibleStr);
                         }
 
                         // @_Score fallback — may be "45", "45%", or "Not Graded"
