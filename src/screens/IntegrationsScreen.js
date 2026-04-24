@@ -335,17 +335,12 @@ export default function IntegrationsScreen() {
             if (!resp.ok) { const errData = await resp.json().catch(() => ({})); throw new Error(errData?.cause || resp.statusText); }
             const xmlText = await resp.text();
             if (xmlText.includes('Gradebook') || !xmlText.includes('RT_ERROR')) {
-                const { classes: formattedClasses, periods } = parseStudentVueGradebook(xmlText);
+                const { classes: formattedClasses } = parseStudentVueGradebook(xmlText);
                 if (formattedClasses?.length > 0) {
                     await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
                     await AsyncStorage.setItem('isDemoData', 'false');
                     setConnectedIds(prev => prev.includes('studentvue') ? prev : [...prev, 'studentvue']);
-                    if (periods?.length > 0) {
-                        await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(periods));
-                        const lastPeriod = periods[periods.length - 1];
-                        await AsyncStorage.setItem('studentVuePeriodName', lastPeriod.name);
-                        await AsyncStorage.setItem('studentVuePeriodIndex', String(lastPeriod.index));
-                    }
+
                     const totalAssignments = formattedClasses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
                     setSyncResult({ type: 'success', message: `Imported ${formattedClasses.length} classes with ${totalAssignments} assignments.` });
                 } else throw new Error("Connected but couldn't parse classes.");

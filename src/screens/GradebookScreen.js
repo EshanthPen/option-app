@@ -82,9 +82,6 @@ export default function GradebookScreen() {
     // Core state
     const [svClasses, setSvClasses] = useState([]);   // StudentVUE synced
     const [manClasses, setManClasses] = useState([]); // Manual entries
-    const [periods, setPeriods] = useState([]);
-    const [curPeriodIdx, setCurPeriodIdx] = useState(null);
-    const [curPeriodName, setCurPeriodName] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
     const [gradeChanges, setGradeChanges] = useState(null);
@@ -119,11 +116,8 @@ export default function GradebookScreen() {
     useFocusEffect(useCallback(() => {
         (async () => {
             try {
-                const [svRaw, perRaw, pName, pIdx, manRaw, isDemo] = await Promise.all([
+                const [svRaw, manRaw, isDemo] = await Promise.all([
                     AsyncStorage.getItem('studentVueGrades'),
-                    AsyncStorage.getItem('studentVuePeriods'),
-                    AsyncStorage.getItem('studentVuePeriodName'),
-                    AsyncStorage.getItem('studentVuePeriodIndex'),
                     AsyncStorage.getItem(MANUAL_KEY),
                     AsyncStorage.getItem('isDemoData'),
                 ]);
@@ -138,9 +132,7 @@ export default function GradebookScreen() {
                         setSvClasses(g);
                     }
                 }
-                if (perRaw) setPeriods(JSON.parse(perRaw));
-                if (pName) setCurPeriodName(pName);
-                if (pIdx !== null) setCurPeriodIdx(parseInt(pIdx));
+                
                 if (manRaw) setManClasses(JSON.parse(manRaw));
                 const changes = await getRecentGradeChanges();
                 if (changes) setGradeChanges(changes.changes);
@@ -158,93 +150,10 @@ export default function GradebookScreen() {
         }
     }, [IS_WIDE, allClasses.length]);
 
-    // ── Sync quarter ──────────────────────────────────────────
-    const switchPeriod = async (periodIndex) => {
+    // ── Sync Current Grades ───────────────────────────────────
+    const syncCurrentGrades = async () => {
         try {
             setFetchError(false);
-            const isDemoData = await AsyncStorage.getItem('isDemoData') === 'true';
-            const raw = await AsyncStorage.getItem(`studentVueGradesQ${periodIndex}`);
-            const perRaw = await AsyncStorage.getItem('studentVuePeriods');
-            const ps = JSON.parse(perRaw || '[]');
-            const pName = ps.find(p => p.index === periodIndex)?.name || `Quarter ${periodIndex + 1}`;
-            
-            let g = null;
-            if (raw) {
-                g = JSON.parse(raw);
-                const isOldDemo = g.length > 0 && g[0].name === 'Physical Education' && g[0].teacher === 'Dr. Sarah Okonkwo';
-                if ((g.length > 0 && g[0].isDemo && !isDemoData) || (isOldDemo && !isDemoData)) {
-                    g = null;
-                }
-            }
-
-            if (!g && periodIndex === 0) {
-                const currentGrades = await AsyncStorage.getItem('studentVueGrades');
-                if (currentGrades) {
-                    const cg = JSON.parse(currentGrades);
-                    const isOldDemo = cg.length > 0 && cg[0].name === 'Physical Education' && cg[0].teacher === 'Dr. Sarah Okonkwo';
-                    if (!((cg.length > 0 && cg[0].isDemo && !isDemoData) || (isOldDemo && !isDemoData))) {
-                        g = cg;
-                    }
-                }
-            }
-            
-            setCurPeriodName(pName);
-            setCurPeriodIdx(periodIndex);
-            await AsyncStorage.setItem('studentVuePeriodName', pName);
-            await AsyncStorage.setItem('studentVuePeriodIndex', String(periodIndex));
-            setSelectedClass(null);
-
-            if (g) {
-                setSvClasses(g);
-                await AsyncStorage.setItem('studentVueGrades', JSON.stringify(g));
-            } else {
-                setSvClasses([]);
-                if (!isDemoData) {
-                    const [svUser, svPass, svUrl] = await Promise.all([
-                        AsyncStorage.getItem('svUsername'),
-                        AsyncStorage.getItem('svPassword'),
-                        AsyncStorage.getItem('svDistrictUrl'),
-                    ]);
-                    
-                    if (svUser && svPass && svUrl) {
-                        setIsSyncing(true);
-                        try {
-                            const finalUrl = svUrl.endsWith('Service/PXPCommunication.asmx') ? svUrl : `${svUrl}/Service/PXPCommunication.asmx`;
-                            const base = Platform.OS === 'web' ? '' : 'https://optionapp.online';
-                            const soap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser}</userID><password>${svPass}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;${periodIndex}&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
-                            
-                            const res = await fetch(`${base}/api/studentvue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalUrl, soapPayload: soap }) });
-                            if (!res.ok) throw new Error('Network error');
-                            const xml = await res.text();
-                            if (!xml.includes('Gradebook') && xml.includes('RT_ERROR')) throw new Error('API error');
-                            
-                            const { classes: parsed } = parseStudentVueGradebook(xml);
-                            if (parsed && parsed.length > 0) {
-                                const parsedStr = JSON.stringify(parsed);
-                                await AsyncStorage.setItem(`studentVueGradesQ${periodIndex}`, parsedStr);
-                                await AsyncStorage.setItem('studentVueGrades', parsedStr);
-                                setSvClasses(parsed);
-                            } else {
-                                throw new Error('No grades found');
-                            }
-                        } catch (err) {
-                            setFetchError(true);
-                        } finally {
-                            setIsSyncing(false);
-                        }
-                    } else {
-                        setFetchError(true);
-                    }
-                }
-            }
-        } catch (e) {
-            console.error(e);
-            setFetchError(true);
-        }
-    };
-
-    const syncAllPeriods = async () => {
-        try {
             const isDemo = await AsyncStorage.getItem('isDemoData') === 'true';
             const [svUser, svPass, svUrl] = await Promise.all([
                 AsyncStorage.getItem('svUsername'),
@@ -255,7 +164,6 @@ export default function GradebookScreen() {
             if (isDemo && (!svUser || !svPass)) {
                 setIsSyncing(true);
                 await new Promise(r => setTimeout(r, 1000));
-                await switchPeriod(curPeriodIdx ?? 0);
                 setIsSyncing(false);
                 return;
             }
@@ -269,90 +177,47 @@ export default function GradebookScreen() {
             const finalUrl = svUrl.endsWith('Service/PXPCommunication.asmx') ? svUrl : `${svUrl}/Service/PXPCommunication.asmx`;
             const base = Platform.OS === 'web' ? '' : 'https://optionapp.online';
 
-            let currentPeriods = periods;
-            if (currentPeriods.length === 0) {
-                const soap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser}</userID><password>${svPass}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr></paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
-                const res = await fetch(`${base}/api/studentvue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalUrl, soapPayload: soap }) });
-                if (!res.ok) throw new Error('Failed to fetch periods');
-                const xml = await res.text();
-                const { periods: fetchedPeriods } = parseStudentVueGradebook(xml);
-                if (fetchedPeriods?.length > 0) {
-                    currentPeriods = fetchedPeriods;
-                    setPeriods(currentPeriods);
-                    await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(currentPeriods));
-                }
-            }
-
-            if (currentPeriods.length === 0) {
-                Alert.alert('Error', 'Could not find any grading periods.');
-                setIsSyncing(false);
-                return;
-            }
-
-            for (const p of currentPeriods) {
-                await saveGradeSnapshot(p.index);
-            }
-
-            let allChanges = [];
-            const fetchPromises = currentPeriods.map(async (p) => {
-                const soap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser}</userID><password>${svPass}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;${p.index}&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
-                const res = await fetch(`${base}/api/studentvue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalUrl, soapPayload: soap }) });
-                if (!res.ok) return null;
-                const xml = await res.text();
-                if (!xml.includes('Gradebook') && xml.includes('RT_ERROR')) return null;
-                return { index: p.index, xml };
-            });
-
-            const results = await Promise.all(fetchPromises);
+            // ReportPeriod 0 always fetches the active/current marking period
+            const soap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser}</userID><password>${svPass}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;0&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
             
-            let updatedCurrent = false;
-            const activePeriodIndex = curPeriodIdx ?? currentPeriods[currentPeriods.length - 1]?.index;
-
-            for (const res of results) {
-                if (!res) continue;
-                const { classes: parsed } = parseStudentVueGradebook(res.xml);
-                if (parsed?.length > 0) {
-                    const parsedStr = JSON.stringify(parsed);
-                    await AsyncStorage.setItem(`studentVueGradesQ${res.index}`, parsedStr);
-                    
-                    if (res.index === activePeriodIndex) {
-                        setSvClasses(parsed);
-                        await AsyncStorage.setItem('studentVueGrades', parsedStr);
-                        updatedCurrent = true;
-                    }
-                    
-                    const changes = await checkForGradeChanges(res.index, parsedStr);
-                    if (changes && changes.length > 0) {
-                        allChanges = [...allChanges, ...changes];
-                    }
-                }
-            }
-
-            if (!updatedCurrent && results.length > 0) {
-                await switchPeriod(activePeriodIndex);
-            }
+            const res = await fetch(`${base}/api/studentvue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalUrl, soapPayload: soap }) });
+            if (!res.ok) throw new Error('Network error');
+            const xml = await res.text();
+            if (!xml.includes('Gradebook') && xml.includes('RT_ERROR')) throw new Error('API error');
             
-            await AsyncStorage.setItem('isDemoData', 'false');
-
-            if (allChanges.length > 0) {
-                setGradeChanges(allChanges);
-                const msg = allChanges.length === 1
-                    ? formatChangeMessage(allChanges[0])
-                    : `${allChanges.length} grade updates detected`;
-                if (Platform.OS === 'web') window.alert(`Grade Update: ${msg}`);
-                else Alert.alert('Grade Update', msg);
+            const { classes: parsed } = parseStudentVueGradebook(xml);
+            if (parsed && parsed.length > 0) {
+                const parsedStr = JSON.stringify(parsed);
                 
-                if (Platform.OS !== 'web') {
-                    for (const change of allChanges) {
-                        if (change.type === 'grade_changed' && typeof change.oldGrade === 'number' && typeof change.newGrade === 'number') {
-                            scheduleGradeChangeNotification(change.className, change.oldGrade, change.newGrade).catch(() => {});
+                await saveGradeSnapshot(0);
+                const changes = await checkForGradeChanges(0, parsedStr);
+                
+                await AsyncStorage.setItem('studentVueGrades', parsedStr);
+                setSvClasses(parsed);
+                
+                if (changes && changes.length > 0) {
+                    setGradeChanges(changes);
+                    const msg = changes.length === 1
+                        ? formatChangeMessage(changes[0])
+                        : `${changes.length} grade updates detected`;
+                    if (Platform.OS === 'web') window.alert(`Grade Update: ${msg}`);
+                    else Alert.alert('Grade Update', msg);
+                    
+                    if (Platform.OS !== 'web') {
+                        for (const change of changes) {
+                            if (change.type === 'grade_changed' && typeof change.oldGrade === 'number' && typeof change.newGrade === 'number') {
+                                scheduleGradeChangeNotification(change.className, change.oldGrade, change.newGrade).catch(() => {});
+                            }
                         }
                     }
                 }
+            } else {
+                throw new Error('No grades found');
             }
-
-        } catch (e) { 
-            Alert.alert('Sync Error', e.message); 
+            await AsyncStorage.setItem('isDemoData', 'false');
+        } catch (err) {
+            console.error(err);
+            setFetchError(true);
         } finally {
             setIsSyncing(false);
         }
@@ -537,7 +402,7 @@ export default function GradebookScreen() {
                 .footer{margin-top:24px;font-size:10px;color:#9ca3af;text-align:center}
             </style></head><body>
                 <h1>Report Card</h1>
-                <p class="sub">${curPeriodName || 'Current Period'} &middot; Generated ${new Date().toLocaleDateString()}</p>
+                <p class="sub">Current Period &middot; Generated ${new Date().toLocaleDateString()}</p>
                 <div class="gpa-box"><div class="gpa-label">WEIGHTED GPA</div><div class="gpa-val">${overallGPA()}</div></div>
                 <table>
                     <thead><tr><th>Class</th><th style="text-align:center">Type</th><th style="text-align:center">Grade</th><th style="text-align:center">Pct</th><th style="text-align:center">W.GPA</th><th style="text-align:center">U.GPA</th></tr></thead>
@@ -625,7 +490,7 @@ export default function GradebookScreen() {
                 title={cls && !IS_WIDE ? cls.name : 'Gradebook'}
                 subtitle={cls && !IS_WIDE
                     ? (cls.teacher || '')
-                    : `${curPeriodName || 'Current period'} · ${allClasses.length} class${allClasses.length === 1 ? '' : 'es'}`}
+                    : `Current Period · ${allClasses.length} class${allClasses.length === 1 ? '' : 'es'}`}
                 actions={
                     cls && !IS_WIDE ? (
                         <TouchableOpacity
@@ -650,7 +515,7 @@ export default function GradebookScreen() {
                         </TouchableOpacity>
                     ) : (
                         <TouchableOpacity
-                            onPress={() => syncAllPeriods()}
+                            onPress={() => syncCurrentGrades()}
                             disabled={isSyncing}
                             style={{
                                 flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -671,21 +536,6 @@ export default function GradebookScreen() {
                     )
                 }
             />
-
-            {/* Quarter tabs (only when list is visible) */}
-            {(!cls || IS_WIDE) && periods.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={S.tabsScroll} contentContainerStyle={S.tabsContent}>
-                    {periods.map(p => {
-                        const active = p.index === curPeriodIdx;
-                        return (
-                            <TouchableOpacity key={p.index} style={[S.qTab, active && S.qTabActive]} onPress={() => switchPeriod(p.index)} disabled={isSyncing}>
-                                {isSyncing && active ? <ActivityIndicator size="small" color="#fff" style={{ marginRight: 5 }} /> : null}
-                                <Text style={[S.qTabTxt, active && S.qTabTxtActive]}>{p.name}</Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </ScrollView>
-            )}
 
             {/* Two-panel container for wide web */}
             <View style={{ flex: 1, flexDirection: IS_WIDE ? 'row' : 'column' }}>
@@ -728,7 +578,7 @@ export default function GradebookScreen() {
                         <View style={S.emptyState}>
                             <Text style={S.emptyIcon}>⚠️</Text>
                             <Text style={S.emptyTitle}>Sync Failed</Text>
-                            <Text style={S.emptySub}>Could not pull grades for {curPeriodName}. Please check your connection or try signing in again.</Text>
+                            <Text style={S.emptySub}>Could not pull grades for the current period. Please check your connection or try signing in again.</Text>
                         </View>
                     )}
 
