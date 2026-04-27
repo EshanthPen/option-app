@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform, Modal } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
@@ -15,7 +15,7 @@ import ICAL from 'ical.js';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { parseStudentVueGradebook, parseStudentVuePeriods } from '../utils/studentVueParser';
-import { getUserId } from '../utils/auth';
+import { getUserId, getDeviceId } from '../utils/auth';
 import WorkingHoursGraph from '../components/WorkingHoursGraph';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -54,6 +54,7 @@ export default function SettingsScreen() {
     // Auth State
     const [accessToken, setAccessToken] = useState(null);
     const [userId, setUserId] = useState(null);
+    const [deviceId, setDeviceId] = useState(null);
 
     const isWeb = typeof window !== 'undefined' && window.location;
 
@@ -119,6 +120,15 @@ export default function SettingsScreen() {
         };
         loadSettings();
     }, []);
+
+    const initialLoad = useRef(true);
+    useEffect(() => {
+        if (initialLoad.current) { initialLoad.current = false; return; }
+        const timer = setTimeout(() => {
+            AsyncStorage.setItem('smartScheduleHours', JSON.stringify(smartHours));
+        }, 800);
+        return () => clearTimeout(timer);
+    }, [smartHours]);
 
     const handleSaveName = async (name) => {
         setUserName(name);
@@ -408,9 +418,14 @@ export default function SettingsScreen() {
         }
     };
 
+    const webSafeAlert = (title, msg) => {
+        if (Platform.OS === 'web') window.alert(`${title}: ${msg}`);
+        else Alert.alert(title, msg);
+    };
+
     const syncGoogleCalendarManual = async () => {
         if (!accessToken) {
-            Alert.alert('Not Linked', 'Please sign in with Google first.');
+            webSafeAlert('Not Linked', 'Please sign in with Google first.');
             return;
         }
 
@@ -418,7 +433,7 @@ export default function SettingsScreen() {
         try {
             const savedGrades = await AsyncStorage.getItem('studentVueGrades');
             if (!savedGrades) {
-                Alert.alert('No Grade Data', 'Please sync with StudentVUE first so we have assignments to share with Google.');
+                webSafeAlert('No Grade Data', 'Please sync with StudentVUE first so we have assignments to share with Google.');
                 return;
             }
 
@@ -434,13 +449,13 @@ export default function SettingsScreen() {
 
             if (allAssignments.length > 0) {
                 const syncCount = await syncAssignmentsToCalendar(accessToken, allAssignments);
-                Alert.alert('Success!', `Synchronized ${syncCount} assignments to your Google Calendar.`);
+                webSafeAlert('Success!', `Synchronized ${syncCount} assignments to your Google Calendar.`);
             } else {
-                Alert.alert('No Assignments', 'No assignments found to sync.');
+                webSafeAlert('No Assignments', 'No assignments found to sync.');
             }
         } catch (error) {
             console.error(error);
-            Alert.alert('Error', 'Failed to manual sync: ' + error.message);
+            webSafeAlert('Error', 'Failed to manual sync: ' + error.message);
         } finally {
             setIsSyncing(false);
         }
@@ -448,7 +463,7 @@ export default function SettingsScreen() {
 
     const blockOutTimeOnGoogleCalendar = async () => {
         if (!accessToken) {
-            Alert.alert('Not Linked', 'Please sign in with Google first.');
+            webSafeAlert('Not Linked', 'Please sign in with Google first.');
             return;
         }
 
@@ -473,12 +488,12 @@ export default function SettingsScreen() {
             });
 
             if (res.ok) {
-                Alert.alert('Success!', 'Successfully scheduled a 1-hour block on your real Google Calendar!');
+                webSafeAlert('Success!', 'Successfully scheduled a 1-hour block on your real Google Calendar!');
             } else {
-                Alert.alert('Calendar Error', 'Failed to insert the event. Are scopes correct?');
+                webSafeAlert('Calendar Error', 'Failed to insert the event. Are scopes correct?');
             }
         } catch (error) {
-            Alert.alert('Error', 'Network issue reaching Google.');
+            webSafeAlert('Error', 'Network issue reaching Google.');
         }
     };
 
@@ -536,7 +551,7 @@ export default function SettingsScreen() {
                         </View>
                         <View>
                             <Text style={styles.profileEmail}>
-                                {supabase.auth.getUser()?.email || 'Logged In'}
+                                {userName || 'Logged In'}
                             </Text>
                             <Text style={styles.profileStatus}>Personal Account</Text>
                         </View>
@@ -852,7 +867,7 @@ export default function SettingsScreen() {
 
             <View style={styles.card}>
                 <Text style={styles.cardTitle}>Smart Scheduling</Text>
-                <Text style={styles.instructions}>Drag the nodes to define your available working hours per day. The AI Scheduler will only place tasks between the green (Start) and blue (End) lines.</Text>
+                <Text style={styles.instructions}>Set your available working hours per day. The AI Scheduler will only place tasks within these windows.</Text>
 
                 <View style={{ marginTop: 20, marginBottom: 10 }}>
                     <WorkingHoursGraph
@@ -872,6 +887,40 @@ export default function SettingsScreen() {
                         <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3 }}>End Time</Text>
                     </View>
                 </View>
+
+                <Text style={[styles.label, { marginTop: 10, marginBottom: 12 }]}>Per-Day Hours (24h format)</Text>
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((dayLabel, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink, width: 36 }}>{dayLabel}</Text>
+                        <TextInput
+                            style={[styles.input, { flex: 1, marginBottom: 0, textAlign: 'center', paddingVertical: 8 }]}
+                            keyboardType="numeric"
+                            value={String(smartHours[i]?.start ?? 15)}
+                            onChangeText={(v) => {
+                                const val = Math.max(0, Math.min(23, parseInt(v) || 0));
+                                const clone = { ...smartHours };
+                                clone[i] = { ...clone[i], start: val };
+                                setSmartHours(clone);
+                            }}
+                            placeholder="Start"
+                            placeholderTextColor={theme.colors.ink3}
+                        />
+                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 }}>to</Text>
+                        <TextInput
+                            style={[styles.input, { flex: 1, marginBottom: 0, textAlign: 'center', paddingVertical: 8 }]}
+                            keyboardType="numeric"
+                            value={String(smartHours[i]?.end ?? 22)}
+                            onChangeText={(v) => {
+                                const val = Math.max(0, Math.min(24, parseInt(v) || 0));
+                                const clone = { ...smartHours };
+                                clone[i] = { ...clone[i], end: val };
+                                setSmartHours(clone);
+                            }}
+                            placeholder="End"
+                            placeholderTextColor={theme.colors.ink3}
+                        />
+                    </View>
+                ))}
 
                 <TouchableOpacity style={[styles.actionBtn, { marginTop: 15 }]} onPress={handleSaveWorkingHours}>
                     <Text style={styles.actionBtnText}>Save Hours</Text>

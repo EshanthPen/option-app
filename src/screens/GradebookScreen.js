@@ -8,6 +8,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { ChevronLeft, RefreshCw, Plus, Wand2, Target, BookOpen, Trash2 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
+
+const webAlert = (title, message, buttons) => {
+    if (Platform.OS === 'web') {
+        if (buttons && buttons.length > 1) {
+            const confirmed = window.confirm(`${title}\n\n${message}`);
+            if (confirmed) {
+                const destructive = buttons.find(b => b.style === 'destructive');
+                if (destructive?.onPress) destructive.onPress();
+            }
+        } else {
+            window.alert(`${title}: ${message}`);
+        }
+    } else {
+        Alert.alert(title, message, buttons);
+    }
+};
 import { parseStudentVueGradebook } from '../utils/studentVueParser';
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -161,7 +177,7 @@ export default function GradebookScreen() {
             }
 
             if (!svUser || !svPass || !svUrl) {
-                Alert.alert('Not configured', 'Enter credentials in Settings first.');
+                webAlert('Not configured', 'Enter credentials in Settings first.');
                 return;
             }
             setIsSyncing(true);
@@ -189,8 +205,8 @@ export default function GradebookScreen() {
                 await AsyncStorage.setItem('studentVuePeriodName', pName);
                 await AsyncStorage.setItem('studentVuePeriodIndex', String(periodIndex));
                 setSelectedClass(null);
-            } else { Alert.alert('No Data', 'No grades found for this period.'); }
-        } catch (e) { Alert.alert('Sync Error', e.message); }
+            } else { webAlert('No Data', 'No grades found for this period.'); }
+        } catch (e) { webAlert('Sync Error', e.message); }
         finally { setIsSyncing(false); }
     };
 
@@ -605,7 +621,7 @@ export default function GradebookScreen() {
 
                     {/* Delete manual class */}
                     {cls.isManual && viewMode === 'assignments' && (
-                        <TouchableOpacity style={S.deleteClassBtn} onPress={() => Alert.alert('Delete class?', `Remove "${cls.name}"?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => deleteManualClass(cls.id) }])}>
+                        <TouchableOpacity style={S.deleteClassBtn} onPress={() => webAlert('Delete class?', `Remove "${cls.name}"?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => deleteManualClass(cls.id) }])}>
                             <Trash2 size={14} color={theme.colors.red} />
                             <Text style={[S.deleteClassTxt]}>Delete Class</Text>
                         </TouchableOpacity>

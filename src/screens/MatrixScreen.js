@@ -3,7 +3,6 @@ import {
     View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
     ScrollView, Alert, Dimensions, Platform, ActivityIndicator
 } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ICAL from 'ical.js';
 import { supabase } from '../supabaseClient';
@@ -46,6 +45,11 @@ export default function MatrixScreen() {
     const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
     const [selectedTaskIds, setSelectedTaskIds] = useState([]);
     const [userId, setUserId] = useState(null);
+
+    // Schedule preview state
+    const [previewModalVisible, setPreviewModalVisible] = useState(false);
+    const [previewBlocks, setPreviewBlocks] = useState([]);
+    const [previewToken, setPreviewToken] = useState(null);
 
     // Form state
     const [title, setTitle] = useState('');
@@ -300,7 +304,6 @@ export default function MatrixScreen() {
     const handleSmartSchedule = async () => {
         setSaving(true);
         try {
-            // 1. Auth check
             const token = await AsyncStorage.getItem('googleAccessToken');
             if (!token) {
                 if (Platform.OS === 'web') window.alert('Not Signed In: Go to Settings and sign in with Google to use Smart Scheduling.');
@@ -309,34 +312,22 @@ export default function MatrixScreen() {
                 return;
             }
 
-            // 2. Load Working Hours (7 days. 0=Mon, ..., 6=Sun visually)
             const savedHours = await AsyncStorage.getItem('smartScheduleHours');
             let workingHours;
             if (savedHours) {
-                try {
-                    workingHours = JSON.parse(savedHours);
-                } catch (e) { console.error("Error parsing smart hours", e); }
+                try { workingHours = JSON.parse(savedHours); } catch (e) { console.error("Error parsing smart hours", e); }
             }
-
             if (!workingHours) {
-                // Fallback to old format
                 const startStr = await AsyncStorage.getItem('workingStartHour');
                 const endStr = await AsyncStorage.getItem('workingEndHour');
                 const s = startStr ? parseInt(startStr) : 15;
                 const e = endStr ? parseInt(endStr) : 22;
-                workingHours = {
-                    0: { start: s, end: e }, 1: { start: s, end: e }, 2: { start: s, end: e },
-                    3: { start: s, end: e }, 4: { start: s, end: e }, 5: { start: s, end: e },
-                    6: { start: s, end: e }
-                };
+                workingHours = { 0: { start: s, end: e }, 1: { start: s, end: e }, 2: { start: s, end: e }, 3: { start: s, end: e }, 4: { start: s, end: e }, 5: { start: s, end: e }, 6: { start: s, end: e } };
             }
 
-            // 3. Fetch Google Calendar constraints for the next 14 days
             const now = new Date();
             const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
             const busyPeriods = await fetchFreeBusy(token, now, twoWeeksOut);
-
-            // 4. Run AI Scheduler Algorithm against 'unscheduled' tasks
             const optimizedTasks = performSmartScheduling(tasks, busyPeriods, workingHours);
 
             if (optimizedTasks.length === 0) {
@@ -346,12 +337,30 @@ export default function MatrixScreen() {
                 return;
             }
 
+            setPreviewBlocks(optimizedTasks);
+            setPreviewToken(token);
+            setPreviewModalVisible(true);
+        } catch (error) {
+            console.error("Smart Schedule Error:", error);
+            if (Platform.OS === 'web') window.alert("Failed to generate schedule. Check console.");
+            else Alert.alert("Error", "Failed to generate schedule.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const confirmSmartSchedule = async () => {
+        setSaving(true);
+        const token = previewToken;
+        const optimizedTasks = previewBlocks;
+        setPreviewModalVisible(false);
+
+        try {
             let successCount = 0;
             const originalIdsToUpdate = [];
             const newWorktimes = [];
 
             for (const worktimeTask of optimizedTasks) {
-                // Save to Google Calendar
                 const event = {
                     summary: `${worktimeTask.title} 🤖`,
                     description: `Priority: ${worktimeTask.urgency}U/${worktimeTask.importance}I\n\nAutomatically scheduled by Option Smart AI.`,
@@ -362,19 +371,17 @@ export default function MatrixScreen() {
                 const calSuccess = await createGoogleCalendarEvent(token, event);
 
                 if (calSuccess) {
-                    // Save locally instead of Supabase to avoid schema conflicts
                     worktimeTask.id = 'wt_' + Date.now() + Math.random().toString(36).substr(2, 9);
                     newWorktimes.push(worktimeTask);
                     successCount++;
-
                     if (worktimeTask.parent_task_id && !originalIdsToUpdate.includes(worktimeTask.parent_task_id)) {
                         originalIdsToUpdate.push(worktimeTask.parent_task_id);
                     }
                 } else {
-                    if (Platform.OS === 'web') window.alert("Failed to sync to Google Calendar. Your session may have expired. Please go to Settings and sign in with Google again.");
-                    else Alert.alert("Sync Error", "Failed to sync to Google Calendar. Your session may have expired. Please go to Settings and sign in with Google again.");
+                    if (Platform.OS === 'web') window.alert("Failed to sync to Google Calendar. Your session may have expired. Re-link in Settings.");
+                    else Alert.alert("Sync Error", "Failed to sync to Google Calendar. Your session may have expired. Re-link in Settings.");
                     setSaving(false);
-                    return; // Abort because Google sync is critical
+                    return;
                 }
             }
 
@@ -386,7 +393,6 @@ export default function MatrixScreen() {
                 } catch (e) { console.error('Local save error', e); }
             }
 
-            // Mark the parent assignments as planned via local store
             if (originalIdsToUpdate.length > 0) {
                 try {
                     const plStr = await AsyncStorage.getItem('@option_app_planned_assignments');
@@ -395,18 +401,18 @@ export default function MatrixScreen() {
                 } catch (e) { console.error('Local save error', e); }
             }
 
-            // Reload visual state completely so users see the times
             await fetchTasks();
 
-            if (Platform.OS === 'web') window.alert(`Smart Scheduling Complete: AI placed ${successCount} tasks on your calendar!`);
-            else Alert.alert('Smart Scheduling Complete', `AI placed ${successCount} tasks on your calendar!`);
-
+            if (Platform.OS === 'web') window.alert(`Smart Scheduling Complete: AI placed ${successCount} blocks on your calendar!`);
+            else Alert.alert('Smart Scheduling Complete', `AI placed ${successCount} blocks on your calendar!`);
         } catch (error) {
             console.error("Smart Schedule Error:", error);
             if (Platform.OS === 'web') window.alert("Failed to auto-schedule tasks. Check console.");
             else Alert.alert("Error", "Failed to auto-schedule tasks.");
         } finally {
             setSaving(false);
+            setPreviewBlocks([]);
+            setPreviewToken(null);
         }
     };
 
@@ -432,17 +438,22 @@ export default function MatrixScreen() {
         return { bg: theme.colors.blue + '20', text: theme.colors.blue };
     };
 
+    const webAlert = (title, msg) => {
+        if (Platform.OS === 'web') window.alert(`${title}: ${msg}`);
+        else Alert.alert(title, msg);
+    };
+
     const blockTask = async (task) => {
         try {
             const token = await AsyncStorage.getItem('googleAccessToken');
-            if (!token) { Alert.alert('Not Signed In', 'Go to Settings and sign in with Google.'); return; }
+            if (!token) { webAlert('Not Signed In', 'Go to Settings and sign in with Google.'); return; }
             const start = (task.due_date || task.date) ? new Date((task.due_date || task.date) + 'T12:00:00') : new Date();
             const end = new Date(start.getTime() + task.duration * 60 * 1000);
             const event = { summary: `Option: ${task.title} 📚`, start: { dateTime: start.toISOString(), timeZone: 'America/New_York' }, end: { dateTime: end.toISOString(), timeZone: 'America/New_York' } };
             const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(event) });
-            if (res.ok) Alert.alert('Scheduled!', `"${task.title}" added to Google Calendar.`);
-            else Alert.alert('Error', 'Failed to insert event.');
-        } catch { Alert.alert('Error', 'Network error.'); }
+            if (res.ok) webAlert('Scheduled!', `"${task.title}" added to Google Calendar.`);
+            else webAlert('Error', 'Failed to insert event.');
+        } catch { webAlert('Error', 'Network error.'); }
     };
 
     // Mini calendar date picker helpers
@@ -847,6 +858,69 @@ export default function MatrixScreen() {
                                 </TouchableOpacity>
                                 <TouchableOpacity disabled={saving || pendingImports.length === 0} style={[styles.btnDark, { flex: 2, justifyContent: 'center', paddingVertical: 12 }]} onPress={saveReviewedImports}>
                                     {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Save {pendingImports.length} Tasks</Text>}
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Schedule Preview Modal */}
+            <Modal visible={previewModalVisible} animationType="fade" transparent>
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalView, { width: '95%', maxWidth: 600, maxHeight: '85%', padding: 0, overflow: 'hidden' }]}>
+                        <View style={{ padding: 24, paddingBottom: 16 }}>
+                            <Text style={styles.modalTitle}>Schedule Preview</Text>
+                            <Text style={styles.instructions}>
+                                The AI wants to place {previewBlocks.length} block{previewBlocks.length !== 1 ? 's' : ''} on your Google Calendar. Review and confirm.
+                            </Text>
+                        </View>
+
+                        <ScrollView style={{ flex: 1, paddingHorizontal: 24 }} contentContainerStyle={{ gap: 10 }}>
+                            {previewBlocks.map((block, idx) => {
+                                const startDate = new Date(block.scheduled_start);
+                                const endDate = new Date(block.scheduled_end);
+                                const dayStr = startDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                                const startTime = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                const endTime = endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                const prio = block.urgency > 5 && block.importance > 5 ? theme.colors.red
+                                    : block.importance > 5 ? theme.colors.orange
+                                    : block.urgency > 5 ? theme.colors.green
+                                    : theme.colors.blue;
+
+                                return (
+                                    <View key={idx} style={{ backgroundColor: theme.colors.surface2, padding: 14, borderRadius: theme.radii.lg, borderWidth: 2, borderColor: theme.colors.border, borderLeftWidth: 4, borderLeftColor: prio }}>
+                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '700', color: theme.colors.ink, marginBottom: 4 }} numberOfLines={1}>
+                                            {block.title}
+                                        </Text>
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2 }}>
+                                            {dayStr} &middot; {startTime} - {endTime} &middot; {block.duration}min
+                                        </Text>
+                                        <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>
+                                            {block.urgency}U / {block.importance}I
+                                        </Text>
+                                    </View>
+                                );
+                            })}
+                        </ScrollView>
+
+                        <View style={{ padding: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+                            <View style={styles.btnRow}>
+                                <TouchableOpacity
+                                    disabled={saving}
+                                    style={[styles.btnOut, { flex: 1, justifyContent: 'center', paddingVertical: 12 }]}
+                                    onPress={() => { setPreviewModalVisible(false); setPreviewBlocks([]); setPreviewToken(null); }}
+                                >
+                                    <Text style={{ fontFamily: theme.fonts.s, fontWeight: '500', color: theme.colors.ink2 }}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    disabled={saving}
+                                    style={[styles.btnDark, { flex: 2, justifyContent: 'center', paddingVertical: 12, backgroundColor: theme.colors.purple }]}
+                                    onPress={confirmSmartSchedule}
+                                >
+                                    {saving ? <ActivityIndicator size="small" color="#fff" /> : (
+                                        <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Confirm & Schedule ({previewBlocks.length})</Text>
+                                    )}
                                 </TouchableOpacity>
                             </View>
                         </View>
