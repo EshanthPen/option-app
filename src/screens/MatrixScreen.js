@@ -590,37 +590,7 @@ export default function MatrixScreen() {
                 subtitle={subtitleStr}
                 actions={
                     <>
-                        {/* Day/Week/Month toggle */}
-                        <View style={{
-                            flexDirection: 'row', gap: 3,
-                            backgroundColor: theme.colors.surface2,
-                            padding: 3, borderRadius: 8,
-                        }}>
-                            {['day', 'week', 'month'].map((v) => {
-                                const active = view === v;
-                                return (
-                                    <TouchableOpacity
-                                        key={v}
-                                        onPress={() => setView(v)}
-                                        activeOpacity={0.85}
-                                        style={{
-                                            paddingHorizontal: 12, paddingVertical: 6,
-                                            borderRadius: 6,
-                                            backgroundColor: active ? theme.colors.surface : 'transparent',
-                                            ...(active ? theme.shadows.sm : {}),
-                                        }}
-                                    >
-                                        <Text style={{
-                                            fontFamily: theme.fonts.s, fontSize: 12, fontWeight: active ? '600' : '500',
-                                            color: active ? theme.colors.ink : theme.colors.ink3,
-                                            textTransform: 'capitalize',
-                                        }}>
-                                            {v}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
+
                         <TouchableOpacity
                             onPress={handleSmartSchedule}
                             disabled={saving}
@@ -1375,16 +1345,21 @@ function CalendarSidebar({ theme, tasks, month, setMonth, year, setYear, selecte
                             style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}
                             activeOpacity={0.7}
                         >
-                            <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: c.color, opacity: active ? 1 : 0.3 }} />
+                            <View style={{
+                                width: 16, height: 16, borderRadius: 4,
+                                backgroundColor: active ? c.color : 'transparent',
+                                borderWidth: active ? 0 : 1.5,
+                                borderColor: active ? c.color : theme.colors.ink3,
+                                alignItems: 'center', justifyContent: 'center',
+                            }}>
+                                {active && <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800' }}>✓</Text>}
+                            </View>
                             <Text style={{
-                                flex: 1, fontFamily: theme.fonts.s, fontSize: 12,
-                                color: active ? theme.colors.ink : theme.colors.ink3,
+                                flex: 1, fontFamily: theme.fonts.s, fontSize: 13,
+                                color: theme.colors.ink,
                             }}>
                                 {c.label}
                             </Text>
-                            {active && (
-                                <Text style={{ color: theme.colors.ink3, fontSize: 12, fontWeight: '600' }}>✓</Text>
-                            )}
                         </TouchableOpacity>
                     );
                 })}
@@ -1411,8 +1386,8 @@ function WeekViewContent({ theme, tasks, selectedDate, setSelectedDate, getPrio,
         };
     });
 
-    // Hours shown 8am - 6pm (10 rows)
-    const HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
+    // Hours shown 12am - 11pm (24 rows)
+    const HOURS = Array.from({ length: 24 }, (_, i) => i);
     const ROW_H = 56;
 
     // Map a task to its time placement on the week grid
@@ -1503,20 +1478,20 @@ function WeekViewContent({ theme, tasks, selectedDate, setSelectedDate, getPrio,
                             }}
                         >
                             <Text style={{
-                                fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3,
-                                textTransform: 'uppercase', letterSpacing: 1,
+                                fontFamily: theme.fonts.m, fontSize: 11, color: d.isToday ? '#1A73E8' : theme.colors.ink3,
+                                textTransform: 'uppercase', fontWeight: '500', marginTop: 4,
                             }}>
                                 {d.w}
                             </Text>
                             <View style={{
-                                width: 26, height: 26, borderRadius: 13,
-                                marginTop: 4,
+                                width: 46, height: 46, borderRadius: 23,
+                                marginTop: 4, marginBottom: 4,
                                 alignItems: 'center', justifyContent: 'center',
-                                backgroundColor: d.isToday ? theme.colors.ink : 'transparent',
+                                backgroundColor: d.isToday ? '#1A73E8' : 'transparent',
                             }}>
                                 <Text style={{
-                                    fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600',
-                                    color: d.isToday ? theme.colors.bg : theme.colors.ink,
+                                    fontFamily: theme.fonts.s, fontSize: 24,
+                                    color: d.isToday ? '#FFF' : theme.colors.ink,
                                 }}>
                                     {d.d}
                                 </Text>
@@ -1526,18 +1501,24 @@ function WeekViewContent({ theme, tasks, selectedDate, setSelectedDate, getPrio,
                 </View>
 
                 {/* Time grid — time column on left, then 7 day columns; events live INSIDE each day column */}
-                <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                <ScrollView 
+                    style={{ flex: 1 }} 
+                    showsVerticalScrollIndicator={false}
+                    contentOffset={{ y: 7 * ROW_H, x: 0 }}
+                >
                     <View style={{ flexDirection: 'row' }}>
                         {/* Time labels column */}
                         <View style={{ width: 50, flexShrink: 0 }}>
                             {HOURS.map((h) => (
                                 <View key={h} style={{
                                     height: ROW_H,
-                                    padding: 4, alignItems: 'flex-end',
-                                    borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                                    position: 'relative',
                                 }}>
-                                    <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink3 }}>
-                                        {h > 12 ? h - 12 : h}{h >= 12 ? 'p' : 'a'}
+                                    <Text style={{ 
+                                        position: 'absolute', top: -8, right: 8,
+                                        fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, fontWeight: '500' 
+                                    }}>
+                                        {h === 0 ? '' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`}
                                     </Text>
                                 </View>
                             ))}
@@ -1558,7 +1539,7 @@ function WeekViewContent({ theme, tasks, selectedDate, setSelectedDate, getPrio,
                                     {HOURS.map((h) => (
                                         <View key={h} style={{
                                             height: ROW_H,
-                                            borderBottomWidth: 1, borderBottomColor: theme.colors.border,
+                                            borderTopWidth: 1, borderTopColor: theme.colors.border,
                                         }} />
                                     ))}
                                     {/* Events absolutely positioned within this day column */}
@@ -1598,14 +1579,14 @@ function WeekViewContent({ theme, tasks, selectedDate, setSelectedDate, getPrio,
                                             left: 0, right: 0,
                                             top: (nowHour - HOURS[0]) * ROW_H,
                                             borderTopWidth: 2,
-                                            borderTopColor: '#E03E3E',
+                                            borderTopColor: '#EA4335',
                                             zIndex: 5,
                                         }}>
                                             <View style={{
                                                 position: 'absolute',
-                                                left: -5, top: -5,
-                                                width: 10, height: 10, borderRadius: 5,
-                                                backgroundColor: '#E03E3E',
+                                                left: -6, top: -7,
+                                                width: 12, height: 12, borderRadius: 6,
+                                                backgroundColor: '#EA4335',
                                             }} />
                                         </View>
                                     )}

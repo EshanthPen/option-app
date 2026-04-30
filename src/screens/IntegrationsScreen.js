@@ -338,7 +338,7 @@ export default function IntegrationsScreen() {
             
             if (!periodsXml.includes('Gradebook') && periodsXml.includes('RT_ERROR')) throw new Error('API error');
             
-            const { currentPeriodIndex } = parseStudentVuePeriods(periodsXml);
+            const { currentPeriodIndex, currentPeriodName } = parseStudentVuePeriods(periodsXml);
             let finalXml = periodsXml;
             
             // 2. If the active period is not 0, fetch the active period specifically
@@ -351,7 +351,7 @@ export default function IntegrationsScreen() {
             }
 
             if (finalXml.includes('Gradebook') || !finalXml.includes('RT_ERROR')) {
-                const { classes: formattedClasses } = parseStudentVueGradebook(finalXml);
+                const { classes: formattedClasses } = parseStudentVueGradebook(finalXml, currentPeriodName);
                 if (formattedClasses?.length > 0) {
                     await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
                     await AsyncStorage.setItem('isDemoData', 'false');

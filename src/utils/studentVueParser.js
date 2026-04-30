@@ -60,7 +60,7 @@ export const parseStudentVuePeriods = (xmlString) => {
     }
 };
 
-export const parseStudentVueGradebook = (xmlString) => {
+export const parseStudentVueGradebook = (xmlString, targetPeriodName = null) => {
     try {
         const parser = new XMLParser({
             ignoreAttributes: false,
@@ -131,17 +131,26 @@ export const parseStudentVueGradebook = (xmlString) => {
                 const marksList = Array.isArray(marks) ? marks : [marks];
 
                 // 1) Find targetMark for the OVERALL GRADE.
-                // We prioritize marks that have a score.
-                for (let i = marksList.length - 1; i >= 0; i--) {
-                    const m = marksList[i];
-                    if (!m) continue;
+                if (targetPeriodName) {
+                    targetMark = marksList.find(m => {
+                        const mName = (m['@_MarkName'] || '').toUpperCase();
+                        return mName === targetPeriodName.toUpperCase();
+                    });
+                }
+                
+                // Fallback: If we couldn't match the name, prioritize marks that have a score.
+                if (!targetMark) {
+                    for (let i = marksList.length - 1; i >= 0; i--) {
+                        const m = marksList[i];
+                        if (!m) continue;
 
-                    const hasScore = m['@_CalculatedScoreRaw'] || m['@_CalculatedScoreString'];
-                    const markName = (m['@_MarkName'] || '').toUpperCase();
+                        const hasScore = m['@_CalculatedScoreRaw'] || m['@_CalculatedScoreString'];
+                        const markName = (m['@_MarkName'] || '').toUpperCase();
 
-                    if (hasScore && !markName.includes('EXAM') && !markName.includes('SEMESTER')) {
-                        targetMark = m;
-                        break;
+                        if (hasScore && !markName.includes('EXAM') && !markName.includes('SEMESTER')) {
+                            targetMark = m;
+                            break;
+                        }
                     }
                 }
 
@@ -189,8 +198,8 @@ export const parseStudentVueGradebook = (xmlString) => {
                     let mAssignments = m.Assignments?.Assignment;
                     if (mAssignments) {
                         if (!Array.isArray(mAssignments)) mAssignments = [mAssignments];
-                        mAssignments.forEach(asm => {
-                            const asmId = asm['@_GradebookID'] || `${courseTitle}-${asm['@_Measure'] || asm['@_Type']}`;
+                        mAssignments.forEach((asm, asmIndex) => {
+                            const asmId = asm['@_GradebookID'] || `${courseTitle}-${asm['@_Measure'] || asm['@_Type']}-${asm['@_Date'] || ''}-${i}-${asmIndex}`;
                             if (!seenAssignmentIds.has(asmId)) {
                                 seenAssignmentIds.add(asmId);
                                 allAssignments.push(asm);
@@ -233,18 +242,30 @@ export const parseStudentVueGradebook = (xmlString) => {
                             total = parseFloat(pointsStr);
                         }
 
-                        // @_Score fallback — may be "45", "45%", or "Not Graded"
+                        // @_Score fallback — may be "45", "45%", "Not Graded", or "45 / 50"
                         if (!isGraded && scoreStr != null) {
                             const strVal = String(scoreStr);
-                            const cleanScore = strVal.replace('%', '').trim();
-                            const scoreNum = parseFloat(cleanScore);
-                            if (!isNaN(scoreNum) && cleanScore.toLowerCase() !== 'not graded') {
-                                if (scoreTypeStr === 'Percentage' && !isNaN(total) && total > 0) {
-                                    earned = (scoreNum / 100) * total;
-                                } else {
-                                    earned = scoreNum;
+                            
+                            if (strVal.includes('/')) {
+                                const parts = strVal.split('/');
+                                const e = parseFloat(parts[0]);
+                                const t = parseFloat(parts[1]);
+                                if (!isNaN(t)) total = t;
+                                if (!isNaN(e)) { earned = e; isGraded = true; }
+                            } else {
+                                const hasPctSymbol = strVal.includes('%');
+                                const cleanScore = strVal.replace('%', '').trim();
+                                const scoreNum = parseFloat(cleanScore);
+                                
+                                if (!isNaN(scoreNum) && cleanScore.toLowerCase() !== 'not graded' && cleanScore.toLowerCase() !== 'excused' && cleanScore.toLowerCase() !== 'missing') {
+                                    const isPercentage = scoreTypeStr === 'Percentage' || hasPctSymbol;
+                                    if (isPercentage && !isNaN(total) && total > 0) {
+                                        earned = (scoreNum / 100) * total;
+                                    } else {
+                                        earned = scoreNum;
+                                    }
+                                    isGraded = true;
                                 }
-                                isGraded = true;
                             }
                         }
 

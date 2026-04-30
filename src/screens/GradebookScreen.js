@@ -5,7 +5,6 @@ import {
     KeyboardAvoidingView, Pressable, Dimensions
 } from 'react-native';
 
-const IS_WIDE = Platform.OS === 'web' && Dimensions.get('window').width > 1100;
 import { LineChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -143,14 +142,7 @@ export default function GradebookScreen() {
 
     const allClasses = [...svClasses, ...manClasses];
 
-    // On wide web screens, keep a class always selected so the right-pane detail is never empty.
-    useEffect(() => {
-        if (IS_WIDE && !selectedClass && allClasses.length > 0) {
-            setSelectedClass(allClasses[0]);
-        }
-    }, [IS_WIDE, allClasses.length]);
-
-    // ── Sync Current Grades ───────────────────────────────────
+    // ── Storage helpers ───────────────────────────────────────────
     const syncCurrentGrades = async () => {
         try {
             setFetchError(false);
@@ -185,7 +177,7 @@ export default function GradebookScreen() {
             const periodsXml = await periodsRes.text();
             if (!periodsXml.includes('Gradebook') && periodsXml.includes('RT_ERROR')) throw new Error('API error');
             
-            const { currentPeriodIndex } = parseStudentVuePeriods(periodsXml);
+            const { currentPeriodIndex, currentPeriodName } = parseStudentVuePeriods(periodsXml);
             let finalXml = periodsXml;
             
             // 2. If the active period is not 0 (e.g. FCPS returning 1st quarter when passing 0), fetch the active period specifically
@@ -197,7 +189,7 @@ export default function GradebookScreen() {
                 }
             }
             
-            const { classes: parsed } = parseStudentVueGradebook(finalXml);
+            const { classes: parsed } = parseStudentVueGradebook(finalXml, currentPeriodName);
             if (parsed && parsed.length > 0) {
                 const parsedStr = JSON.stringify(parsed);
                 
@@ -499,12 +491,12 @@ export default function GradebookScreen() {
     return (
         <View style={S.root}>
             <TopBar
-                title={cls && !IS_WIDE ? cls.name : 'Gradebook'}
-                subtitle={cls && !IS_WIDE
+                title={cls ? cls.name : 'Gradebook'}
+                subtitle={cls
                     ? (cls.teacher || '')
                     : `Current Period · ${allClasses.length} class${allClasses.length === 1 ? '' : 'es'}`}
                 actions={
-                    cls && !IS_WIDE ? (
+                    cls ? (
                         <TouchableOpacity
                             onPress={() => {
                                 setSelectedClass(null);
@@ -549,17 +541,14 @@ export default function GradebookScreen() {
                 }
             />
 
-            {/* Two-panel container for wide web */}
-            <View style={{ flex: 1, flexDirection: IS_WIDE ? 'row' : 'column' }}>
+            {/* Main content container */}
+            <View style={{ flex: 1 }}>
 
             {/* CLASS LIST */}
-            {(!cls || IS_WIDE) && (
+            {!cls && (
                 <ScrollView
-                    style={IS_WIDE
-                        ? { width: 320, flexShrink: 0, borderRightWidth: 1, borderRightColor: theme.colors.border, backgroundColor: theme.colors.surface }
-                        : { flex: 1 }
-                    }
-                    contentContainerStyle={S.listContent}
+                    style={{ flex: 1 }}
+                    contentContainerStyle={[S.listContent, { maxWidth: 800, alignSelf: 'center', width: '100%' }]}
                     showsVerticalScrollIndicator={false}
                 >
                     {allClasses.length > 0 && (
@@ -635,7 +624,11 @@ export default function GradebookScreen() {
 
             {/* CLASS DETAIL */}
             {cls && (
-                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+                <ScrollView 
+                    style={{ flex: 1 }} 
+                    contentContainerStyle={{ paddingBottom: 120, maxWidth: 1000, alignSelf: 'center', width: '100%' }} 
+                    showsVerticalScrollIndicator={false}
+                >
                     {/* Detail header (matches design): color dot + type badge + title + teacher | actions */}
                     <View style={{
                         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
@@ -1272,10 +1265,10 @@ export default function GradebookScreen() {
                 </ScrollView>
             )}
 
-            </View>{/* close two-panel container */}
+            </View>{/* close main container */}
 
             {/* FAB: Add class */}
-            {(!cls || IS_WIDE) && (
+            {!cls && (
                 <TouchableOpacity style={S.fab} onPress={() => setShowAddClass(true)} activeOpacity={0.85}>
                     <Plus size={22} color="#fff" />
                 </TouchableOpacity>
