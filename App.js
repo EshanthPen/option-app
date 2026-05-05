@@ -39,6 +39,8 @@ export default function App() {
   const [loading, setLoading] = React.useState(true);
   const [isAuthenticating, setIsAuthenticating] = React.useState(false);
   const [showVerifiedModal, setShowVerifiedModal] = React.useState(false);
+  const [installPrompt, setInstallPrompt] = React.useState(null);
+  const [showInstallBanner, setShowInstallBanner] = React.useState(false);
 
   React.useEffect(() => {
     // Initial session check
@@ -97,6 +99,19 @@ export default function App() {
       };
       window.addEventListener('beforeunload', handleBeforeUnload);
       return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handler = (e) => {
+        e.preventDefault();
+        setInstallPrompt(e);
+        const dismissed = localStorage.getItem('option_install_dismissed');
+        if (!dismissed) setShowInstallBanner(true);
+      };
+      window.addEventListener('beforeinstallprompt', handler);
+      return () => window.removeEventListener('beforeinstallprompt', handler);
     }
   }, []);
 
@@ -179,6 +194,38 @@ export default function App() {
               </View>
           </View>
       </Modal>
+
+      {/* PWA Install Banner */}
+      {showInstallBanner && Platform.OS === 'web' && (
+        <View style={styles.installBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.installTitle}>Install Option</Text>
+            <Text style={styles.installSub}>Add to your dock for quick access</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.installBtn}
+            onPress={async () => {
+              if (installPrompt) {
+                installPrompt.prompt();
+                const { outcome } = await installPrompt.userChoice;
+                if (outcome === 'accepted') setShowInstallBanner(false);
+              }
+              setInstallPrompt(null);
+            }}
+          >
+            <Text style={styles.installBtnText}>Install</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.installDismiss}
+            onPress={() => {
+              setShowInstallBanner(false);
+              if (typeof localStorage !== 'undefined') localStorage.setItem('option_install_dismissed', '1');
+            }}
+          >
+            <Text style={{ color: '#999', fontSize: 18, fontWeight: '700' }}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </ThemeProvider>
   );
 }
@@ -233,5 +280,43 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 18,
         fontWeight: '700',
+    },
+    installBanner: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#1a1a1a',
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderTopWidth: 2,
+        borderTopColor: '#333',
+        gap: 12,
+    },
+    installTitle: {
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: '700',
+    },
+    installSub: {
+        color: '#999',
+        fontSize: 12,
+        marginTop: 2,
+    },
+    installBtn: {
+        backgroundColor: '#fff',
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderRadius: 8,
+    },
+    installBtnText: {
+        color: '#000',
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    installDismiss: {
+        padding: 8,
     },
 });
