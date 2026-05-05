@@ -37,37 +37,11 @@ export const ThemeProvider = ({ children }) => {
         }
     };
 
-    const baseTheme = getTheme(true, themePreset); // Force dark mode structure
-    const customColors = require('../theme').colors;
-    const customFonts = require('../theme').fonts;
-    const customSizes = require('../theme').sizes;
-    
-    const theme = {
-        ...baseTheme,
-        colors: customColors,
-        fonts: {
-            ...baseTheme.fonts,
-            ...customFonts,
-            m: customFonts.sans,
-            s: customFonts.sansSemiBold,
-            b: customFonts.displayBold,
-            mono: customFonts.mono,
-        },
-        radii: {
-            ...baseTheme.radii,
-            lg: customSizes.radius,
-            r: customSizes.radius,
-        },
-        shadows: {
-            none: baseTheme.shadows.none,
-            sm: baseTheme.shadows.none,
-            md: baseTheme.shadows.none,
-            lg: baseTheme.shadows.none,
-        }
-    };
+    // Build the theme from the active preset + dark/light mode
+    const theme = getTheme(isDarkMode, themePreset);
 
     return (
-        <ThemeContext.Provider value={{ isDarkMode: true, toggleTheme, theme, themePreset, changePreset }}>
+        <ThemeContext.Provider value={{ isDarkMode, toggleTheme, theme, themePreset, changePreset }}>
             {children}
         </ThemeContext.Provider>
     );

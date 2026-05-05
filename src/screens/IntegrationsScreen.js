@@ -208,22 +208,50 @@ export default function IntegrationsScreen() {
             cleanUrl = 'https://' + cleanUrl.split('http').pop().replace(/^\/+/, '');
         }
         let fetchUrl = cleanUrl.replace(/^webcal:\/\//i, 'https://');
-        const baseUrl = Platform.OS === 'web' ? window.location.origin : 'http://localhost:8081';
-        const proxyUrl = `${baseUrl}/api/schoology?url=${encodeURIComponent(fetchUrl)}`;
+        // Try direct fetch first. This works automatically on iOS/Android as they don't enforce CORS.
+        let icsData = '';
+        let usingProxy = false;
+        
         try {
-            let icsData = '';
+            const directResponse = await fetch(fetchUrl);
+            if (!directResponse.ok) throw new Error('Direct fetch failed');
+            icsData = await directResponse.text();
+            if (icsData.includes('<html')) throw new Error('HTML returned');
+        } catch (err) {
+            // If direct fetch fails (usually due to CORS on web), use a proxy.
+            usingProxy = true;
+        }
+
+        if (usingProxy) {
             try {
-                const resp = await fetch(proxyUrl);
-                if (!resp.ok) { const ej = await resp.json().catch(() => ({})); throw new Error(ej.details || `Proxy returned ${resp.status}`); }
-                icsData = await resp.text();
+                let proxyUrl = '';
+                if (Platform.OS === 'web' && window.location.origin.includes('localhost')) {
+                    // Local web dev needs a proxy that sends Schoology's required headers.
+                    proxyUrl = `http://localhost:3001/?url=${encodeURIComponent(fetchUrl)}`;
+                } else {
+                    const baseUrl = Platform.OS === 'web' ? window.location.origin : 'https://optionapp.online';
+                    proxyUrl = `${baseUrl}/api/schoology?url=${encodeURIComponent(fetchUrl)}`;
+                }
+                
+                const proxyResp = await fetch(proxyUrl);
+                if (!proxyResp.ok) throw new Error(`Proxy HTTP ${proxyResp.status}`);
+                icsData = await proxyResp.text();
             } catch (proxyErr) {
-                const directResponse = await fetch(fetchUrl);
-                if (!directResponse.ok) throw new Error(`Direct fetch failed: ${directResponse.status}`);
-                icsData = await directResponse.text();
+                setSyncResult({ type: 'error', message: `Sync failed: Ensure the link is valid.` });
+                setIsSchoologySyncing(false);
+                return;
             }
+        }
+
+        try {
             if (!icsData) throw new Error('Empty response from Schoology.');
-            if (icsData.includes('<html') || icsData.includes('<!DOCTYPE html')) throw new Error('Schoology returned a login page instead of calendar data.');
-            if (!icsData.includes('BEGIN:VCALENDAR')) throw new Error('Invalid calendar data (missing VCALENDAR).');
+            // Some servers return an HTML login page instead of the iCal file if the link is expired
+            if (icsData.includes('<html') || icsData.includes('<!DOCTYPE html')) {
+                throw new Error("Schoology returned a login page instead of calendar data. Make sure to copy the 'Private Link'.");
+            }
+            if (!icsData.includes('BEGIN:VCALENDAR')) {
+                throw new Error('Invalid calendar data format.');
+            }
             const jcalData = ICAL.parse(icsData);
             const comp = new ICAL.Component(jcalData);
             const events = comp.getAllSubcomponents('vevent');

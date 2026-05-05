@@ -1370,8 +1370,8 @@ const getStyles = (theme) => StyleSheet.create({
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 52, paddingBottom: 12 },
-    title: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
-    titleSub: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2 },
+    title: { fontFamily: 'PlayfairDisplay-BlackItalic', fontSize: 36, color: theme.colors.ink, letterSpacing: -1 },
+    titleSub: { fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 4 },
     backBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
     backTxt: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },
     headerRight: { flexDirection: 'row', gap: 8, alignItems: 'center' },
@@ -1379,36 +1379,71 @@ const getStyles = (theme) => StyleSheet.create({
 
     tabsScroll: { paddingLeft: 24, marginBottom: 10, flexGrow: 0 },
     tabsContent: { gap: 8, paddingRight: 24 },
-    qTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, flexDirection: 'row', alignItems: 'center', ...theme.shadows.sm },
-    qTabActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
-    qTabTxt: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2, fontWeight: '700' },
+    qTab: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, flexDirection: 'row', alignItems: 'center' },
+    qTabActive: { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink },
+    qTabTxt: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2, fontWeight: '600' },
     qTabTxtActive: { color: theme.colors.bg, fontWeight: '700' },
 
     listContent: { paddingHorizontal: 20, paddingTop: 4 },
-    gpaBanner: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 16, padding: 18, marginBottom: 16, ...theme.shadows.sm },
-    gpaBannerLabel: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 },
-    gpaBannerVal: { fontFamily: theme.fonts.d, fontSize: 28, fontWeight: '700', color: theme.colors.ink, letterSpacing: -1 },
 
-    classCard: { backgroundColor: theme.colors.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 16, overflow: 'hidden', flexDirection: 'row', ...theme.shadows.sm },
-    classCardAccent: { width: 5 },
-    classCardBody: { flex: 1, padding: 16, flexDirection: 'row', alignItems: 'center' },
-    classCardTags: { flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 6 },
-    className: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700', color: theme.colors.ink, lineHeight: 22 },
-    teacherTxt: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 3 },
+    // GPA banner — flat, no box, editorial
+    gpaBanner: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        paddingHorizontal: 4,
+        paddingVertical: 12,
+        marginBottom: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+    },
+    gpaBannerLabel: { fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.ink4, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 },
+    gpaBannerVal: { fontFamily: 'PlayfairDisplay-BlackItalic', fontSize: 40, color: theme.colors.ink, letterSpacing: -2, lineHeight: 44 },
+
+    // Class card — no border, thick color left strip, big italic grade letter
+    classCard: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: 14,
+        marginBottom: 10,
+        overflow: 'hidden',
+        flexDirection: 'row',
+        ...theme.shadows.sm,
+    },
+    classCardAccent: { width: 6 },
+    classCardBody: { flex: 1, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center' },
+    classCardTags: { flexDirection: 'row', gap: 6, alignItems: 'center', marginBottom: 5 },
+    className: { fontFamily: theme.fonts.s, fontSize: 15, fontWeight: '700', color: theme.colors.ink, lineHeight: 21 },
+    teacherTxt: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 },
     periodTxt: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3 },
     gradeBlock: { alignItems: 'flex-end', marginLeft: 12 },
-    gradeLetterBig: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', letterSpacing: -1, lineHeight: 38 },
-    gradePctSmall: { fontFamily: theme.fonts.m, fontSize: 11, fontWeight: '600' },
+    // Big italic grade letter — editorial
+    gradeLetterBig: { fontFamily: 'PlayfairDisplay-BlackItalic', fontSize: 44, letterSpacing: -2, lineHeight: 48 },
+    gradePctSmall: { fontFamily: theme.fonts.mono, fontSize: 10, fontWeight: '600', letterSpacing: 0.5 },
 
     tag: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
     tagAP: { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink },
     tagHN: { backgroundColor: theme.colors.ink2, borderColor: theme.colors.ink2 },
     tagTxt: { fontFamily: theme.fonts.m, fontSize: 8, fontWeight: '700', color: theme.colors.ink2, letterSpacing: 0.5, textTransform: 'uppercase' },
 
-    detailHeader: { margin: 20, marginBottom: 12, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 16, padding: 18, flexDirection: 'row', alignItems: 'flex-start', borderLeftWidth: 3, ...theme.shadows.md },
-    detailName: { fontFamily: theme.fonts.d, fontSize: 24, fontWeight: '700', color: theme.colors.ink, marginBottom: 4, lineHeight: 28 },
+    // Detail header — grade letter is the hero, 80pt editorial
+    detailHeader: {
+        marginHorizontal: 20,
+        marginBottom: 12,
+        paddingVertical: 24,
+        paddingHorizontal: 20,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+        borderLeftWidth: 4,
+        borderLeftColor: 'transparent', // overridden inline with gColor
+    },
+    detailName: { fontFamily: theme.fonts.d, fontSize: 20, fontWeight: '700', color: theme.colors.ink, marginBottom: 3, lineHeight: 26, letterSpacing: -0.3 },
     detailMeta: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginBottom: 8 },
     detailTags: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+    // Grade block in detail: huge italic letter
+    gradeLetterBig: { fontFamily: 'PlayfairDisplay-BlackItalic', fontSize: 44, letterSpacing: -2, lineHeight: 48 },
+    gradePctSmall: { fontFamily: theme.fonts.mono, fontSize: 10, fontWeight: '600', letterSpacing: 0.5 },
 
     gradeTrendCard: { marginHorizontal: 20, marginBottom: 12, backgroundColor: theme.colors.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, padding: 14, ...theme.shadows.sm },
 
@@ -1424,7 +1459,7 @@ const getStyles = (theme) => StyleSheet.create({
     filterChipTxt: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2 },
     filterChipTxtActive: { color: theme.colors.bg, fontWeight: '600' },
 
-    asgnCard: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 16, marginHorizontal: 20, backgroundColor: theme.colors.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 8, borderLeftWidth: 3, ...theme.shadows.sm },
+    asgnCard: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingVertical: 13, paddingHorizontal: 16, marginHorizontal: 20, backgroundColor: theme.colors.surface, borderRadius: 10, marginBottom: 6, borderLeftWidth: 3, ...theme.shadows.sm },
     asgnName: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '500', color: theme.colors.ink, lineHeight: 18 },
     asgnDate: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 },
     asgnScore: { fontFamily: theme.fonts.m, fontSize: 13, fontWeight: '700' },
