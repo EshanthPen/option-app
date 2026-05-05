@@ -1,28 +1,30 @@
 export const colors = {
-    bg: '#f5f4f1',
-    surface: '#ffffff',
-    surface2: '#eeecea',
-    border: '#e2dfda',
-    border2: '#ccc9c1',
-    ink: '#0d0c0a',
-    ink2: '#4e4c47',
-    ink3: '#908d86',
-    ink4: '#cac7c0',
-    red: '#b83232',
-    orange: '#c45e1a',
-    green: '#1a6e40',
-    blue: '#1b4a82',
+    bg: '#000000',        // True black background
+    surface: '#0A0A0A',   // Barely visible elevation for cards
+    surface2: '#171717',  // Hover states / secondary surfaces
+    border: '#262626',    // Sharp, subtle borders (crucial for this look)
+    border2: '#404040',
+    ink: '#FAFAFA',       // High-contrast off-white for primary text
+    ink2: '#A1A1AA',      // Muted gray for secondary text
+    ink3: '#71717A',      // Darker gray for tertiary text/icons
+    ink4: '#52525B',
+    // Neon-leaning semantic colors to pop against the black
+    red: '#EF4444', 
+    orange: '#F97316',
+    green: '#10B981',
+    blue: '#3B82F6',
 };
 
 export const sizes = {
-    radius: 6,
+    radius: 4, // Tighter, sharper corners than the previous 6
 };
 
 export const fonts = {
-    display: 'PlayfairDisplay',
-    displayItalic: 'PlayfairDisplay-Italic',
-    displayBold: 'PlayfairDisplay-Bold',
-    displayBlackItalic: 'PlayfairDisplay-BlackItalic',
+    // Drop the Serif entirely. Map display fonts to sans/mono.
+    display: 'InstrumentSans-SemiBold', 
+    displayItalic: 'InstrumentSans',
+    displayBold: 'InstrumentSans-Bold',
+    displayBlackItalic: 'InstrumentSans-Bold',
     mono: 'DMMono',
     monoMedium: 'DMMono-Medium',
     sans: 'InstrumentSans',

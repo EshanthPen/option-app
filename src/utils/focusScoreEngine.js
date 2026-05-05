@@ -170,6 +170,7 @@ const calcPomodoroScore = async () => {
 const calcTaskCompletionScore = async () => {
     try {
         const userId = await getUserId();
+        if (userId.startsWith('user_')) return 50;
         const now = new Date();
         const dayOfWeek = now.getDay();
         const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -211,6 +212,7 @@ const calcTaskCompletionScore = async () => {
 const calcOnTimeScore = async () => {
     try {
         const userId = await getUserId();
+        if (userId.startsWith('user_')) return 50;
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().slice(0, 10);

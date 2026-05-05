@@ -97,6 +97,7 @@ const checkGradeDrops = async () => {
 const checkUpcomingDeadlines = async () => {
     try {
         const userId = await getUserId();
+        if (userId.startsWith('user_')) return [];
         const now = new Date();
         const cutoff = new Date(now.getTime() + UPCOMING_DEADLINE_HOURS * 60 * 60 * 1000);
 

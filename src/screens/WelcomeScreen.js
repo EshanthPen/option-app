@@ -9,13 +9,14 @@ import {
     Modal,
     Platform
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import AuthScreen from './AuthScreen';
 import { ArrowRight, Sparkles } from 'lucide-react-native';
+import { useTheme } from '../context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 
 const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
+    const { theme } = useTheme();
     const [authModalVisible, setAuthModalVisible] = useState(false);
 
     const handleCloseModal = () => {
@@ -25,14 +26,13 @@ const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
 
     return (
         <View style={styles.container}>
-            {/* Premium Background Gradient/Image Placeholder */}
-            <View style={[styles.background, { backgroundColor: '#121212' }]}>
+            <View style={[styles.background, { backgroundColor: theme.colors.bg }]}>
                 <View style={styles.content}>
                     <View style={styles.heroSection}>
                         <View style={styles.logoBadge}>
                             <Sparkles size={24} color="#fff" />
                         </View>
-                        <Text style={styles.title}>Option</Text>
+                        <Text style={[styles.title, { fontFamily: theme.fonts.sansSemiBold }]}>Option</Text>
                         <Text style={styles.subtitle}>
                             Your academic life,{"\n"}
                             <Text style={styles.highlight}>automated & optimized.</Text>
@@ -45,7 +45,7 @@ const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
                             onPress={() => setAuthModalVisible(true)}
                         >
                             <Text style={styles.buttonText}>Get Started</Text>
-                            <ArrowRight size={20} color="#000" />
+                            <ArrowRight size={20} color="#fff" />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -70,11 +70,7 @@ const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
                 onRequestClose={handleCloseModal}
             >
                 <View style={styles.modalOverlay}>
-                    {Platform.OS === 'ios' ? (
-                        <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-                    ) : (
-                        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
-                    )}
+                    <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
                     
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
@@ -124,11 +120,10 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(255,255,255,0.2)',
     },
     title: {
-        fontSize: 48,
+        fontSize: 72,
         fontWeight: '900',
         color: '#fff',
-        letterSpacing: -1,
-        fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+        letterSpacing: -2,
     },
     subtitle: {
         fontSize: 28,
@@ -145,22 +140,20 @@ const styles = StyleSheet.create({
         gap: 20,
     },
     primaryButton: {
-        backgroundColor: '#fff',
+        backgroundColor: 'transparent',
         height: 64,
-        borderRadius: 32,
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 12,
-        shadowColor: '#fff',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
     },
     buttonText: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#000',
+        color: '#fff',
     },
     guestButton: {
         height: 52,

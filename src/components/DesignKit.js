@@ -45,11 +45,10 @@ export function Card({ children, style, onPress, padding = 16, noBorder, gradien
     const { theme } = useTheme();
     const cardStyle = {
         backgroundColor: theme.colors.surface,
-        borderRadius: theme.radii.lg,
+        borderRadius: 6,
         padding,
         borderWidth: noBorder ? 0 : 1,
         borderColor: theme.colors.border,
-        ...theme.shadows.sm,
         ...style,
     };
     if (onPress) {
@@ -132,7 +131,9 @@ export function Badge({ children, color, style }) {
         <View style={[{
             paddingHorizontal: 8, paddingVertical: 3,
             borderRadius: 6,
-            backgroundColor: c + '18',
+            backgroundColor: 'transparent',
+            borderWidth: 1,
+            borderColor: c,
         }, style]}>
             <Text style={{
                 fontFamily: theme.fonts.s,
@@ -181,9 +182,7 @@ export function TopBar({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 paddingHorizontal: 32, paddingTop: 20, paddingBottom: 20,
-                borderBottomWidth: 1,
-                borderBottomColor: theme.colors.border,
-                backgroundColor: theme.colors.surface,
+                backgroundColor: theme.colors.bg,
                 gap: 12,
             }, style]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -332,7 +331,6 @@ export function Switch({ on, onToggle, size = 'md' }) {
                 position: 'absolute',
                 top: (dims.h - dims.knob) / 2,
                 left: dims.knobLeft,
-                shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, elevation: 2,
             }} />
         </TouchableOpacity>
     );
@@ -363,7 +361,6 @@ export function TabPills({ tabs, value, onChange, style }) {
                             paddingVertical: 6,
                             borderRadius: 6,
                             backgroundColor: active ? theme.colors.surface : 'transparent',
-                            ...(active ? theme.shadows.sm : {}),
                         }}
                     >
                         <Text style={{
