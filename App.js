@@ -1,7 +1,7 @@
 import React from 'react';
 import './src/index.css';
 import { View, ActivityIndicator, Platform, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import TabNavigator from './src/navigation/TabNavigator';
 import { useFonts } from 'expo-font';
 import {
@@ -47,7 +47,7 @@ import SearchModal from './src/components/ui/SearchModal';
 import SyncStatusBar from './src/components/navigation/SyncStatusBar';
 
 function MainApp() {
-  const { theme } = useTheme();
+  const { theme, isDarkMode } = useTheme();
   const [session, setSession] = React.useState(null);
   const [guestMode, setGuestMode] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
@@ -112,24 +112,24 @@ function MainApp() {
           await checkSetupStep(session);
         }
       }
-      
+
       if (session?.user?.user_metadata) {
-          const { full_name, schoology_url } = session.user.user_metadata;
-          
-          if (full_name) {
-              await AsyncStorage.setItem('userName', full_name);
-          }
-          if (schoology_url) {
-              await AsyncStorage.setItem('schoologyUrl', schoology_url);
-          }
+        const { full_name, schoology_url } = session.user.user_metadata;
+
+        if (full_name) {
+          await AsyncStorage.setItem('userName', full_name);
+        }
+        if (schoology_url) {
+          await AsyncStorage.setItem('schoologyUrl', schoology_url);
+        }
       }
 
       // Detect if this is a fresh verification
       if (_event === 'USER_UPDATED' && session?.user?.email_confirmed_at) {
-          setShowVerifiedModal(true);
+        setShowVerifiedModal(true);
       }
     });
-    
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -201,6 +201,20 @@ function MainApp() {
     },
   };
 
+  // Map the brutalist theme tokens into React Navigation's theme system so
+  // the navigator header, bottom tabs, and modal backgrounds all stay in sync.
+  const navigationTheme = {
+    ...(isDarkMode ? DarkTheme : DefaultTheme),
+    colors: {
+      ...(isDarkMode ? DarkTheme.colors : DefaultTheme.colors),
+      background: theme.colors.bg,
+      card: theme.colors.surface,
+      text: theme.colors.ink,
+      border: theme.colors.border,
+      primary: theme.colors.accent,
+    },
+  };
+
   const handleGuestMode = async () => {
     await AsyncStorage.setItem('@OptionApp_GuestMode', 'true');
     setGuestMode(true);
@@ -214,7 +228,7 @@ function MainApp() {
 
   return (
     <>
-      <NavigationContainer linking={linking}>
+      <NavigationContainer linking={linking} theme={navigationTheme}>
         {(session || guestMode) ? (
           // Logged-in flow: route through setup screens if not completed yet
           setupStep === 'sis' ? (
@@ -237,33 +251,33 @@ function MainApp() {
         )}
 
         {Platform.OS === 'web' && (session || guestMode) && setupStep === 'done' && (
-            <>
-                <SearchModal />
-                <SyncStatusBar />
-            </>
+          <>
+            <SearchModal />
+            <SyncStatusBar />
+          </>
         )}
       </NavigationContainer>
 
       {/* Email Verified Global Success Modal */}
       <Modal
-          visible={showVerifiedModal}
-          transparent
-          animationType="slide"
+        visible={showVerifiedModal}
+        transparent
+        animationType="slide"
       >
-          <View style={dynamicStyles(theme).modalOverlay}>
-              <View style={dynamicStyles(theme).successPopup}>
-                  <Text style={dynamicStyles(theme).successTitle}>Email Verified! 🎉</Text>
-                  <Text style={dynamicStyles(theme).successText}>
-                      Your account is now fully active. Your profile information has been automatically synced.
-                  </Text>
-                  <TouchableOpacity 
-                      style={dynamicStyles(theme).successBtn}
-                      onPress={() => setShowVerifiedModal(false)}
-                  >
-                      <Text style={dynamicStyles(theme).successBtnText}>Amazing</Text>
-                  </TouchableOpacity>
-              </View>
+        <View style={dynamicStyles(theme).modalOverlay}>
+          <View style={dynamicStyles(theme).successPopup}>
+            <Text style={dynamicStyles(theme).successTitle}>Email Verified! 🎉</Text>
+            <Text style={dynamicStyles(theme).successText}>
+              Your account is now fully active. Your profile information has been automatically synced.
+            </Text>
+            <TouchableOpacity
+              style={dynamicStyles(theme).successBtn}
+              onPress={() => setShowVerifiedModal(false)}
+            >
+              <Text style={dynamicStyles(theme).successBtnText}>Amazing</Text>
+            </TouchableOpacity>
           </View>
+        </View>
       </Modal>
     </>
   );
@@ -280,53 +294,53 @@ export default function App() {
 }
 
 const dynamicStyles = (theme) => StyleSheet.create({
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.8)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 24,
-    },
-    successPopup: {
-        backgroundColor: theme.colors.surface,
-        borderRadius: theme.radii.lg || 0,
-        padding: 28,
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: theme.colors.border,
-        width: '100%',
-        maxWidth: 400,
-        ...theme.shadows.md,
-    },
-    successTitle: {
-        fontFamily: theme.fonts.d,
-        fontSize: 24,
-        fontWeight: '700',
-        color: theme.colors.ink,
-        marginBottom: 10,
-        textAlign: 'center',
-    },
-    successText: {
-        fontFamily: theme.fonts.m,
-        fontSize: 14,
-        color: theme.colors.ink2,
-        textAlign: 'center',
-        lineHeight: 22,
-        marginBottom: 24,
-    },
-    successBtn: {
-        backgroundColor: theme.colors.ink,
-        paddingVertical: 14,
-        borderRadius: theme.radii.r || 0,
-        width: '100%',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: theme.colors.border,
-        ...theme.shadows.sm,
-    },
-    successBtnText: {
-        color: theme.colors.bg,
-        fontSize: 16,
-        fontFamily: theme.fonts.s,
-    },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  successPopup: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.lg || 0,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: theme.colors.border,
+    width: '100%',
+    maxWidth: 400,
+    ...theme.shadows.md,
+  },
+  successTitle: {
+    fontFamily: theme.fonts.d,
+    fontSize: 24,
+    fontWeight: '700',
+    color: theme.colors.ink,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  successText: {
+    fontFamily: theme.fonts.m,
+    fontSize: 14,
+    color: theme.colors.ink2,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  successBtn: {
+    backgroundColor: theme.colors.ink,
+    paddingVertical: 14,
+    borderRadius: theme.radii.r || 0,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: theme.colors.border,
+    ...theme.shadows.sm,
+  },
+  successBtnText: {
+    color: theme.colors.bg,
+    fontSize: 16,
+    fontFamily: theme.fonts.s,
+  },
 });

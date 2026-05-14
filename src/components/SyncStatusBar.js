@@ -13,6 +13,7 @@ const CONNECTIVITY_INTERVAL = 30000;
 
 export default function SyncStatusBar() {
     const { theme } = useTheme();
+    const styles = getStyles(theme);
     const [status, setStatus] = useState(getSyncStatus());
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -140,7 +141,7 @@ export default function SyncStatusBar() {
                     styles.label,
                     {
                         fontFamily: theme.fonts.s,
-                        color: '#fff',
+                        color: theme.colors.bg,
                         opacity: status === 'syncing' ? pulseAnim : 1,
                     },
                 ]}
@@ -151,7 +152,7 @@ export default function SyncStatusBar() {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     container: {
         position: 'absolute',
         top: 0,
@@ -161,6 +162,8 @@ const styles = StyleSheet.create({
         height: 28,
         justifyContent: 'center',
         alignItems: 'center',
+        borderBottomWidth: 2,
+        borderBottomColor: '#000000',
     },
     label: {
         fontSize: 12,

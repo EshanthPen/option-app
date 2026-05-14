@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { Crown, Lock, Zap } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { usePremium } from '../context/PremiumContext';
+import { SEM } from './DesignKit';
 
 /**
  * Inline premium gate — shows a lock overlay when feature is not available
@@ -26,14 +27,14 @@ export function PremiumGate({ gate, children, onUpgrade, message }) {
     <View style={styles.gateContainer}>
       <View style={styles.lockedOverlay}>
         <View style={styles.lockBadge}>
-          <Lock size={18} color="#FFB800" />
+          <Lock size={18} color={SEM.gold} />
         </View>
         <Text style={styles.lockTitle}>Pro Feature</Text>
         <Text style={styles.lockMessage}>
           {message || 'Upgrade to Option Pro to unlock this feature'}
         </Text>
         <TouchableOpacity style={styles.upgradeBtn} onPress={onUpgrade} activeOpacity={0.8}>
-          <Crown size={14} color="#121212" />
+          <Crown size={14} color={theme.colors.bg} />
           <Text style={styles.upgradeBtnText}>Upgrade</Text>
         </TouchableOpacity>
       </View>
@@ -53,19 +54,21 @@ export function ProBadge({ style }) {
 
   return (
     <View style={[{
-      backgroundColor: 'rgba(255, 184, 0, 0.15)',
+      backgroundColor: `${SEM.gold}26`, // 15% opacity
       paddingHorizontal: 6,
       paddingVertical: 2,
-      borderRadius: 4,
+      borderRadius: 0,
+      borderWidth: 2,
+      borderColor: SEM.gold,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 3,
     }, style]}>
-      <Crown size={10} color="#FFB800" />
+      <Crown size={10} color={SEM.gold} />
       <Text style={{
         fontSize: 9,
         fontWeight: '700',
-        color: '#FFB800',
+        color: SEM.gold,
         letterSpacing: 0.5,
       }}>PRO</Text>
     </View>
@@ -88,7 +91,7 @@ export function PaywallModal({ visible, onClose, onUpgrade }) {
           </TouchableOpacity>
 
           <View style={styles.modalCrown}>
-            <Crown size={32} color="#FFB800" />
+            <Crown size={32} color={SEM.gold} />
           </View>
 
           <Text style={styles.modalTitle}>Unlock this feature</Text>
@@ -137,11 +140,13 @@ const getStyles = (theme) => StyleSheet.create({
   lockBadge: {
     width: 44,
     height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 184, 0, 0.1)',
+    borderRadius: 0,
+    backgroundColor: `${SEM.gold}1A`, // 10% opacity
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
+    borderWidth: 2,
+    borderColor: SEM.gold,
   },
   lockTitle: {
     fontSize: 15,
@@ -162,15 +167,18 @@ const getStyles = (theme) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FFB800',
+    backgroundColor: SEM.gold,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 0,
+    borderWidth: 2,
+    borderColor: '#000000',
+    ...theme.shadows.sm,
   },
   upgradeBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#121212',
+    color: theme.colors.bg,
   },
 
   // Modal
@@ -181,11 +189,16 @@ const getStyles = (theme) => StyleSheet.create({
   },
   modalContent: {
     backgroundColor: theme.colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderColor: '#000000',
     padding: 28,
     paddingBottom: 40,
     alignItems: 'center',
+    ...theme.shadows.md,
   },
   modalClose: {
     alignSelf: 'flex-end',
@@ -198,11 +211,13 @@ const getStyles = (theme) => StyleSheet.create({
   modalCrown: {
     width: 64,
     height: 64,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 184, 0, 0.12)',
+    borderRadius: 0,
+    backgroundColor: `${SEM.gold}1F`, // 12% opacity
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    borderWidth: 2,
+    borderColor: SEM.gold,
   },
   modalTitle: {
     fontSize: 22,
@@ -236,16 +251,18 @@ const getStyles = (theme) => StyleSheet.create({
   },
   modalCta: {
     width: '100%',
-    backgroundColor: '#FFB800',
+    backgroundColor: SEM.gold,
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: 0,
+    borderWidth: 2,
+    borderColor: '#000000',
     alignItems: 'center',
     ...theme.shadows.md,
   },
   modalCtaText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#121212',
+    color: theme.colors.bg,
   },
   modalTrialText: {
     fontSize: 11,

@@ -17,6 +17,7 @@ const { width, height } = Dimensions.get('window');
 
 const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
     const { theme } = useTheme();
+    const styles = getStyles(theme);
     const [authModalVisible, setAuthModalVisible] = useState(false);
 
     const handleCloseModal = () => {
@@ -91,7 +92,7 @@ const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme) => StyleSheet.create({
     container: {
         flex: 1,
     },
@@ -111,18 +112,18 @@ const styles = StyleSheet.create({
     logoBadge: {
         width: 60,
         height: 60,
-        borderRadius: 20,
+        borderRadius: 0,
         backgroundColor: 'rgba(255,255,255,0.1)',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 24,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.4)',
     },
     title: {
         fontSize: 72,
         fontWeight: '900',
-        color: '#fff',
+        color: theme.colors.ink,
         letterSpacing: -2,
     },
     subtitle: {
@@ -133,7 +134,7 @@ const styles = StyleSheet.create({
         fontWeight: '500',
     },
     highlight: {
-        color: '#fff',
+        color: theme.colors.ink,
         fontWeight: '700',
     },
     footer: {
@@ -142,26 +143,27 @@ const styles = StyleSheet.create({
     primaryButton: {
         backgroundColor: 'transparent',
         height: 64,
-        borderRadius: 4,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 0,
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.4)',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 12,
+        ...theme.shadows.sm,
     },
     buttonText: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#fff',
+        color: theme.colors.ink,
     },
     guestButton: {
         height: 52,
-        borderRadius: 26,
+        borderRadius: 0,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 1.5,
+        borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.3)',
     },
     guestButtonText: {
@@ -179,15 +181,15 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     modalContent: {
-        backgroundColor: '#121212', // Match dark theme
-        borderTopLeftRadius: 32,
-        borderTopRightRadius: 32,
+        backgroundColor: theme.colors.bg,
+        borderTopLeftRadius: 0,
+        borderTopRightRadius: 0,
+        borderTopWidth: 2,
+        borderLeftWidth: 2,
+        borderRightWidth: 2,
+        borderColor: theme.colors.border,
         height: height * 0.85,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -10 },
-        shadowOpacity: 0.1,
-        shadowRadius: 20,
-        elevation: 20,
+        ...theme.shadows.md,
     },
     modalHeader: {
         alignItems: 'center',
@@ -196,8 +198,8 @@ const styles = StyleSheet.create({
     closeBar: {
         width: 40,
         height: 5,
-        borderRadius: 2.5,
-        backgroundColor: '#ddd',
+        borderRadius: 0,
+        backgroundColor: theme.colors.ink3,
     }
 });
 
