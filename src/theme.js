@@ -20,14 +20,13 @@ export const sizes = {
 };
 
 export const fonts = {
-    // Drop the Serif entirely. Map display fonts to sans/mono.
-    display: 'InstrumentSans-SemiBold', 
-    displayItalic: 'InstrumentSans',
-    displayBold: 'InstrumentSans-Bold',
-    displayBlackItalic: 'InstrumentSans-Bold',
+    display: 'PlayfairDisplay-SemiBold', 
+    displayItalic: 'PlayfairDisplay-Italic',
+    displayBold: 'PlayfairDisplay-Bold',
+    displayBlackItalic: 'PlayfairDisplay-BlackItalic',
     mono: 'DMMono',
     monoMedium: 'DMMono-Medium',
-    sans: 'InstrumentSans',
-    sansMedium: 'InstrumentSans-Medium',
-    sansSemiBold: 'InstrumentSans-SemiBold',
+    sans: 'Geist',
+    sansMedium: 'Geist-Medium',
+    sansSemiBold: 'Geist-SemiBold',
 };

@@ -17,6 +17,103 @@ import { useTheme } from '../context/ThemeContext';
 import { parseStudentVueGradebook, parseStudentVuePeriods } from '../utils/studentVueParser';
 import { getRecentGradeChanges, dismissGradeChanges, isAssignmentNew, isClassGradeChanged, saveGradeSnapshot, checkForGradeChanges, formatChangeMessage } from '../utils/gradeNotifications';
 import { scheduleGradeChangeNotification } from '../utils/notificationService';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { buttonVariants } from '../components/ui/button';
+import { cn } from '../lib/utils';
+
+// ── Grade Calculator Modal ───────────────────────────────────────
+function GradeCalculatorModal({ currentGrade, categoryWeights }) {
+    const [targetGrade, setTargetGrade] = useState('');
+    const [weight, setWeight] = useState('');
+    const [isCustomWeight, setIsCustomWeight] = useState(false);
+
+    const hasCategories = categoryWeights && Object.keys(categoryWeights).length > 0;
+
+    useEffect(() => {
+        if (hasCategories && !weight && !isCustomWeight) {
+            const firstCat = Object.keys(categoryWeights)[0];
+            setWeight((categoryWeights[firstCat] * 100).toString());
+        }
+    }, [categoryWeights, hasCategories, weight, isCustomWeight]);
+
+    const target = parseFloat(targetGrade);
+    const w = parseFloat(weight);
+    
+    let requiredScore = null;
+    if (!isNaN(target) && !isNaN(w) && w > 0 && w <= 100 && currentGrade !== null) {
+        requiredScore = (target - currentGrade * (1 - w / 100)) / (w / 100);
+    }
+
+    if (Platform.OS !== 'web') return null;
+
+    return (
+        <Dialog>
+            <DialogTrigger className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), "shadow-sm shadow-black/10")}>
+                Calculate Target
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle className="font-sans text-xl tracking-tight text-foreground">Grade Calculator</DialogTitle>
+                    <DialogDescription className="text-muted-foreground font-mono text-xs uppercase tracking-wider mt-1">
+                        Find out what you need on your final.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="target" className="text-right font-semibold text-foreground">Target %</Label>
+                        <Input id="target" type="number" value={targetGrade} onChange={(e) => setTargetGrade(e.target.value)} placeholder="90" className="col-span-3 border-2 border-black bg-foreground/5 text-foreground focus-visible:border-[#CCFF00]" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="weight" className="text-right font-semibold text-foreground">Weight %</Label>
+                        {hasCategories && !isCustomWeight ? (
+                            <select 
+                                id="weight"
+                                value={weight}
+                                onChange={(e) => {
+                                    if (e.target.value === 'custom') {
+                                        setIsCustomWeight(true);
+                                        setWeight('');
+                                    } else {
+                                        setWeight(e.target.value);
+                                    }
+                                }}
+                                className="col-span-3 h-8 w-full rounded-none border-2 border-black bg-foreground/5 px-2.5 text-sm text-foreground focus-visible:border-[#CCFF00] focus-visible:outline-none"
+                            >
+                                <option value="" disabled>Select category...</option>
+                                {Object.keys(categoryWeights).map(cat => (
+                                    <option key={cat} value={(categoryWeights[cat] * 100).toString()}>
+                                        {cat} ({Math.round(categoryWeights[cat] * 100)}%)
+                                    </option>
+                                ))}
+                                <option value="custom">Custom Weight...</option>
+                            </select>
+                        ) : (
+                            <div className="col-span-3 flex gap-2">
+                                <Input id="weight" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="20" className="flex-1 border-2 border-black bg-foreground/5 text-foreground focus-visible:border-[#CCFF00]" />
+                                {hasCategories && (
+                                    <button onClick={() => setIsCustomWeight(false)} className="px-2 border-2 border-black rounded-none text-xs text-muted-foreground hover:bg-foreground/5">
+                                        Back
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    {requiredScore !== null && (
+                        <div className="mt-4 p-4 rounded-none bg-foreground/5 border-2 border-black text-center">
+                            <span className="text-xs font-mono text-muted-foreground uppercase tracking-widest">You Need</span>
+                            <div className={`text-4xl font-bold mt-2 ${requiredScore > 100 ? 'text-destructive' : 'text-[#CCFF00]'}`}>
+                                {requiredScore.toFixed(1)}%
+                            </div>
+                            {requiredScore > 100 && <div className="text-xs text-destructive mt-1 font-semibold">Over 100% required!</div>}
+                        </div>
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 // ── Helpers ───────────────────────────────────────────────────
 const gradeColor = (pct, theme) => {
@@ -45,22 +142,63 @@ const numScore = (v) => {
 // ── Grade calculation (weighted: Summative 70%, Formative 30%, Final 20% of total) ──
 // Accepts mixed real + hypothetical assignments. An assignment counts if it has a
 // numeric score AND a total > 0. A zero score (0/50) IS a valid graded assignment.
-const calcGrade = (assignments) => {
-    const cats = { Summative: { e: 0, p: 0 }, Formative: { e: 0, p: 0 }, Final: { e: 0, p: 0 } };
+const calcGrade = (assignments, categoryWeights) => {
+    // If no weights are provided, fall back to the old 70/30/20 heuristic
+    if (!categoryWeights || Object.keys(categoryWeights).length === 0) {
+        const cats = { Summative: { e: 0, p: 0 }, Formative: { e: 0, p: 0 }, Final: { e: 0, p: 0 } };
+        (assignments || []).forEach(a => {
+            const s = numScore(a.score);
+            const t = parseFloat(a.total);
+            if (isNaN(s) || isNaN(t) || t <= 0) return;
+            const cat = a.category || 'Formative';
+            if (cats[cat]) { cats[cat].e += s; cats[cat].p += t; }
+            else { cats.Formative.e += s; cats.Formative.p += t; }
+        });
+        const sAvg = cats.Summative.p > 0 ? (cats.Summative.e / cats.Summative.p) * 100 : null;
+        const fAvg = cats.Formative.p > 0 ? (cats.Formative.e / cats.Formative.p) * 100 : null;
+        const feAvg = cats.Final.p > 0 ? (cats.Final.e / cats.Final.p) * 100 : null;
+        let w = sAvg !== null && fAvg !== null ? sAvg * 0.7 + fAvg * 0.3 : sAvg ?? fAvg ?? null;
+        if (w === null) return null;
+        return feAvg !== null ? w * 0.8 + feAvg * 0.2 : w;
+    }
+
+    // Calculate using exact category weights from StudentVUE
+    const cats = {};
+    Object.keys(categoryWeights).forEach(cat => cats[cat] = { e: 0, p: 0 });
+
     (assignments || []).forEach(a => {
         const s = numScore(a.score);
         const t = parseFloat(a.total);
         if (isNaN(s) || isNaN(t) || t <= 0) return;
-        const cat = a.category || 'Formative';
-        if (cats[cat]) { cats[cat].e += s; cats[cat].p += t; }
-        else { cats.Formative.e += s; cats.Formative.p += t; }
+        const cat = a.category;
+        if (cat && cats[cat]) {
+            cats[cat].e += s;
+            cats[cat].p += t;
+        } else {
+            // Unweighted or mismatched category, fallback to first category to not lose points
+            const firstCat = Object.keys(categoryWeights)[0];
+            if (firstCat && cats[firstCat]) {
+                cats[firstCat].e += s;
+                cats[firstCat].p += t;
+            }
+        }
     });
-    const sAvg = cats.Summative.p > 0 ? (cats.Summative.e / cats.Summative.p) * 100 : null;
-    const fAvg = cats.Formative.p > 0 ? (cats.Formative.e / cats.Formative.p) * 100 : null;
-    const feAvg = cats.Final.p > 0 ? (cats.Final.e / cats.Final.p) * 100 : null;
-    let w = sAvg !== null && fAvg !== null ? sAvg * 0.7 + fAvg * 0.3 : sAvg ?? fAvg ?? null;
-    if (w === null) return null;
-    return feAvg !== null ? w * 0.8 + feAvg * 0.2 : w;
+
+    let earnedWeighted = 0;
+    let totalWeightUsed = 0;
+
+    Object.keys(cats).forEach(cat => {
+        const data = cats[cat];
+        if (data.p > 0) {
+            const avg = (data.e / data.p) * 100;
+            const w = categoryWeights[cat];
+            earnedWeighted += avg * w;
+            totalWeightUsed += w;
+        }
+    });
+
+    if (totalWeightUsed === 0) return null;
+    return earnedWeighted / totalWeightUsed; // Normalize if some categories have no assignments
 };
 
 const buildGP = (pct, type) => {
@@ -278,7 +416,7 @@ export default function GradebookScreen() {
         if (selectedClass.isManual && !hypothetical) {
             // Real, persistent assignment on a manual class
             const updatedAsgns = [...(selectedClass.assignments || []), asgn];
-            const newGrade = calcGrade(updatedAsgns) ?? 0;
+            const newGrade = calcGrade(updatedAsgns, selectedClass.categoryWeights) ?? 0;
             const gp = buildGP(newGrade, selectedClass.type);
             const updatedCls = { ...selectedClass, assignments: updatedAsgns, grade: +newGrade.toFixed(1), ...gp };
             const updated = manClasses.map(c => c.id === selectedClass.id ? updatedCls : c);
@@ -304,7 +442,7 @@ export default function GradebookScreen() {
     const deleteAssignment = async (asgnId) => {
         if (!selectedClass?.isManual) return;
         const updatedAsgns = selectedClass.assignments.filter(a => a.id !== asgnId);
-        const newGrade = calcGrade(updatedAsgns) ?? 0;
+        const newGrade = calcGrade(updatedAsgns, selectedClass.categoryWeights) ?? 0;
         const gp = buildGP(newGrade, selectedClass.type);
         const updatedCls = { ...selectedClass, assignments: updatedAsgns, grade: +newGrade.toFixed(1), ...gp };
         const updated = manClasses.map(c => c.id === selectedClass.id ? updatedCls : c);
@@ -332,10 +470,18 @@ export default function GradebookScreen() {
         }));
     };
 
+    const getClassCategories = () => {
+        if (selectedClass?.categoryWeights && Object.keys(selectedClass.categoryWeights).length > 0) {
+            return Object.keys(selectedClass.categoryWeights);
+        }
+        return ['Summative', 'Formative', 'Final'];
+    };
+
     // Add a blank fake hypothetical assignment directly to the top of the list,
     // so the student can edit its fields inline rather than filling out a modal.
     const addBlankHypoAssignment = () => {
         if (!selectedClass) return;
+        const cats = getClassCategories();
         const asgn = {
             id: uid(),
             name: '',
@@ -343,7 +489,7 @@ export default function GradebookScreen() {
             // Stored as strings so TextInputs can bind directly without blowing up NaN.
             score: '',
             total: '100',
-            category: 'Summative',
+            category: cats[0],
             date: new Date().toLocaleDateString(),
             isHypothetical: true,
             isGraded: false,
@@ -356,11 +502,11 @@ export default function GradebookScreen() {
         if (!hypothetical) setHypothetical(true);
     };
 
-    // Cycle category on tap: Summative → Formative → Final → Summative
+    // Cycle category on tap through actual class categories
     const cycleHypoCategory = (asgnId, currentCat) => {
-        const order = ['Summative', 'Formative', 'Final'];
+        const order = getClassCategories();
         const idx = order.indexOf(currentCat);
-        const next = order[(idx + 1) % order.length];
+        const next = order[(idx + 1) % order.length] || order[0];
         updateHypoAssignment(asgnId, { category: next });
     };
 
@@ -452,15 +598,15 @@ export default function GradebookScreen() {
 
     const getHypoGrade = (cls) => {
         if (!hypothetical || !cls?.assignments) return null;
-        return calcGrade(applyHypo(cls));
+        return calcGrade(applyHypo(cls), cls.categoryWeights);
     };
 
     // ── Grade impact calc (how much an assignment moved the overall grade) ──
     const getGradeImpact = (cls, asgn) => {
         if (!cls?.assignments) return null;
         const without = cls.assignments.filter(a => a.id !== asgn.id);
-        const gradeWith = calcGrade(cls.assignments);
-        const gradeWithout = calcGrade(without);
+        const gradeWith = calcGrade(cls.assignments, cls.categoryWeights);
+        const gradeWithout = calcGrade(without, cls.categoryWeights);
         if (gradeWith === null || gradeWithout === null) return null;
         return gradeWith - gradeWithout;
     };
@@ -653,31 +799,34 @@ export default function GradebookScreen() {
                                 </Text>
                             ) : null}
                         </View>
-                        <TouchableOpacity
-                            style={{
-                                flexDirection: 'row', alignItems: 'center', gap: 6,
-                                paddingHorizontal: 12, paddingVertical: 8,
-                                backgroundColor: hypothetical ? theme.colors.blue + '18' : theme.colors.surface,
-                                borderWidth: 1, borderColor: hypothetical ? theme.colors.blue : theme.colors.border2,
-                                borderRadius: 10,
-                            }}
-                            onPress={() => {
-                                const next = !hypothetical;
-                                setHypothetical(next);
-                                if (!next) {
-                                    setHypoEdits({});
-                                    setHypoAssignments(prev => ({ ...prev, [cls.id]: [] }));
-                                }
-                            }}
-                        >
-                            <Sparkles size={14} color={hypothetical ? theme.colors.blue : theme.colors.ink2} />
-                            <Text style={{
-                                fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600',
-                                color: hypothetical ? theme.colors.blue : theme.colors.ink2,
-                            }}>
-                                {hypothetical ? 'Exit hypothetical' : 'What-if mode'}
-                            </Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                            <GradeCalculatorModal currentGrade={parseFloat(cls.grade)} categoryWeights={cls?.categoryWeights} />
+                            <TouchableOpacity
+                                style={{
+                                    flexDirection: 'row', alignItems: 'center', gap: 6,
+                                    paddingHorizontal: 12, paddingVertical: 8,
+                                    backgroundColor: hypothetical ? theme.colors.blue + '18' : theme.colors.surface,
+                                    borderWidth: 1, borderColor: hypothetical ? theme.colors.blue : theme.colors.border2,
+                                    borderRadius: 10,
+                                }}
+                                onPress={() => {
+                                    const next = !hypothetical;
+                                    setHypothetical(next);
+                                    if (!next) {
+                                        setHypoEdits({});
+                                        setHypoAssignments(prev => ({ ...prev, [cls.id]: [] }));
+                                    }
+                                }}
+                            >
+                                <Sparkles size={14} color={hypothetical ? theme.colors.blue : theme.colors.ink2} />
+                                <Text style={{
+                                    fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600',
+                                    color: hypothetical ? theme.colors.blue : theme.colors.ink2,
+                                }}>
+                                    {hypothetical ? 'Exit hypothetical' : 'What-if mode'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
                     {/* 3-card stat row (matches design) */}
@@ -800,7 +949,7 @@ export default function GradebookScreen() {
                         const runningGrades = [];
                         for (let i = 1; i <= sorted.length; i++) {
                             const slice = sorted.slice(0, i);
-                            const g = calcGrade(slice);
+                            const g = calcGrade(slice, cls.categoryWeights);
                             runningGrades.push(g !== null ? Math.round(g * 10) / 10 : 0);
                         }
                         const labels = sorted.map((a, i) =>
@@ -1403,7 +1552,9 @@ const getStyles = (theme) => StyleSheet.create({
     // Class card — no border, thick color left strip, big italic grade letter
     classCard: {
         backgroundColor: theme.colors.surface,
-        borderRadius: 14,
+        borderRadius: 0,
+        borderWidth: 2,
+        borderColor: '#000000',
         marginBottom: 10,
         overflow: 'hidden',
         flexDirection: 'row',
@@ -1472,19 +1623,19 @@ const getStyles = (theme) => StyleSheet.create({
     hypoNameInput: { flex: 1, minWidth: 140, fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '500', color: theme.colors.ink, backgroundColor: theme.colors.blue + '08', borderBottomWidth: 1, borderBottomColor: theme.colors.blue + '40', paddingVertical: 2, paddingHorizontal: 4, borderRadius: 4 },
 
     inputLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8, marginTop: 14, paddingHorizontal: 20 },
-    input: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, padding: 13, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, marginHorizontal: 20, marginBottom: 0 },
+    input: { backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: '#000000', borderRadius: 0, padding: 13, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, marginHorizontal: 20, marginBottom: 0 },
     segRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 4 },
     seg: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
     segActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
     segTxt: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink },
     segTxtActive: { color: theme.colors.bg, fontWeight: '700' },
-    calcBtn: { backgroundColor: theme.colors.accent, borderRadius: 12, padding: 14, alignItems: 'center', marginHorizontal: 20, marginTop: 12, ...theme.shadows.sm },
+    calcBtn: { backgroundColor: '#CCFF00', borderRadius: 0, borderWidth: 2, borderColor: '#000000', padding: 14, alignItems: 'center', marginHorizontal: 20, marginTop: 12, ...theme.shadows.sm },
     calcBtnTxt: { fontFamily: theme.fonts.s, fontSize: 15, color: theme.colors.bg, letterSpacing: 0.5 },
 
-    fab: { position: 'absolute', bottom: 32, right: 24, backgroundColor: theme.colors.accent, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: theme.colors.accent, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
+    fab: { position: 'absolute', bottom: 32, right: 24, backgroundColor: '#CCFF00', width: 56, height: 56, borderRadius: 0, borderWidth: 2, borderColor: '#000000', alignItems: 'center', justifyContent: 'center', shadowColor: '#000000', shadowOpacity: 1, shadowRadius: 0, shadowOffset: { width: 4, height: 4 }, elevation: 8 },
 
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalSheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 0, paddingTop: 12, paddingBottom: 40 },
+    modalSheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTopWidth: 2, borderTopColor: '#000000', paddingHorizontal: 0, paddingTop: 12, paddingBottom: 40 },
     modalHandle: { width: 36, height: 4, backgroundColor: theme.colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
     modalTitle: { fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, paddingHorizontal: 20, marginBottom: 8 },
 

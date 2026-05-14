@@ -45,10 +45,10 @@ export function Card({ children, style, onPress, padding = 16, noBorder, gradien
     const { theme } = useTheme();
     const cardStyle = {
         backgroundColor: theme.colors.surface,
-        borderRadius: 6,
+        borderRadius: 0,
         padding,
-        borderWidth: noBorder ? 0 : 1,
-        borderColor: theme.colors.border,
+        borderWidth: noBorder ? 0 : 2,
+        borderColor: '#000000',
         ...style,
     };
     if (onPress) {
@@ -81,8 +81,8 @@ export function Button({
     }[size];
 
     const variants = {
-        primary:   { bg: theme.colors.ink,    fg: theme.colors.bg, border: theme.colors.ink },
-        secondary: { bg: theme.colors.surface, fg: theme.colors.ink, border: theme.colors.border2 },
+        primary:   { bg: '#CCFF00',           fg: '#000000',        border: '#000000' },
+        secondary: { bg: theme.colors.surface, fg: theme.colors.ink, border: '#000000' },
         ghost:     { bg: 'transparent',       fg: theme.colors.ink2, border: 'transparent' },
         danger:    { bg: SEM.red,             fg: '#fff',           border: SEM.red },
         accent:    { bg: theme.colors.accent, fg: '#fff',           border: theme.colors.accent },
@@ -98,9 +98,9 @@ export function Button({
                 flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
                 gap: 6,
                 backgroundColor: variants.bg,
-                borderColor: variants.border,
-                borderWidth: 1,
-                borderRadius: 10,
+                borderColor: '#000000',
+                borderWidth: 2,
+                borderRadius: 0,
                 paddingVertical: sizes.paddingV,
                 paddingHorizontal: sizes.paddingH,
                 height: sizes.height,

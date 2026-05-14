@@ -1,4 +1,5 @@
 import React from 'react';
+import './src/index.css';
 import { View, ActivityIndicator, Platform, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import TabNavigator from './src/navigation/TabNavigator';
@@ -42,6 +43,8 @@ import { supabase } from './src/supabaseClient';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import SetupSchoologyScreen from './src/screens/SetupSchoologyScreen';
 import SetupSISScreen from './src/screens/SetupSISScreen';
+import SearchModal from './src/components/ui/SearchModal';
+import SyncStatusBar from './src/components/navigation/SyncStatusBar';
 
 export default function App() {
   const [session, setSession] = React.useState(null);
@@ -231,6 +234,13 @@ export default function App() {
             onAuthReset={() => setIsAuthenticating(false)}
             onGuestMode={handleGuestMode}
           />
+        )}
+
+        {Platform.OS === 'web' && (session || guestMode) && setupStep === 'done' && (
+            <>
+                <SearchModal />
+                <SyncStatusBar />
+            </>
         )}
       </NavigationContainer>
 

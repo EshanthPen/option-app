@@ -183,7 +183,33 @@ export const parseStudentVueGradebook = (xmlString, targetPeriodName = null) => 
                     }
                 }
 
-                // 2) Aggregate assignments from ALL valid marks
+                // 2) Extract category weights from GradeCalculationSummary
+                let categoryWeights = null;
+                if (targetMark && targetMark.GradeCalculationSummary?.AssignmentGradeCalc) {
+                    let calcs = targetMark.GradeCalculationSummary.AssignmentGradeCalc;
+                    if (!Array.isArray(calcs)) calcs = [calcs];
+                    const weights = {};
+                    let totalWeight = 0;
+                    calcs.forEach(calc => {
+                        const type = calc['@_Type'];
+                        let weightStr = calc['@_Weight'];
+                        if (type && weightStr) {
+                            const wMatch = weightStr.match(/[\d.]+/);
+                            if (wMatch) {
+                                const w = parseFloat(wMatch[0]);
+                                if (w > 0) {
+                                    weights[type] = w / 100;
+                                    totalWeight += w / 100;
+                                }
+                            }
+                        }
+                    });
+                    if (Object.keys(weights).length > 0 && totalWeight > 0) {
+                        categoryWeights = weights;
+                    }
+                }
+
+                // 3) Aggregate assignments from ALL valid marks
                 let allAssignments = [];
                 const seenAssignmentIds = new Set();
                 
@@ -333,7 +359,8 @@ export const parseStudentVueGradebook = (xmlString, targetPeriodName = null) => 
                 teacher: course['@_Staff'] || '',
                 room: course['@_Room'] || '',
                 type: isAP ? 'AP' : (courseTitle.includes(' HN') ? 'HN' : 'ST'),
-                assignments: formattedAssignments
+                assignments: formattedAssignments,
+                categoryWeights: categoryWeights,
             });
         });
 

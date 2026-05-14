@@ -1,6 +1,99 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --font-sans: "Geist", "Instrument Sans", sans-serif;
+  --font-mono: "DM Mono", monospace;
+  --font-serif: "Playfair Display", serif;
+
+  /* Brutalist override: force all radius variants to 4px */
+  --radius-lg: var(--radius);
+  --radius-md: var(--radius);
+  --radius-sm: var(--radius);
+}
+
+@layer base {
+  :root {
+    --background: 48 40% 98%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+    --primary: 262 83% 58%; /* Vibrant violet */
+    --primary-foreground: 48 40% 98%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 262 83% 58%;
+    --radius: 0.25rem; /* Brutalist 4px radius */
+  }
+
+  .dark {
+    --background: 0 0% 0%; /* True black */
+    --foreground: 48 40% 94%; /* #F5F3E9 */
+    --card: 0 0% 4%; /* High-contrast card */
+    --card-foreground: 48 40% 94%;
+    --popover: 0 0% 4%;
+    --popover-foreground: 48 40% 94%;
+    --primary: 262 83% 58%; /* Vibrant violet accent */
+    --primary-foreground: 48 40% 94%;
+    --secondary: 0 0% 9%;
+    --secondary-foreground: 48 40% 94%;
+    --muted: 0 0% 9%;
+    --muted-foreground: 0 0% 63%;
+    --accent: 262 83% 58%;
+    --accent-foreground: 48 40% 94%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 262 83% 58%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* Glassmorphism Panel */
+.glass-panel {
+  @apply bg-foreground/5 backdrop-blur-md border border-border/50 shadow-sm shadow-black/20;
+}
+
 @keyframes fadeSlideIn {
   to {
     opacity: 1;

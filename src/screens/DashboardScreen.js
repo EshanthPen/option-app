@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions
+    View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Platform
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -18,6 +18,56 @@ import { generateNudges } from '../utils/studyNudges';
 import { getUnlockedAchievements, ACHIEVEMENTS } from '../utils/achievements';
 import { lightImpact } from '../utils/haptics';
 import SyncStatusBar from '../components/SyncStatusBar';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../components/ui/card';
+import { Progress } from '../components/ui/progress';
+import { Button as ShadcnButton } from '../components/ui/button';
+
+// ── Focus Timer Widget ─────────────────────────────────────────
+function FocusTimerWidget({ theme }) {
+    const [timeLeft, setTimeLeft] = useState(25 * 60);
+    const [isActive, setIsActive] = useState(false);
+
+    useEffect(() => {
+        let interval = null;
+        if (isActive && timeLeft > 0) {
+            interval = setInterval(() => {
+                setTimeLeft((t) => t - 1);
+            }, 1000);
+        } else if (timeLeft === 0) {
+            setIsActive(false);
+        }
+        return () => clearInterval(interval);
+    }, [isActive, timeLeft]);
+
+    const toggle = () => setIsActive(!isActive);
+    const reset = () => { setIsActive(false); setTimeLeft(25 * 60); };
+    
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
+    const progress = 100 - ((timeLeft / (25 * 60)) * 100);
+
+    if (Platform.OS !== 'web') return null;
+
+    return (
+        <Card className="mt-6 shadow-sm shadow-black/20">
+            <CardHeader className="pb-2 pt-4 px-5">
+                <CardTitle className="text-[11px] uppercase tracking-[1.5px] text-muted-foreground font-mono">Focus Session</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center gap-4 px-5 pb-4">
+                <div className="text-5xl font-bold tracking-tighter text-foreground font-sans">
+                    {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+                </div>
+                <Progress value={progress} className="h-2 w-full bg-secondary" />
+            </CardContent>
+            <CardFooter className="flex justify-between pt-0 pb-4 px-5 gap-3">
+                <ShadcnButton variant="outline" onClick={reset} className="flex-1">Reset</ShadcnButton>
+                <ShadcnButton variant="default" onClick={toggle} className="flex-1">
+                    {isActive ? 'Pause' : 'Start Focus'}
+                </ShadcnButton>
+            </CardFooter>
+        </Card>
+    );
+}
 
 const SEM = { red: '#E03E3E', orange: '#D97706', green: '#16A34A', blue: '#2563EB', purple: '#7C3AED', gold: '#FFB800' };
 
@@ -425,6 +475,9 @@ export default function DashboardScreen() {
                                 ))}
                             </View>
                         </TouchableOpacity>
+
+                        {/* Focus Timer Widget */}
+                        <FocusTimerWidget theme={theme} />
 
                         {/* Class Overview */}
                         <View>
