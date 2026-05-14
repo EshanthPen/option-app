@@ -1,24 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getTheme, THEME_PRESETS } from '../utils/theme';
+import { getTheme } from '../utils/theme';
 
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
     const systemColorScheme = useColorScheme();
     const [isDarkMode, setIsDarkMode] = useState(systemColorScheme === 'dark');
-    const [themePreset, setThemePreset] = useState('classic');
 
     useEffect(() => {
         const loadTheme = async () => {
             const savedTheme = await AsyncStorage.getItem('userTheme');
             if (savedTheme) {
                 setIsDarkMode(savedTheme === 'dark');
-            }
-            const savedPreset = await AsyncStorage.getItem('userThemePreset');
-            if (savedPreset && THEME_PRESETS[savedPreset]) {
-                setThemePreset(savedPreset);
             }
         };
         loadTheme();
@@ -30,18 +25,10 @@ export const ThemeProvider = ({ children }) => {
         await AsyncStorage.setItem('userTheme', newMode ? 'dark' : 'light');
     };
 
-    const changePreset = async (presetKey) => {
-        if (THEME_PRESETS[presetKey]) {
-            setThemePreset(presetKey);
-            await AsyncStorage.setItem('userThemePreset', presetKey);
-        }
-    };
-
-    // Build the theme from the active preset + dark/light mode
-    const theme = getTheme(isDarkMode, themePreset);
+    const theme = getTheme(isDarkMode);
 
     return (
-        <ThemeContext.Provider value={{ isDarkMode, toggleTheme, theme, themePreset, changePreset }}>
+        <ThemeContext.Provider value={{ isDarkMode, toggleTheme, theme }}>
             {children}
         </ThemeContext.Provider>
     );

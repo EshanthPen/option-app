@@ -7,7 +7,6 @@ import {
 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { usePremium } from '../context/PremiumContext';
-import { THEME_PRESETS } from '../utils/theme';
 import WorkingHoursGraph from '../components/WorkingHoursGraph';
 import { TopBar, Card, Button, Badge, Switch, SectionLabel, GradientCard, SEM } from '../components/DesignKit';
 
@@ -21,7 +20,7 @@ const TABS = [
 ];
 
 export default function SettingsScreen({ navigation, isGuest, onSignOut }) {
-    const { theme, toggleTheme, isDarkMode, themePreset, changePreset } = useTheme();
+    const { theme, toggleTheme, isDarkMode } = useTheme();
     const { isPro, subscription } = usePremium();
     const [tab, setTab] = useState('account');
     const [userName, setUserName] = useState('');
@@ -166,56 +165,7 @@ export default function SettingsScreen({ navigation, isGuest, onSignOut }) {
                         {/* ── APPEARANCE ── */}
                         {tab === 'appearance' && (
                             <>
-                                <Card padding={20} style={{ marginBottom: 16 }}>
-                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink, marginBottom: 4 }}>
-                                        Color theme
-                                    </Text>
-                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, marginBottom: 14 }}>
-                                        Changes the accent color and surface tones across the app.
-                                    </Text>
-                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                                        {Object.entries(THEME_PRESETS).map(([key, preset]) => {
-                                            const t = isDarkMode ? preset.dark : preset.light;
-                                            const active = themePreset === key;
-                                            return (
-                                                <TouchableOpacity
-                                                    key={key}
-                                                    onPress={() => changePreset?.(key)}
-                                                    activeOpacity={0.85}
-                                                    style={{
-                                                        width: '31%',
-                                                        borderWidth: 2,
-                                                        borderColor: active ? t.accent : theme.colors.border,
-                                                        borderRadius: 12, overflow: 'hidden',
-                                                        backgroundColor: t.bg,
-                                                    }}
-                                                >
-                                                    <View style={{
-                                                        padding: 12, paddingVertical: 10,
-                                                        flexDirection: 'row', alignItems: 'center', gap: 8,
-                                                        backgroundColor: t.surface,
-                                                        borderBottomWidth: 1, borderBottomColor: t.border,
-                                                    }}>
-                                                        <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: t.accent }} />
-                                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: t.ink, flex: 1 }} numberOfLines={1}>
-                                                            {preset.name}
-                                                        </Text>
-                                                        {active && <Check size={14} color={t.accent} strokeWidth={2.5} />}
-                                                    </View>
-                                                    <View style={{ padding: 10, flexDirection: 'row', gap: 4 }}>
-                                                        {[t.surface, t.surface2, t.border, t.ink, t.accent].map((c, i) => (
-                                                            <View key={i} style={{
-                                                                width: 14, height: 14, borderRadius: 3,
-                                                                backgroundColor: c,
-                                                                borderWidth: 1, borderColor: t.border,
-                                                            }} />
-                                                        ))}
-                                                    </View>
-                                                </TouchableOpacity>
-                                            );
-                                        })}
-                                    </View>
-                                </Card>
+
 
                                 <Card padding={0} style={{ overflow: 'hidden' }}>
                                     <ToggleRow

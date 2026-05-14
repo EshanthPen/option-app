@@ -49,6 +49,7 @@ export function Card({ children, style, onPress, padding = 16, noBorder, gradien
         padding,
         borderWidth: noBorder ? 0 : 2,
         borderColor: '#000000',
+        ...(noBorder ? {} : theme.shadows.md),
         ...style,
     };
     if (onPress) {
@@ -105,6 +106,7 @@ export function Button({
                 paddingHorizontal: sizes.paddingH,
                 height: sizes.height,
                 opacity: (disabled || loading) ? 0.5 : 1,
+                ...theme.shadows.sm,
             }, style]}
         >
             {loading
@@ -130,9 +132,9 @@ export function Badge({ children, color, style }) {
     return (
         <View style={[{
             paddingHorizontal: 8, paddingVertical: 3,
-            borderRadius: 6,
+            borderRadius: 0,
             backgroundColor: 'transparent',
-            borderWidth: 1,
+            borderWidth: 2,
             borderColor: c,
         }, style]}>
             <Text style={{
@@ -213,8 +215,9 @@ export function TopBar({
                                 flexDirection: 'row', alignItems: 'center', gap: 8,
                                 paddingHorizontal: 12, paddingVertical: 8,
                                 backgroundColor: theme.colors.bg,
-                                borderWidth: 1, borderColor: theme.colors.border,
-                                borderRadius: 10, width: 260,
+                                borderWidth: 2, borderColor: '#000000',
+                                borderRadius: 0, width: 260,
+                                ...theme.shadows.sm,
                             }}
                         >
                             <Search size={14} color={theme.colors.ink3} />
@@ -228,7 +231,8 @@ export function TopBar({
                             <View style={{
                                 paddingHorizontal: 5, paddingVertical: 1,
                                 backgroundColor: theme.colors.surface2,
-                                borderRadius: 4,
+                                borderRadius: 0,
+                                borderWidth: 1, borderColor: '#000000',
                             }}>
                                 <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink4 }}>
                                     ⌘K
@@ -238,17 +242,18 @@ export function TopBar({
                     )}
                     {showBell && (
                         <TouchableOpacity style={{
-                            width: 36, height: 36, borderRadius: 10,
+                            width: 36, height: 36, borderRadius: 0,
                             backgroundColor: theme.colors.surface,
-                            borderWidth: 1, borderColor: theme.colors.border,
+                            borderWidth: 2, borderColor: '#000000',
                             alignItems: 'center', justifyContent: 'center', position: 'relative',
+                            ...theme.shadows.sm,
                         }}>
                             <Bell size={16} color={theme.colors.ink2} />
                             <View style={{
                                 position: 'absolute', top: 8, right: 8,
-                                width: 7, height: 7, borderRadius: 4,
+                                width: 7, height: 7, borderRadius: 0,
                                 backgroundColor: SEM.red,
-                                borderWidth: 1.5, borderColor: theme.colors.surface,
+                                borderWidth: 1.5, borderColor: '#000000',
                             }} />
                         </TouchableOpacity>
                     )}
@@ -344,7 +349,10 @@ export function TabPills({ tabs, value, onChange, style }) {
             flexDirection: 'row',
             backgroundColor: theme.colors.surface2,
             padding: 3,
-            borderRadius: 8,
+            borderRadius: 0,
+            borderWidth: 2,
+            borderColor: '#000000',
+            ...theme.shadows.sm,
             gap: 4,
         }, style]}>
             {tabs.map((tab) => {
@@ -359,8 +367,10 @@ export function TabPills({ tabs, value, onChange, style }) {
                         style={{
                             paddingHorizontal: 12,
                             paddingVertical: 6,
-                            borderRadius: 6,
+                            borderRadius: 0,
                             backgroundColor: active ? theme.colors.surface : 'transparent',
+                            borderWidth: active ? 2 : 0,
+                            borderColor: '#000000',
                         }}
                     >
                         <Text style={{

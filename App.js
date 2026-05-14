@@ -36,7 +36,7 @@ import {
   Geist_600SemiBold,
   Geist_700Bold,
 } from '@expo-google-fonts/geist';
-import { ThemeProvider } from './src/context/ThemeContext';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { PremiumProvider } from './src/context/PremiumContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './src/supabaseClient';
@@ -46,7 +46,8 @@ import SetupSISScreen from './src/screens/SetupSISScreen';
 import SearchModal from './src/components/ui/SearchModal';
 import SyncStatusBar from './src/components/navigation/SyncStatusBar';
 
-export default function App() {
+function MainApp() {
+  const { theme } = useTheme();
   const [session, setSession] = React.useState(null);
   const [guestMode, setGuestMode] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
@@ -128,7 +129,7 @@ export default function App() {
           setShowVerifiedModal(true);
       }
     });
-
+    
     return () => subscription.unsubscribe();
   }, []);
 
@@ -178,8 +179,8 @@ export default function App() {
 
   if (!fontsLoaded || loading || (isAuthenticating && !session)) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#121212' }}>
-        <ActivityIndicator size="large" color="#F5F3E9" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.bg }}>
+        <ActivityIndicator size="large" color={theme.colors.accent} />
       </View>
     );
   }
@@ -212,8 +213,7 @@ export default function App() {
   };
 
   return (
-    <ThemeProvider>
-      <PremiumProvider>
+    <>
       <NavigationContainer linking={linking}>
         {(session || guestMode) ? (
           // Logged-in flow: route through setup screens if not completed yet
@@ -250,27 +250,36 @@ export default function App() {
           transparent
           animationType="slide"
       >
-          <View style={styles.modalOverlay}>
-              <View style={styles.successPopup}>
-                  <Text style={styles.successTitle}>Email Verified! 🎉</Text>
-                  <Text style={styles.successText}>
+          <View style={dynamicStyles(theme).modalOverlay}>
+              <View style={dynamicStyles(theme).successPopup}>
+                  <Text style={dynamicStyles(theme).successTitle}>Email Verified! 🎉</Text>
+                  <Text style={dynamicStyles(theme).successText}>
                       Your account is now fully active. Your profile information has been automatically synced.
                   </Text>
                   <TouchableOpacity 
-                      style={styles.successBtn}
+                      style={dynamicStyles(theme).successBtn}
                       onPress={() => setShowVerifiedModal(false)}
                   >
-                      <Text style={styles.successBtnText}>Amazing</Text>
+                      <Text style={dynamicStyles(theme).successBtnText}>Amazing</Text>
                   </TouchableOpacity>
               </View>
           </View>
       </Modal>
-    </PremiumProvider>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <PremiumProvider>
+        <MainApp />
+      </PremiumProvider>
     </ThemeProvider>
   );
 }
 
-const styles = StyleSheet.create({
+const dynamicStyles = (theme) => StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.8)',
@@ -279,49 +288,45 @@ const styles = StyleSheet.create({
         padding: 24,
     },
     successPopup: {
-        backgroundColor: '#1a1a1a',
-        borderRadius: 20,
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.radii.lg || 0,
         padding: 28,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#2a2a2a',
+        borderWidth: 2,
+        borderColor: theme.colors.border,
         width: '100%',
         maxWidth: 400,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 10,
+        ...theme.shadows.md,
     },
     successTitle: {
+        fontFamily: theme.fonts.d,
         fontSize: 24,
         fontWeight: '700',
-        color: '#F5F3E9',
+        color: theme.colors.ink,
         marginBottom: 10,
         textAlign: 'center',
     },
     successText: {
+        fontFamily: theme.fonts.m,
         fontSize: 14,
-        color: '#999',
+        color: theme.colors.ink2,
         textAlign: 'center',
         lineHeight: 22,
         marginBottom: 24,
     },
     successBtn: {
-        backgroundColor: '#F5F3E9',
+        backgroundColor: theme.colors.ink,
         paddingVertical: 14,
-        borderRadius: 12,
+        borderRadius: theme.radii.r || 0,
         width: '100%',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        elevation: 3,
+        borderWidth: 2,
+        borderColor: theme.colors.border,
+        ...theme.shadows.sm,
     },
     successBtnText: {
-        color: '#121212',
+        color: theme.colors.bg,
         fontSize: 16,
-        fontWeight: '700',
+        fontFamily: theme.fonts.s,
     },
 });

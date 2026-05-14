@@ -7,7 +7,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ICAL from 'ical.js';
 import { supabase } from '../supabaseClient';
-import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
 import { ChevronLeft, ChevronRight, Plus, Download, CalendarDays, Zap, Sparkles } from 'lucide-react-native';
 import { fetchFreeBusy, createGoogleCalendarEvent } from '../utils/googleCalendarAPI';

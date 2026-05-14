@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
 import { Search, X, Check, Globe } from 'lucide-react-native';
-import { theme as staticTheme } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
 
 export const KNOWN_DISTRICTS = [
@@ -124,8 +123,12 @@ const getStyles = (theme) => StyleSheet.create({
     },
     modalContent: {
         backgroundColor: theme.colors.bg,
-        borderTopLeftRadius: theme.radii.xl,
-        borderTopRightRadius: theme.radii.xl,
+        borderTopLeftRadius: 0,
+        borderTopRightRadius: 0,
+        borderTopWidth: 2,
+        borderLeftWidth: 2,
+        borderRightWidth: 2,
+        borderColor: '#000000',
         maxHeight: '90%',
         minHeight: '60%',
         paddingTop: 20,
@@ -153,9 +156,9 @@ const getStyles = (theme) => StyleSheet.create({
         backgroundColor: theme.colors.surface,
         marginHorizontal: 24,
         paddingHorizontal: 15,
-        borderRadius: theme.radii.lg,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
+        borderRadius: 0,
+        borderWidth: 2,
+        borderColor: '#000000',
         marginBottom: 15,
         height: 50,
     },
@@ -182,9 +185,9 @@ const getStyles = (theme) => StyleSheet.create({
         justifyContent: 'space-between',
         padding: 16,
         backgroundColor: theme.colors.surface,
-        borderRadius: theme.radii.lg,
+        borderRadius: 0,
         marginBottom: 8,
-        borderWidth: 1,
+        borderWidth: 2,
         borderColor: 'transparent',
     },
     districtItemSelected: {
@@ -199,13 +202,13 @@ const getStyles = (theme) => StyleSheet.create({
     iconBox: {
         width: 40,
         height: 40,
-        borderRadius: theme.radii.lg,
+        borderRadius: 0,
         backgroundColor: theme.colors.surface2,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 15,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
+        borderWidth: 2,
+        borderColor: '#000000',
     },
     iconBoxSelected: {
         backgroundColor: theme.colors.surface,
@@ -247,9 +250,9 @@ const getStyles = (theme) => StyleSheet.create({
         backgroundColor: theme.colors.surface,
         paddingHorizontal: 20,
         paddingVertical: 12,
-        borderRadius: theme.radii.lg,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
+        borderRadius: 0,
+        borderWidth: 2,
+        borderColor: '#000000',
     },
     customFallbackText: {
         fontFamily: theme.fonts.s,

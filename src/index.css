@@ -34,47 +34,49 @@
 }
 
 @layer base {
+  /* ── Light mode — matches brutalist.light in src/utils/theme.js ── */
   :root {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 4%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 4%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 72 100% 50%; /* Neon CCFF00 */
+    --background: 0 0% 100%;        /* #FFFFFF */
+    --foreground: 0 0% 0%;          /* #000000 */
+    --card: 0 0% 98%;               /* #FAFAFA */
+    --card-foreground: 0 0% 0%;
+    --popover: 0 0% 98%;
+    --popover-foreground: 0 0% 0%;
+    --primary: 72 100% 50%;         /* #CCFF00 neon accent */
     --primary-foreground: 0 0% 0%;
-    --secondary: 0 0% 9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 9%;
-    --muted-foreground: 0 0% 63%;
+    --secondary: 0 0% 96%;          /* #F4F4F5 surface2 */
+    --secondary-foreground: 0 0% 0%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 44%;   /* #717171 ink3 */
     --accent: 72 100% 50%;
     --accent-foreground: 0 0% 0%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 15%;
-    --input: 0 0% 15%;
+    --destructive: 0 84% 60%;       /* #EF4444 red */
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 0%;              /* #000000 hard black border */
+    --input: 0 0% 96%;
     --ring: 72 100% 50%;
     --radius: 0px;
   }
 
+  /* ── Dark mode — matches brutalist.dark in src/utils/theme.js ── */
   .dark {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 4%;
+    --background: 0 0% 0%;          /* #000000 true black */
+    --foreground: 0 0% 98%;         /* #FAFAFA */
+    --card: 0 0% 4%;                /* #0A0A0A surface */
     --card-foreground: 0 0% 98%;
     --popover: 0 0% 4%;
     --popover-foreground: 0 0% 98%;
-    --primary: 72 100% 50%;
+    --primary: 72 100% 50%;         /* #CCFF00 neon accent */
     --primary-foreground: 0 0% 0%;
-    --secondary: 0 0% 9%;
+    --secondary: 0 0% 9%;           /* #171717 surface2 */
     --secondary-foreground: 0 0% 98%;
     --muted: 0 0% 9%;
-    --muted-foreground: 0 0% 63%;
+    --muted-foreground: 0 0% 44%;   /* #717171 ink3 */
     --accent: 72 100% 50%;
     --accent-foreground: 0 0% 0%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 84% 60%;       /* #EF4444 red */
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 15%;
+    --border: 0 0% 15%;             /* #262626 dark border */
     --input: 0 0% 15%;
     --ring: 72 100% 50%;
   }

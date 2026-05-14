@@ -82,7 +82,7 @@ export default function SearchModal({ onNavigate }) {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.15, ease: "easeOut" }}
-          className="w-full max-w-lg bg-background border border-border shadow-2xl rounded-xl overflow-hidden font-sans"
+          className="w-full max-w-lg bg-background border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-none overflow-hidden font-sans"
         >
           <div className="flex items-center px-4 py-3 border-b border-border">
             <Search className="w-5 h-5 text-muted-foreground mr-3" />
@@ -111,11 +111,11 @@ export default function SearchModal({ onNavigate }) {
                     setIsOpen(false);
                     onNavigate && onNavigate(item.route);
                   }}
-                  className="w-full flex items-center px-3 py-3 text-sm rounded-md hover:bg-foreground/10 hover:text-foreground transition-colors group"
+                  className="w-full flex items-center px-3 py-3 text-sm rounded-none hover:bg-foreground/10 hover:text-foreground transition-colors group"
                 >
                   <item.icon className="w-4 h-4 mr-3 text-muted-foreground group-hover:text-foreground" />
                   <span className="font-medium text-foreground">{item.title}</span>
-                  <span className="ml-auto text-xs text-muted-foreground capitalize bg-foreground/5 px-2 py-0.5 rounded">
+                  <span className="ml-auto text-xs text-muted-foreground capitalize bg-foreground/5 px-2 py-0.5 rounded-none">
                     {item.type}
                   </span>
                 </button>
