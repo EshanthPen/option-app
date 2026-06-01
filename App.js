@@ -41,8 +41,6 @@ import { PremiumProvider } from './src/context/PremiumContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './src/supabaseClient';
 import WelcomeScreen from './src/screens/WelcomeScreen';
-import SetupSchoologyScreen from './src/screens/SetupSchoologyScreen';
-import SetupSISScreen from './src/screens/SetupSISScreen';
 import SearchModal from './src/components/ui/SearchModal';
 
 function MainApp() {
@@ -53,38 +51,6 @@ function MainApp() {
   const [isAuthenticating, setIsAuthenticating] = React.useState(false);
   const [showVerifiedModal, setShowVerifiedModal] = React.useState(false);
 
-  // Post-login integration setup flow
-  // 'schoology' → show Schoology setup
-  // 'sis'       → show SIS setup
-  // 'done'      → go to main app
-  const [setupStep, setSetupStep] = React.useState('done'); // default: skip if flags already set
-
-  // Check whether the user still needs to go through the setup flow.
-  // Called whenever a session becomes active (initial load or new login).
-  const checkSetupStep = React.useCallback(async (activeSession) => {
-    if (!activeSession) return;
-    // Check both the completion flags AND whether real credentials exist.
-    // This ensures users who skipped/had stale flags still see setup if not configured.
-    const [sisDone, schoologyDone, svUsername, svDistrictUrl, schoologyUrl] = await Promise.all([
-      AsyncStorage.getItem('setup_sis_done'),
-      AsyncStorage.getItem('setup_schoology_done'),
-      AsyncStorage.getItem('svUsername'),
-      AsyncStorage.getItem('svDistrictUrl'),
-      AsyncStorage.getItem('schoologyUrl'),
-    ]);
-
-    const sisConfigured = !!(svUsername && svDistrictUrl);
-    const schoologyConfigured = !!schoologyUrl;
-
-    // Show setup if the flag is missing OR the real credential is not set
-    if (!sisDone && !sisConfigured) {
-      setSetupStep('sis');
-    } else if (!schoologyDone && !schoologyConfigured) {
-      setSetupStep('schoology');
-    } else {
-      setSetupStep('done');
-    }
-  }, []);
 
   React.useEffect(() => {
     // Initial session check + guest mode check
@@ -95,8 +61,6 @@ function MainApp() {
       setSession(session);
       if (!session && guestFlag === 'true') {
         setGuestMode(true);
-      } else if (session) {
-        checkSetupStep(session);
       }
       setLoading(false);
     });
@@ -107,9 +71,6 @@ function MainApp() {
       if (session) {
         setIsAuthenticating(false);
         // Only trigger setup flow on fresh sign-in events, not on token refreshes
-        if (_event === 'SIGNED_IN') {
-          await checkSetupStep(session);
-        }
       }
 
       if (session?.user?.user_metadata) {
@@ -229,18 +190,7 @@ function MainApp() {
     <>
       <NavigationContainer linking={linking} theme={navigationTheme}>
         {(session || guestMode) ? (
-          // Logged-in flow: route through setup screens if not completed yet
-          setupStep === 'sis' ? (
-            <SetupSISScreen
-              onComplete={() => setSetupStep('schoology')}
-            />
-          ) : setupStep === 'schoology' ? (
-            <SetupSchoologyScreen
-              onComplete={() => setSetupStep('done')}
-            />
-          ) : (
-            <TabNavigator isGuest={guestMode && !session} onSignOut={handleSignOut} />
-          )
+          <TabNavigator isGuest={guestMode && !session} onSignOut={handleSignOut} />
         ) : (
           <WelcomeScreen
             onAuthStart={() => setIsAuthenticating(true)}

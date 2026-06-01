@@ -1,97 +1,184 @@
 import { XMLParser } from 'fast-xml-parser';
 
+// ── Shared helpers ─────────────────────────────────────────────────────────
+
+const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
+
+/**
+ * Parse a date string that may be in MM/DD/YYYY or YYYY-MM-DD format.
+ * `new Date("MM/DD/YYYY")` is non-standard and returns Invalid Date on Safari.
+ */
+const parseDate = (dateStr) => {
+    if (!dateStr) return null;
+    // Already valid ISO? (YYYY-MM-DD or full ISO string)
+    const iso = new Date(dateStr);
+    if (!isNaN(iso.getTime()) && String(dateStr).length >= 8) return iso;
+    // MM/DD/YYYY or M/D/YYYY
+    const slash = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (slash) {
+        const d = new Date(parseInt(slash[3]), parseInt(slash[1]) - 1, parseInt(slash[2]));
+        if (!isNaN(d.getTime())) return d;
+    }
+    // MM-DD-YYYY
+    const dash = dateStr.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (dash) {
+        const d = new Date(parseInt(dash[3]), parseInt(dash[1]) - 1, parseInt(dash[2]));
+        if (!isNaN(d.getTime())) return d;
+    }
+    return null;
+};
+
+/**
+ * Extract the inner Gradebook XML string from a SOAP response.
+ * Handles: HTML-encoded content, CDATA wrapping, raw XML, namespaced elements.
+ */
+const extractInnerXml = (xmlString) => {
+    // Match the result element, allowing for attributes (e.g. xsi:type="xsd:string")
+    const match = xmlString.match(/<ProcessWebServiceRequestResult[^>]*>([\s\S]*?)<\/ProcessWebServiceRequestResult>/i);
+    let inner = match ? match[1].trim() : null;
+
+    if (inner) {
+        // Unwrap CDATA section if present
+        if (inner.startsWith('<![CDATA[')) {
+            inner = inner.slice(9, inner.lastIndexOf(']]>')).trim();
+        } else {
+            // Decode HTML entities in the prescribed order (&amp; must come last)
+            inner = inner
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&amp;/g, '&');
+        }
+    }
+
+    // Fallback: raw XML without a SOAP wrapper
+    if (!inner && xmlString.includes('<Gradebook')) {
+        inner = xmlString;
+    }
+
+    return inner || null;
+};
+
+// ── parseStudentVuePeriods ─────────────────────────────────────────────────
+
 export const parseStudentVuePeriods = (xmlString) => {
     try {
-        const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_" });
-        const match = xmlString.match(/<ProcessWebServiceRequestResult>(.*?)<\/ProcessWebServiceRequestResult>/s);
-        let gradebookXmlString = match ? match[1] : null;
-        if (!gradebookXmlString && xmlString.includes('<Gradebook')) gradebookXmlString = xmlString;
-        if (!gradebookXmlString) return { periods: [], currentPeriodIndex: 0, currentPeriodName: '' };
+        const inner = extractInnerXml(xmlString);
+        if (!inner) return { periods: [], currentPeriodIndex: 0, currentPeriodName: '' };
 
-        gradebookXmlString = gradebookXmlString.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-        const innerJson = parser.parse(gradebookXmlString);
+        const innerJson = xmlParser.parse(inner);
+        const gb = innerJson?.Gradebook;
+        if (!gb) return { periods: [], currentPeriodIndex: 0, currentPeriodName: '' };
 
-        let reportPeriods = innerJson?.Gradebook?.ReportingPeriods?.ReportPeriod || innerJson?.Gradebook?.ReportingPeriods?.ReportingPeriod;
-        let periods = [];
+        // Build the full periods list from the <ReportingPeriods> collection
+        let reportPeriods =
+            gb.ReportingPeriods?.ReportPeriod ||
+            gb.ReportingPeriods?.ReportingPeriod;
+
+        const periods = [];
         if (reportPeriods) {
             if (!Array.isArray(reportPeriods)) reportPeriods = [reportPeriods];
-
-            const today = new Date();
-            let bestIndex = 0;
-            let bestName = '';
-            let foundCurrent = false;
-
-            periods = reportPeriods.map(p => {
+            reportPeriods.forEach(p => {
                 const idx = parseInt(p['@_Index'] || p['@_GradingPeriodIndex'] || '0');
                 const name = p['@_GradePeriod'] || p['@_MarkingPeriod'] || `Period ${idx}`;
-
-                const start = new Date(p['@_StartDate'] || p['@_Start'] || 0);
-                const end = new Date(p['@_EndDate'] || p['@_End'] || 0);
-
-                if (start && end && today >= start && today <= end) {
-                    bestIndex = idx;
-                    bestName = name;
-                    foundCurrent = true;
-                }
-
-                return { index: idx, name: name };
+                periods.push({ index: idx, name });
             });
+        }
 
-            if (!foundCurrent && periods.length > 0) {
-                // Default to first period if start dates are empty or in the future
-                // Wait, typically we want the highest index if dates are missing, or the most recent past date
-                let maxIdx = periods[0].index;
-                let maxName = periods[0].name;
-                periods.forEach(p => {
-                    if (p.index > maxIdx) {
-                        maxIdx = p.index;
-                        maxName = p.name;
-                    }
-                });
-                bestIndex = maxIdx;
-                bestName = maxName;
+        // ── Current-period detection (3 strategies, most reliable first) ──
+
+        // Strategy 1: Many StudentVUE responses include a single <ReportingPeriod>
+        // directly under <Gradebook> (not inside <ReportingPeriods>) that marks
+        // the active period — use it directly when present.
+        const singlePeriod = gb.ReportingPeriod;
+        if (singlePeriod && !Array.isArray(singlePeriod)) {
+            const idx = parseInt(singlePeriod['@_Index'] || singlePeriod['@_GradingPeriodIndex'] || '0');
+            const name = singlePeriod['@_GradePeriod'] || singlePeriod['@_MarkingPeriod'] || `Period ${idx}`;
+            return { periods, currentPeriodIndex: idx, currentPeriodName: name };
+        }
+
+        // Strategy 2: Match today's date against each period's start/end range.
+        // Uses parseDate() to handle MM/DD/YYYY (Safari-safe).
+        if (periods.length > 0) {
+            const today = new Date();
+            let bestIndex = -1;
+            let bestName = '';
+
+            for (let i = 0; i < (Array.isArray(reportPeriods) ? reportPeriods : []).length; i++) {
+                const p = (Array.isArray(reportPeriods) ? reportPeriods : [])[i];
+                if (!p) continue;
+                const start = parseDate(p['@_StartDate'] || p['@_Start']);
+                const end = parseDate(p['@_EndDate'] || p['@_End']);
+                if (start && end && today >= start && today <= end) {
+                    bestIndex = periods[i]?.index ?? -1;
+                    bestName = periods[i]?.name ?? '';
+                    break;
+                }
             }
 
-            return { periods, currentPeriodIndex: bestIndex, currentPeriodName: bestName };
+            if (bestIndex >= 0) {
+                return { periods, currentPeriodIndex: bestIndex, currentPeriodName: bestName };
+            }
+
+            // Strategy 3: No date match — pick the most recently ended period
+            // (today is just past Q3's end date, between quarters) rather than
+            // blindly taking the highest index (which would pick a future quarter).
+            const today2 = new Date();
+            let closestPast = null;
+            let closestPastDiff = Infinity;
+            let closestPastIdx = -1;
+            let closestPastName = '';
+
+            for (let i = 0; i < (Array.isArray(reportPeriods) ? reportPeriods : []).length; i++) {
+                const p = (Array.isArray(reportPeriods) ? reportPeriods : [])[i];
+                if (!p) continue;
+                const end = parseDate(p['@_EndDate'] || p['@_End']);
+                if (end && end < today2) {
+                    const diff = today2 - end;
+                    if (diff < closestPastDiff) {
+                        closestPastDiff = diff;
+                        closestPast = end;
+                        closestPastIdx = periods[i]?.index ?? -1;
+                        closestPastName = periods[i]?.name ?? '';
+                    }
+                }
+            }
+
+            if (closestPastIdx >= 0) {
+                return { periods, currentPeriodIndex: closestPastIdx, currentPeriodName: closestPastName };
+            }
+
+            // Last resort: take the first period in the list
+            return { periods, currentPeriodIndex: periods[0].index, currentPeriodName: periods[0].name };
         }
+
         return { periods: [], currentPeriodIndex: 0, currentPeriodName: '' };
     } catch (e) {
+        console.error('parseStudentVuePeriods error:', e);
         return { periods: [], currentPeriodIndex: 0, currentPeriodName: '' };
     }
 };
 
+// ── parseStudentVueGradebook ───────────────────────────────────────────────
+
 export const parseStudentVueGradebook = (xmlString, targetPeriodName = null) => {
     try {
-        const parser = new XMLParser({
-            ignoreAttributes: false,
-            attributeNamePrefix: "@_"
-        });
-
-        const jsonObj = parser.parse(xmlString);
-
-        // The SOAP response wraps the actual XML string inside a Result node.
-        // Schools send different SOAP envelopes, so we extract the inner XML string manually.
-        const match = xmlString.match(/<ProcessWebServiceRequestResult>(.*?)<\/ProcessWebServiceRequestResult>/s);
-        let gradebookXmlString = match ? match[1] : null;
-
-        // Fallback: If the regex didn't catch it, maybe they returned raw XML without SOAP encoding
-        if (!gradebookXmlString && xmlString.includes('<Gradebook')) {
-            gradebookXmlString = xmlString;
-        }
-
-        if (!gradebookXmlString) {
-            console.error("Could not find Gradebook raw XML inside response");
+        const inner = extractInnerXml(xmlString);
+        if (!inner) {
+            console.error('Could not find Gradebook XML inside response');
             return { classes: [], periods: [] };
         }
 
-        // Unescape XML entities that SOAP might have injected (&lt;, &gt;)
-        gradebookXmlString = gradebookXmlString.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        const innerJson = xmlParser.parse(inner);
+        const gb = innerJson?.Gradebook;
+        if (!gb) {
+            console.error('No <Gradebook> element found after parsing');
+            return { classes: [], periods: [] };
+        }
 
-        // Parse the inner Gradebook XML explicitly
-        const innerJson = parser.parse(gradebookXmlString);
-
-        // Extract Reporting Periods (Quarters/Semesters)
-        let xmlPeriods = innerJson?.Gradebook?.ReportingPeriods?.ReportPeriod || innerJson?.Gradebook?.ReportingPeriods?.ReportingPeriod;
+        // ── Reporting periods (for UI period switcher) ──
+        let xmlPeriods =
+            gb.ReportingPeriods?.ReportPeriod ||
+            gb.ReportingPeriods?.ReportingPeriod;
         const formattedPeriods = [];
         if (xmlPeriods) {
             if (!Array.isArray(xmlPeriods)) xmlPeriods = [xmlPeriods];
@@ -100,28 +187,25 @@ export const parseStudentVueGradebook = (xmlString, targetPeriodName = null) => 
                     index: parseInt(p['@_Index']),
                     name: p['@_GradePeriod'] || p['@_MarkingPeriod'] || `Quarter ${p['@_Index']}`,
                     startDate: p['@_StartDate'],
-                    endDate: p['@_EndDate']
+                    endDate: p['@_EndDate'],
                 });
             });
         }
 
-        let xmlCourses = innerJson?.Gradebook?.Courses?.Course;
-        if (!xmlCourses) return { classes: [], periods: formattedPeriods };
-
-        // If taking only 1 class, it might not be an array
-        if (!Array.isArray(xmlCourses)) {
-            xmlCourses = [xmlCourses];
+        // ── Courses ──
+        // Some schools omit the <Courses> wrapper and put <Course> directly in <Gradebook>
+        let xmlCourses = gb.Courses?.Course ?? gb.Course;
+        if (!xmlCourses || typeof xmlCourses !== 'object') {
+            return { classes: [], periods: formattedPeriods };
         }
+        if (!Array.isArray(xmlCourses)) xmlCourses = [xmlCourses];
 
         const formattedClasses = [];
 
         xmlCourses.forEach(course => {
             const courseTitle = course['@_Title'] || 'Unknown Class';
-
-            // Check if class is AP (for GPA math)
             const isAP = courseTitle.toUpperCase().includes('AP ');
 
-            // Navigate to Marks to get the current Grade
             let marks = course?.Marks?.Mark;
             let currentGrade = 0;
             let targetMark = null;
@@ -130,23 +214,20 @@ export const parseStudentVueGradebook = (xmlString, targetPeriodName = null) => 
             if (marks) {
                 const marksList = Array.isArray(marks) ? marks : [marks];
 
-                // 1) Find targetMark for the OVERALL GRADE.
+                // Match by period name
                 if (targetPeriodName) {
-                    targetMark = marksList.find(m => {
-                        const mName = (m['@_MarkName'] || '').toUpperCase();
-                        return mName === targetPeriodName.toUpperCase();
-                    });
+                    targetMark = marksList.find(m =>
+                        (m['@_MarkName'] || '').toUpperCase() === targetPeriodName.toUpperCase()
+                    );
                 }
-                
-                // Fallback: If we couldn't match the name, prioritize marks that have a score.
+
+                // Fallback: last mark with a score that isn't an exam/semester mark
                 if (!targetMark) {
                     for (let i = marksList.length - 1; i >= 0; i--) {
                         const m = marksList[i];
                         if (!m) continue;
-
                         const hasScore = m['@_CalculatedScoreRaw'] || m['@_CalculatedScoreString'];
                         const markName = (m['@_MarkName'] || '').toUpperCase();
-
                         if (hasScore && !markName.includes('EXAM') && !markName.includes('SEMESTER')) {
                             targetMark = m;
                             break;
@@ -154,7 +235,7 @@ export const parseStudentVueGradebook = (xmlString, targetPeriodName = null) => 
                     }
                 }
 
-                // Fallback to the last mark if none matched the heuristic
+                // Last resort: final mark in list
                 if (!targetMark && marksList.length > 0) {
                     targetMark = marksList[marksList.length - 1];
                 }
@@ -162,20 +243,16 @@ export const parseStudentVueGradebook = (xmlString, targetPeriodName = null) => 
                 if (targetMark) {
                     const raw = targetMark['@_CalculatedScoreRaw'];
                     const str = targetMark['@_CalculatedScoreString'];
-                    
                     let parsedStr = NaN;
                     if (str) {
-                        // Extract percentage if present, e.g. "B+ (86.7%)" -> 86.7
                         const pctMatch = str.match(/(\d{1,3}(?:\.\d+)?)%/);
                         if (pctMatch) {
                             parsedStr = parseFloat(pctMatch[1]);
                         } else {
-                            // Otherwise look for a standalone number like "86.7" (avoiding "1st")
                             const numMatch = str.match(/(?:^|\s|\()(\d{1,3}(?:\.\d+)?)(?:$|\s|\))/);
                             if (numMatch) parsedStr = parseFloat(numMatch[1]);
                         }
                     }
-
                     if (!isNaN(parsedStr) && parsedStr >= 0) {
                         currentGrade = parsedStr;
                     } else if (raw && !isNaN(parseFloat(raw))) {
@@ -183,146 +260,116 @@ export const parseStudentVueGradebook = (xmlString, targetPeriodName = null) => 
                     }
                 }
 
-                // 2) Extract category weights from GradeCalculationSummary
+                // Category weights
                 let categoryWeights = null;
-                if (targetMark && targetMark.GradeCalculationSummary?.AssignmentGradeCalc) {
+                if (targetMark?.GradeCalculationSummary?.AssignmentGradeCalc) {
                     let calcs = targetMark.GradeCalculationSummary.AssignmentGradeCalc;
                     if (!Array.isArray(calcs)) calcs = [calcs];
                     const weights = {};
                     let totalWeight = 0;
                     calcs.forEach(calc => {
                         const type = calc['@_Type'];
-                        let weightStr = calc['@_Weight'];
+                        const weightStr = calc['@_Weight'];
                         if (type && weightStr) {
                             const wMatch = weightStr.match(/[\d.]+/);
                             if (wMatch) {
                                 const w = parseFloat(wMatch[0]);
-                                if (w > 0) {
-                                    weights[type] = w / 100;
-                                    totalWeight += w / 100;
-                                }
+                                if (w > 0) { weights[type] = w / 100; totalWeight += w / 100; }
                             }
                         }
                     });
-                    if (Object.keys(weights).length > 0 && totalWeight > 0) {
-                        categoryWeights = weights;
-                    }
+                    if (Object.keys(weights).length > 0 && totalWeight > 0) categoryWeights = weights;
                 }
 
-                // 3) Aggregate assignments from ALL valid marks
-                let allAssignments = [];
-                const seenAssignmentIds = new Set();
-                
-                for (let i = 0; i < marksList.length; i++) {
-                    const m = marksList[i];
-                    if (!m) continue;
-
+                // Assignments — collect from all non-exam marks, deduplicated
+                const seenIds = new Set();
+                const allAssignments = [];
+                const marksList2 = Array.isArray(marks) ? marks : [marks];
+                marksList2.forEach((m, mi) => {
+                    if (!m) return;
                     const markName = (m['@_MarkName'] || '').toUpperCase();
-                    // Skip semester/exam marks if we only want the quarter's assignments
-                    if (markName.includes('EXAM') || markName.includes('SEMESTER')) continue;
-
-                    let mAssignments = m.Assignments?.Assignment;
-                    if (mAssignments) {
-                        if (!Array.isArray(mAssignments)) mAssignments = [mAssignments];
-                        mAssignments.forEach((asm, asmIndex) => {
-                            const asmId = asm['@_GradebookID'] || `${courseTitle}-${asm['@_Measure'] || asm['@_Type']}-${asm['@_Date'] || ''}-${i}-${asmIndex}`;
-                            if (!seenAssignmentIds.has(asmId)) {
-                                seenAssignmentIds.add(asmId);
-                                allAssignments.push(asm);
-                            }
-                        });
-                    }
-                }
-
-                // Extract Assignments
-                if (allAssignments.length > 0) {
-                    allAssignments.forEach((asm, index) => {
-                        // StudentVUE sends points in several shapes depending on the district:
-                        //   "45.00 / 50.0000"   → graded (45 earned, 50 possible)
-                        //   "0 / 50.0000"       → zero grade (still valid, must show up)
-                        //   "50.0000"           → not yet graded, but max points is 50
-                        //   ""  /  missing      → nothing known
-                        // We also fall back to @_PointsPossible for total and @_Score for earned.
-                        const pointsStr = asm['@_Points'];
-                        const pointsPossibleStr = asm['@_PointsPossible'] || asm['@_Points_Possible'];
-                        const scoreStr = asm['@_Score'];
-                        const scoreTypeStr = asm['@_ScoreType']; // e.g., "Raw Score", "Percentage"
-
-                        let earned = NaN;
-                        let total = NaN;
-                        let isGraded = false;
-
-                        // Prioritize explicitly labeled total points possible
-                        if (pointsPossibleStr && !isNaN(parseFloat(pointsPossibleStr))) {
-                            total = parseFloat(pointsPossibleStr);
+                    if (markName.includes('EXAM') || markName.includes('SEMESTER')) return;
+                    let asmList = m.Assignments?.Assignment;
+                    if (!asmList) return;
+                    if (!Array.isArray(asmList)) asmList = [asmList];
+                    asmList.forEach((asm, ai) => {
+                        const id = asm['@_GradebookID'] || `${courseTitle}-${asm['@_Measure'] || asm['@_Type']}-${asm['@_Date'] || ''}-${mi}-${ai}`;
+                        if (!seenIds.has(id)) {
+                            seenIds.add(id);
+                            allAssignments.push(asm);
                         }
+                    });
+                });
 
-                        if (pointsStr && typeof pointsStr === 'string' && pointsStr.includes('/')) {
-                            const parts = pointsStr.split('/');
+                allAssignments.forEach((asm, index) => {
+                    const pointsStr = asm['@_Points'];
+                    const pointsPossibleStr = asm['@_PointsPossible'] || asm['@_Points_Possible'];
+                    const scoreStr = asm['@_Score'];
+                    const scoreTypeStr = asm['@_ScoreType'];
+
+                    let earned = NaN;
+                    let total = NaN;
+                    let isGraded = false;
+
+                    if (pointsPossibleStr && !isNaN(parseFloat(pointsPossibleStr))) {
+                        total = parseFloat(pointsPossibleStr);
+                    }
+                    if (pointsStr && typeof pointsStr === 'string' && pointsStr.includes('/')) {
+                        const parts = pointsStr.split('/');
+                        const e = parseFloat(parts[0]);
+                        const t = parseFloat(parts[1]);
+                        if (!isNaN(t)) total = t;
+                        if (!isNaN(e)) { earned = e; isGraded = true; }
+                    } else if (isNaN(total) && pointsStr && !isNaN(parseFloat(pointsStr))) {
+                        total = parseFloat(pointsStr);
+                    }
+
+                    if (!isGraded && scoreStr != null) {
+                        const strVal = String(scoreStr);
+                        if (strVal.includes('/')) {
+                            const parts = strVal.split('/');
                             const e = parseFloat(parts[0]);
                             const t = parseFloat(parts[1]);
                             if (!isNaN(t)) total = t;
                             if (!isNaN(e)) { earned = e; isGraded = true; }
-                        } else if (isNaN(total) && pointsStr && !isNaN(parseFloat(pointsStr))) {
-                            // Single number and total not yet known — treat as total points possible
-                            total = parseFloat(pointsStr);
-                        }
-
-                        // @_Score fallback — may be "45", "45%", "Not Graded", or "45 / 50"
-                        if (!isGraded && scoreStr != null) {
-                            const strVal = String(scoreStr);
-                            
-                            if (strVal.includes('/')) {
-                                const parts = strVal.split('/');
-                                const e = parseFloat(parts[0]);
-                                const t = parseFloat(parts[1]);
-                                if (!isNaN(t)) total = t;
-                                if (!isNaN(e)) { earned = e; isGraded = true; }
-                            } else {
-                                const hasPctSymbol = strVal.includes('%');
-                                const cleanScore = strVal.replace('%', '').trim();
-                                const scoreNum = parseFloat(cleanScore);
-                                
-                                if (!isNaN(scoreNum) && cleanScore.toLowerCase() !== 'not graded' && cleanScore.toLowerCase() !== 'excused' && cleanScore.toLowerCase() !== 'missing') {
-                                    const isPercentage = scoreTypeStr === 'Percentage' || hasPctSymbol;
-                                    if (isPercentage && !isNaN(total) && total > 0) {
-                                        earned = (scoreNum / 100) * total;
-                                    } else {
-                                        earned = scoreNum;
-                                    }
-                                    isGraded = true;
+                        } else {
+                            const hasPctSymbol = strVal.includes('%');
+                            const cleanScore = strVal.replace('%', '').trim();
+                            const scoreNum = parseFloat(cleanScore);
+                            const lc = cleanScore.toLowerCase();
+                            if (!isNaN(scoreNum) && lc !== 'not graded' && lc !== 'excused' && lc !== 'missing') {
+                                const isPercentage = scoreTypeStr === 'Percentage' || hasPctSymbol;
+                                if (isPercentage && !isNaN(total) && total > 0) {
+                                    earned = (scoreNum / 100) * total;
+                                } else {
+                                    earned = scoreNum;
                                 }
+                                isGraded = true;
                             }
                         }
+                    }
 
-                        // Compute percentage only when we have a valid graded assignment.
-                        // A zero grade (0/50) IS valid and must be preserved — do not skip it.
-                        let percentage = 0;
-                        if (isGraded && !isNaN(earned) && !isNaN(total) && total > 0) {
-                            percentage = (earned / total) * 100;
-                        }
+                    let percentage = 0;
+                    if (isGraded && !isNaN(earned) && !isNaN(total) && total > 0) {
+                        percentage = (earned / total) * 100;
+                    }
 
-                        formattedAssignments.push({
-                            id: asm['@_GradebookID'] || `${courseTitle}-asm-${index}`,
-                            title: asm['@_Measure'] || asm['@_Type'] || 'Assignment',
-                            // Use null (not 0) for score when assignment has no grade yet —
-                            // this lets the UI distinguish "ungraded" from "scored 0".
-                            score: isGraded ? earned : null,
-                            total: isNaN(total) ? 0 : total,
-                            percentage: parseFloat(percentage.toFixed(1)),
-                            date: asm['@_Date'] || '',
-                            due_date: asm['@_DueDate'] || '',
-                            category: asm['@_Type'] || 'Other',
-                            isGraded,
-                        });
+                    formattedAssignments.push({
+                        id: asm['@_GradebookID'] || `${courseTitle}-asm-${index}`,
+                        title: asm['@_Measure'] || asm['@_Type'] || 'Assignment',
+                        score: isGraded ? earned : null,
+                        total: isNaN(total) ? 0 : total,
+                        percentage: parseFloat(percentage.toFixed(1)),
+                        date: asm['@_Date'] || '',
+                        due_date: asm['@_DueDate'] || '',
+                        category: asm['@_Type'] || 'Other',
+                        isGraded,
                     });
-                }
+                });
             }
 
-            // Put it all together into the format GradebookScreen expects
+            // Fallback grade calculation when school reports 0 but assignments exist
             let finalGrade = currentGrade;
-            
-            // Fallback calculation if the school reports 0 but there are assignments
             if (finalGrade === 0 && formattedAssignments.length > 0) {
                 const cats = { Summative: { e: 0, p: 0 }, Formative: { e: 0, p: 0 }, Final: { e: 0, p: 0 } };
                 let hasGraded = false;
@@ -330,24 +377,15 @@ export const parseStudentVueGradebook = (xmlString, targetPeriodName = null) => 
                     if (!a.isGraded || a.score === null || a.total <= 0) return;
                     hasGraded = true;
                     const cat = a.category || 'Formative';
-                    if (cats[cat]) {
-                        cats[cat].e += a.score;
-                        cats[cat].p += a.total;
-                    } else {
-                        cats.Formative.e += a.score;
-                        cats.Formative.p += a.total;
-                    }
+                    if (cats[cat]) { cats[cat].e += a.score; cats[cat].p += a.total; }
+                    else { cats.Formative.e += a.score; cats.Formative.p += a.total; }
                 });
-
                 if (hasGraded) {
                     const sAvg = cats.Summative.p > 0 ? (cats.Summative.e / cats.Summative.p) * 100 : null;
                     const fAvg = cats.Formative.p > 0 ? (cats.Formative.e / cats.Formative.p) * 100 : null;
                     const feAvg = cats.Final.p > 0 ? (cats.Final.e / cats.Final.p) * 100 : null;
-                    
                     let w = sAvg !== null && fAvg !== null ? sAvg * 0.7 + fAvg * 0.3 : sAvg ?? fAvg ?? null;
-                    if (w !== null) {
-                        finalGrade = feAvg !== null ? w * 0.8 + feAvg * 0.2 : w;
-                    }
+                    if (w !== null) finalGrade = feAvg !== null ? w * 0.8 + feAvg * 0.2 : w;
                 }
             }
 
@@ -360,14 +398,36 @@ export const parseStudentVueGradebook = (xmlString, targetPeriodName = null) => 
                 room: course['@_Room'] || '',
                 type: isAP ? 'AP' : (courseTitle.includes(' HN') ? 'HN' : 'ST'),
                 assignments: formattedAssignments,
-                categoryWeights: categoryWeights,
+                categoryWeights: null, // set below after category extraction
             });
+
+            // Attach category weights to the last pushed class
+            if (targetMark?.GradeCalculationSummary?.AssignmentGradeCalc) {
+                let calcs = targetMark.GradeCalculationSummary.AssignmentGradeCalc;
+                if (!Array.isArray(calcs)) calcs = [calcs];
+                const weights = {};
+                let totalWeight = 0;
+                calcs.forEach(calc => {
+                    const type = calc['@_Type'];
+                    const weightStr = calc['@_Weight'];
+                    if (type && weightStr) {
+                        const wMatch = weightStr.match(/[\d.]+/);
+                        if (wMatch) {
+                            const w = parseFloat(wMatch[0]);
+                            if (w > 0) { weights[type] = w / 100; totalWeight += w / 100; }
+                        }
+                    }
+                });
+                if (Object.keys(weights).length > 0 && totalWeight > 0) {
+                    formattedClasses[formattedClasses.length - 1].categoryWeights = weights;
+                }
+            }
         });
 
         return { classes: formattedClasses, periods: formattedPeriods };
 
     } catch (err) {
-        console.error("Error parsing StudentVUE XML:", err);
+        console.error('parseStudentVueGradebook error:', err);
         return { classes: [], periods: [] };
     }
 };

@@ -358,36 +358,40 @@ export default function IntegrationsScreen() {
             await AsyncStorage.setItem('svPassword', svPass);
             await AsyncStorage.setItem('svDistrictUrl', baseUrl);
             const finalTargetUrl = baseUrl.endsWith('Service/PXPCommunication.asmx') ? baseUrl : `${baseUrl}/Service/PXPCommunication.asmx`;
+            const apiBase = Platform.OS === 'web' ? '' : 'https://optionapp.online';
+            const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
             // 1. Fetch periods list to find the active period
-            const periodsSoap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</userID><password>${svPass.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;0&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
-            const periodsResp = await fetch('/api/studentvue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload: periodsSoap }) });
+            const periodsSoap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${esc(svUser)}</userID><password>${esc(svPass)}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;0&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
+            const periodsResp = await fetch(`${apiBase}/api/studentvue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload: periodsSoap }) });
             if (!periodsResp.ok) { const errData = await periodsResp.json().catch(() => ({})); throw new Error(errData?.cause || periodsResp.statusText); }
             const periodsXml = await periodsResp.text();
-            
-            if (!periodsXml.includes('Gradebook') && periodsXml.includes('RT_ERROR')) throw new Error('API error');
-            
+
+            if (periodsXml.includes('RT_ERROR') || !periodsXml.includes('Gradebook')) throw new Error('Invalid credentials or district URL.');
+
             const { currentPeriodIndex, currentPeriodName } = parseStudentVuePeriods(periodsXml);
             let finalXml = periodsXml;
-            
+
             // 2. If the active period is not 0, fetch the active period specifically
             if (currentPeriodIndex !== 0) {
-                const gradesSoap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</userID><password>${svPass.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;${currentPeriodIndex}&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
-                const gradesResp = await fetch('/api/studentvue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload: gradesSoap }) });
+                const gradesSoap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${esc(svUser)}</userID><password>${esc(svPass)}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;${currentPeriodIndex}&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
+                const gradesResp = await fetch(`${apiBase}/api/studentvue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalTargetUrl, soapPayload: gradesSoap }) });
                 if (gradesResp.ok) {
                     finalXml = await gradesResp.text();
                 }
             }
 
-            if (finalXml.includes('Gradebook') || !finalXml.includes('RT_ERROR')) {
+            if (finalXml.includes('Gradebook') && !finalXml.includes('RT_ERROR')) {
                 const { classes: formattedClasses } = parseStudentVueGradebook(finalXml, currentPeriodName);
                 if (formattedClasses?.length > 0) {
                     await AsyncStorage.setItem('studentVueGrades', JSON.stringify(formattedClasses));
                     await AsyncStorage.setItem('isDemoData', 'false');
                     setConnectedIds(prev => prev.includes('studentvue') ? prev : [...prev, 'studentvue']);
-
                     const totalAssignments = formattedClasses.reduce((sum, c) => sum + (c.assignments?.length || 0), 0);
                     setSyncResult({ type: 'success', message: `Imported ${formattedClasses.length} classes with ${totalAssignments} assignments.` });
-                } else throw new Error("Connected but couldn't parse classes.");
+                } else {
+                    throw new Error('Connected but no classes found for this period. Try a different quarter in Settings → Integrations.');
+                }
             } else {
                 setSyncResult({ type: 'error', message: 'No grade data found for this period.' });
             }
