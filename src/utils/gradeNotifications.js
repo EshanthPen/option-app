@@ -47,15 +47,16 @@ export const diffGrades = (oldClasses, newClasses) => {
         const oldAssignments = oldClass.assignments || [];
 
         for (const newAsgn of newAssignments) {
+            const newTitle = newAsgn.title || newAsgn.name;
             const oldAsgn = oldAssignments.find(a =>
-                a.name === newAsgn.name && a.date === newAsgn.date
+                (a.title || a.name) === newTitle && a.date === newAsgn.date
             );
 
             if (!oldAsgn) {
                 changes.push({
                     type: 'new_assignment',
                     className: newClass.name,
-                    assignmentName: newAsgn.name,
+                    assignmentName: newTitle,
                     score: newAsgn.score,
                     total: newAsgn.total,
                 });
@@ -63,7 +64,7 @@ export const diffGrades = (oldClasses, newClasses) => {
                 changes.push({
                     type: 'score_changed',
                     className: newClass.name,
-                    assignmentName: newAsgn.name,
+                    assignmentName: newTitle,
                     oldScore: oldAsgn.score,
                     newScore: newAsgn.score,
                     total: newAsgn.total,

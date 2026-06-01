@@ -81,7 +81,7 @@ export const parseStudentVueGradebook = (xmlString, targetPeriodName = null) => 
 
         if (!gradebookXmlString) {
             console.error("Could not find Gradebook raw XML inside response");
-            return [];
+            return { classes: [], periods: [] };
         }
 
         // Unescape XML entities that SOAP might have injected (&lt;, &gt;)
