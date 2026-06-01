@@ -141,12 +141,12 @@ export default function LeaderboardScreen() {
 
     const renderAvatarInline = (item, size = 36) => {
         if (item.avatar_url) {
-            return <Image source={{ uri: item.avatar_url }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
+            return <Image source={{ uri: item.avatar_url }} style={{ width: size, height: size, borderRadius: theme.radii.round }} />;
         }
         if (item.avatar_preset && PRESET_AVATARS[item.avatar_preset]) {
             return (
                 <View style={{
-                    width: size, height: size, borderRadius: size / 2,
+                    width: size, height: size, borderRadius: theme.radii.round,
                     backgroundColor: theme.colors.surface2,
                     alignItems: 'center', justifyContent: 'center',
                     borderWidth: 1, borderColor: theme.colors.border,
@@ -158,7 +158,7 @@ export default function LeaderboardScreen() {
         const initials = (item.display_name || 'S').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
         return (
             <View style={{
-                width: size, height: size, borderRadius: size / 2,
+                width: size, height: size, borderRadius: theme.radii.round,
                 backgroundColor: item.isMe ? theme.colors.ink : theme.colors.surface2,
                 alignItems: 'center', justifyContent: 'center',
             }}>
@@ -202,7 +202,7 @@ export default function LeaderboardScreen() {
                                 style={{
                                     flexDirection: 'row', alignItems: 'center', gap: 6,
                                     paddingHorizontal: 10, paddingVertical: 6,
-                                    backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 8,
+                                    backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg,
                                 }}
                             >
                                 <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, fontWeight: '700', color: theme.colors.ink, letterSpacing: 1 }}>
@@ -234,7 +234,7 @@ export default function LeaderboardScreen() {
                                     activeOpacity={0.85}
                                     style={{
                                         paddingHorizontal: 14, paddingVertical: 8,
-                                        borderRadius: 10,
+                                        borderRadius: theme.radii.lg,
                                         backgroundColor: active ? theme.colors.ink : theme.colors.surface,
                                         borderWidth: 1, borderColor: active ? theme.colors.ink : theme.colors.border,
                                         flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -292,7 +292,7 @@ export default function LeaderboardScreen() {
                                             return (
                                                 <View key={p.user_id || i} style={{ flex: 1, maxWidth: 140, alignItems: 'center' }}>
                                                     <View style={{
-                                                        width: 56, height: 56, borderRadius: 28,
+                                                        width: 56, height: 56, borderRadius: theme.radii.round,
                                                         marginBottom: 8,
                                                         backgroundColor: p.isMe ? theme.colors.ink : theme.colors.surface2,
                                                         borderWidth: 3, borderColor: podColor,
@@ -312,7 +312,7 @@ export default function LeaderboardScreen() {
                                                     <View style={{
                                                         height: heights[i], width: '100%',
                                                         backgroundColor: podColor + '22',
-                                                        borderTopLeftRadius: 8, borderTopRightRadius: 8,
+                                                        borderTopLeftRadius: theme.radii.lg, borderTopRightRadius: theme.radii.lg,
                                                         marginTop: 8,
                                                         alignItems: 'center', justifyContent: 'center',
                                                         borderTopWidth: 3, borderTopColor: podColor,
@@ -391,10 +391,10 @@ export default function LeaderboardScreen() {
                                                         </View>
                                                     )}
                                                 </View>
-                                                <View style={{ width: 100, height: 6, backgroundColor: theme.colors.surface2, borderRadius: 3, overflow: 'hidden' }}>
+                                                <View style={{ width: 100, height: 6, backgroundColor: theme.colors.surface2, borderRadius: 0, overflow: 'hidden' }}>
                                                     <View style={{
                                                         width: `${Math.min(100, s.score)}%`, height: '100%',
-                                                        backgroundColor: gradeColor(s.score), borderRadius: 3,
+                                                        backgroundColor: gradeColor(s.score), borderRadius: 0,
                                                     }} />
                                                 </View>
                                                 <Text style={{ width: 32, textAlign: 'right', fontFamily: theme.fonts.mono, fontSize: 14, fontWeight: '600', color: theme.colors.ink }}>
@@ -422,12 +422,12 @@ export default function LeaderboardScreen() {
                                                 width: '47%',
                                                 padding: 12, paddingHorizontal: 10,
                                                 borderWidth: 1, borderColor: theme.colors.border,
-                                                borderRadius: 10, alignItems: 'center',
+                                                borderRadius: theme.radii.lg, alignItems: 'center',
                                                 backgroundColor: earned ? theme.colors.surface : theme.colors.surface2 + '40',
                                                 opacity: earned ? 1 : 0.55,
                                             }}>
                                                 <View style={{
-                                                    width: 36, height: 36, borderRadius: 18,
+                                                    width: 36, height: 36, borderRadius: theme.radii.round,
                                                     backgroundColor: earned ? SEM.gold + '20' : theme.colors.surface2,
                                                     alignItems: 'center', justifyContent: 'center', marginBottom: 6,
                                                 }}>
@@ -463,8 +463,8 @@ export default function LeaderboardScreen() {
                                 <Text style={{ fontFamily: theme.fonts.m, fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>
                                     Earn 2× points this week
                                 </Text>
-                                <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, overflow: 'hidden', marginTop: 12 }}>
-                                    <View style={{ width: '80%', height: '100%', backgroundColor: '#fff', borderRadius: 3 }} />
+                                <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: theme.radii.round, overflow: 'hidden', marginTop: 12 }}>
+                                    <View style={{ width: '80%', height: '100%', backgroundColor: '#fff', borderRadius: theme.radii.round }} />
                                 </View>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
                                     <Text style={{ fontFamily: theme.fonts.mono, fontSize: 11, color: 'rgba(255,255,255,0.85)' }}>4 / 5 days</Text>
@@ -482,7 +482,7 @@ export default function LeaderboardScreen() {
                     <View style={{
                         backgroundColor: theme.colors.surface,
                         borderWidth: 1, borderColor: theme.colors.border,
-                        borderRadius: theme.radii.xl,
+                        borderRadius: theme.radii.lg,
                         padding: 24, width: '85%', maxWidth: 360,
                         ...theme.shadows.lg,
                     }}>
@@ -506,7 +506,7 @@ export default function LeaderboardScreen() {
                             maxLength={6}
                             style={{
                                 borderWidth: 1, borderColor: theme.colors.border,
-                                borderRadius: theme.radii.r, padding: 12,
+                                borderRadius: theme.radii.lg, padding: 12,
                                 fontFamily: theme.fonts.s, fontSize: 20,
                                 color: theme.colors.ink, textAlign: 'center',
                                 letterSpacing: 4, fontWeight: '700', marginBottom: 12,
@@ -531,7 +531,7 @@ export default function LeaderboardScreen() {
                                     onPress={copyFriendCode}
                                     style={{
                                         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                                        backgroundColor: theme.colors.surface2, borderRadius: theme.radii.r, paddingVertical: 10,
+                                        backgroundColor: theme.colors.surface2, borderRadius: theme.radii.lg, paddingVertical: 10,
                                     }}
                                 >
                                     <Text style={{ fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, letterSpacing: 3 }}>

@@ -817,7 +817,7 @@ export default function MatrixScreen() {
                                     style={[styles.ctrlBtn, taskType === t && { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}
                                     onPress={() => setTaskType(t)}
                                 >
-                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: taskType === t ? '#fff' : theme.colors.ink2, textTransform: 'capitalize' }}>{t}</Text>
+                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: taskType === t ? theme.colors.bg : theme.colors.ink2, textTransform: 'capitalize' }}>{t}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -875,7 +875,7 @@ export default function MatrixScreen() {
                                 <Text style={{ fontFamily: theme.fonts.s, fontWeight: '500', color: theme.colors.ink2 }}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity disabled={saving} style={[styles.btnDark, { flex: 1, justifyContent: 'center', paddingVertical: 12 }]} onPress={handleAddTask}>
-                                {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Save</Text>}
+                                {saving ? <ActivityIndicator size="small" color={theme.colors.bg} /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.bg }}>Save</Text>}
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -901,7 +901,7 @@ export default function MatrixScreen() {
                                 <Text style={{ fontFamily: theme.fonts.s, fontWeight: '500', color: theme.colors.ink2 }}>Cancel</Text>
                             </TouchableOpacity>
                             <TouchableOpacity disabled={saving || !schoologyUrl} style={[styles.btnDark, { flex: 1, justifyContent: 'center', paddingVertical: 12 }]} onPress={importICSFromUrl}>
-                                {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Import</Text>}
+                                {saving ? <ActivityIndicator size="small" color={theme.colors.bg} /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.bg }}>Import</Text>}
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -929,7 +929,7 @@ export default function MatrixScreen() {
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                 {[30, 60, 120].map(v => (
                                                     <TouchableOpacity key={v} style={[styles.ctrlBtn, item.duration === v && { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]} onPress={() => updatePendingImport(idx, 'duration', v)}>
-                                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: item.duration === v ? '#fff' : theme.colors.ink2 }}>{v}m</Text>
+                                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: item.duration === v ? theme.colors.bg : theme.colors.ink2 }}>{v}m</Text>
                                                     </TouchableOpacity>
                                                 ))}
                                                 <TextInput
@@ -975,7 +975,7 @@ export default function MatrixScreen() {
                                     <Text style={{ fontFamily: theme.fonts.s, fontWeight: '500', color: theme.colors.ink2 }}>Discard</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity disabled={saving || pendingImports.length === 0} style={[styles.btnDark, { flex: 2, justifyContent: 'center', paddingVertical: 12 }]} onPress={saveReviewedImports}>
-                                    {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Save {pendingImports.length} Tasks</Text>}
+                                    {saving ? <ActivityIndicator size="small" color={theme.colors.bg} /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.bg }}>Save {pendingImports.length} Tasks</Text>}
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -1010,7 +1010,7 @@ export default function MatrixScreen() {
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                     {[30, 60, 120, 180].map(v => (
                                                         <TouchableOpacity key={v} style={[styles.ctrlBtn, parseInt(item.totalTime) === v && { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]} onPress={() => updateScheduleReviewTask(idx, 'totalTime', String(v))}>
-                                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: parseInt(item.totalTime) === v ? '#fff' : theme.colors.ink2 }}>{v >= 60 ? `${v / 60}h` : `${v}m`}</Text>
+                                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: parseInt(item.totalTime) === v ? theme.colors.bg : theme.colors.ink2 }}>{v >= 60 ? `${v / 60}h` : `${v}m`}</Text>
                                                         </TouchableOpacity>
                                                     ))}
                                                     <TextInput
@@ -1029,7 +1029,7 @@ export default function MatrixScreen() {
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                     {[25, 45, 60, 90].map(v => (
                                                         <TouchableOpacity key={v} style={[styles.ctrlBtn, parseInt(item.sessionLength) === v && { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]} onPress={() => updateScheduleReviewTask(idx, 'sessionLength', String(v))}>
-                                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: parseInt(item.sessionLength) === v ? '#fff' : theme.colors.ink2 }}>{v}m</Text>
+                                                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: parseInt(item.sessionLength) === v ? theme.colors.bg : theme.colors.ink2 }}>{v}m</Text>
                                                         </TouchableOpacity>
                                                     ))}
                                                     <TextInput
@@ -1056,7 +1056,7 @@ export default function MatrixScreen() {
                                     <Text style={{ fontFamily: theme.fonts.s, fontWeight: '500', color: theme.colors.ink2 }}>Cancel</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity disabled={saving || scheduleReviewTasks.length === 0} style={[styles.btnDark, { flex: 2, justifyContent: 'center', paddingVertical: 12 }]} onPress={confirmSmartSchedule}>
-                                    {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: '#fff' }}>Schedule {scheduleReviewTasks.length} Tasks</Text>}
+                                    {saving ? <ActivityIndicator size="small" color={theme.colors.bg} /> : <Text style={{ fontFamily: theme.fonts.s, fontWeight: '600', color: theme.colors.bg }}>Schedule {scheduleReviewTasks.length} Tasks</Text>}
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -1076,11 +1076,11 @@ const getStyles = (theme) => StyleSheet.create({
     title: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
     subtitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 },
     btnRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-    btnDark: { backgroundColor: theme.colors.accent, flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: theme.radii.r, gap: 8, ...theme.shadows.sm },
-    btnDarkText: { color: '#fff', fontFamily: theme.fonts.s, fontSize: 14 },
+    btnDark: { backgroundColor: theme.colors.accent, flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, borderRadius: theme.radii.lg, gap: 8, ...theme.shadows.sm },
+    btnDarkText: { color: theme.colors.bg, fontFamily: theme.fonts.s, fontSize: 14 },
     saveButton: { backgroundColor: theme.colors.accent, padding: 14, borderRadius: theme.radii.lg, alignItems: 'center', marginTop: 20, ...theme.shadows.sm },
-    saveButtonText: { color: '#fff', fontFamily: theme.fonts.s, fontSize: 15 },
-    btnOut: { borderWidth: 1, borderColor: theme.colors.border, padding: 10, borderRadius: theme.radii.r, alignItems: 'center', backgroundColor: theme.colors.surface },
+    saveButtonText: { color: theme.colors.bg, fontFamily: theme.fonts.s, fontSize: 15 },
+    btnOut: { borderWidth: 1, borderColor: theme.colors.border, padding: 10, borderRadius: theme.radii.lg, alignItems: 'center', backgroundColor: theme.colors.surface },
     btnOutText: { color: theme.colors.ink, fontFamily: theme.fonts.s, fontSize: 14 },
 
     legend: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 16, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 20, marginBottom: 18, ...theme.shadows.sm },
@@ -1090,7 +1090,7 @@ const getStyles = (theme) => StyleSheet.create({
     legendText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink2, fontWeight: '500' },
 
     controlsRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 12 },
-    ctrlBtn: { borderWidth: 1, borderColor: theme.colors.border, padding: 5, borderRadius: theme.radii.r },
+    ctrlBtn: { borderWidth: 1, borderColor: theme.colors.border, padding: 5, borderRadius: theme.radii.lg },
     monthText: { fontFamily: theme.fonts.d, fontSize: 18, fontWeight: '700', color: theme.colors.ink },
 
     daysRow: { flexDirection: 'row', marginBottom: 4 },
@@ -1113,10 +1113,10 @@ const getStyles = (theme) => StyleSheet.create({
     modalTitle: { fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, marginBottom: 12, letterSpacing: -0.5 },
     instructions: { fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink2, lineHeight: 20, marginBottom: 15 },
     label: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 5 },
-    input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, paddingVertical: 10, paddingHorizontal: 12, fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink, marginBottom: 14 },
+    input: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, paddingVertical: 10, paddingHorizontal: 12, fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.ink, marginBottom: 14 },
 
     // Mini calendar
-    miniCalWrap: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, marginBottom: 14, marginTop: -8 },
+    miniCalWrap: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 12, marginBottom: 14, marginTop: -8 },
     miniCalNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
     miniCalMonth: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '700', color: theme.colors.ink },
     miniDaysRow: { flexDirection: 'row', marginBottom: 4 },
@@ -1125,7 +1125,7 @@ const getStyles = (theme) => StyleSheet.create({
     miniCell: { width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 4 },
     miniCellSelected: { backgroundColor: theme.colors.ink },
     miniCellNum: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink2 },
-    miniCellNumSelected: { color: '#fff', fontWeight: '700' },
+    miniCellNumSelected: { color: theme.colors.bg, fontWeight: '700' },
 
     // Sidebar
     sidebar: { backgroundColor: theme.colors.surface, borderLeftWidth: 1, borderTopWidth: 1, borderColor: theme.colors.border },

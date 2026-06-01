@@ -223,7 +223,7 @@ export default function ScreentimeScreen() {
                             marginBottom: 16,
                         }}>
                             <View style={{
-                                width: 36, height: 36, borderRadius: 9,
+                                width: 36, height: 36, borderRadius: theme.radii.lg,
                                 backgroundColor: SEM.blue + '18',
                                 alignItems: 'center', justifyContent: 'center',
                             }}>
@@ -293,7 +293,7 @@ export default function ScreentimeScreen() {
                                             activeOpacity={0.85}
                                             style={{
                                                 paddingHorizontal: 14, paddingVertical: 7,
-                                                borderRadius: 8,
+                                                borderRadius: theme.radii.lg,
                                                 backgroundColor: active ? theme.colors.ink : theme.colors.surface2,
                                             }}
                                         >
@@ -328,7 +328,7 @@ export default function ScreentimeScreen() {
                                 <View style={{
                                     flexDirection: 'row', alignItems: 'center', gap: 8,
                                     padding: 10, paddingHorizontal: 14,
-                                    backgroundColor: SEM.red + '12', borderRadius: 8,
+                                    backgroundColor: SEM.red + '12', borderRadius: theme.radii.lg,
                                     marginTop: 20,
                                 }}>
                                     <Shield size={14} color={SEM.red} />
@@ -354,7 +354,7 @@ export default function ScreentimeScreen() {
                                 <Text style={{ fontFamily: theme.fonts.m, fontSize: 15, color: theme.colors.ink3 }}>/ 100</Text>
                                 <View style={{
                                     marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 4,
-                                    backgroundColor: focusColor + '15', borderRadius: 6,
+                                    backgroundColor: focusColor + '15', borderRadius: theme.radii.lg,
                                 }}>
                                     <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, color: focusColor, fontWeight: '600' }}>
                                         {scoreLabel || 'Keep going'}
@@ -378,7 +378,7 @@ export default function ScreentimeScreen() {
                                         <View key={i}>
                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                                                 <View style={{
-                                                    width: 24, height: 24, borderRadius: 6,
+                                                    width: 24, height: 24, borderRadius: theme.radii.lg,
                                                     backgroundColor: m.color + '15',
                                                     alignItems: 'center', justifyContent: 'center',
                                                 }}>
@@ -391,8 +391,8 @@ export default function ScreentimeScreen() {
                                                     {m.total}
                                                 </Text>
                                             </View>
-                                            <View style={{ height: 6, backgroundColor: theme.colors.surface2, borderRadius: 3, overflow: 'hidden' }}>
-                                                <View style={{ width: `${m.val}%`, height: '100%', backgroundColor: m.color, borderRadius: 3 }} />
+                                            <View style={{ height: 6, backgroundColor: theme.colors.surface2, borderRadius: theme.radii.round, overflow: 'hidden' }}>
+                                                <View style={{ width: `${m.val}%`, height: '100%', backgroundColor: m.color, borderRadius: theme.radii.round }} />
                                             </View>
                                             <Text style={{ fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, marginTop: 3 }}>
                                                 {m.desc}
@@ -433,7 +433,7 @@ export default function ScreentimeScreen() {
                                         borderBottomColor: theme.colors.border,
                                     }}>
                                         <View style={{
-                                            width: 32, height: 32, borderRadius: 8,
+                                            width: 32, height: 32, borderRadius: theme.radii.round,
                                             backgroundColor: SEM.green + '18',
                                             alignItems: 'center', justifyContent: 'center',
                                         }}>
@@ -470,7 +470,7 @@ export default function ScreentimeScreen() {
                                     <View key={i} style={{ marginBottom: i < apps.length - 1 ? 12 : 0 }}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                                             <View style={{
-                                                width: 24, height: 24, borderRadius: 6,
+                                                width: 24, height: 24, borderRadius: theme.radii.lg,
                                                 backgroundColor: a.color + '18',
                                                 alignItems: 'center', justifyContent: 'center',
                                             }}>
@@ -483,8 +483,8 @@ export default function ScreentimeScreen() {
                                                 {a.time}
                                             </Text>
                                         </View>
-                                        <View style={{ height: 4, backgroundColor: theme.colors.surface2, borderRadius: 2, overflow: 'hidden', marginLeft: 34 }}>
-                                            <View style={{ width: `${a.pct}%`, height: '100%', backgroundColor: a.color, borderRadius: 2 }} />
+                                        <View style={{ height: 4, backgroundColor: theme.colors.surface2, borderRadius: theme.radii.round, overflow: 'hidden', marginLeft: 34 }}>
+                                            <View style={{ width: `${a.pct}%`, height: '100%', backgroundColor: a.color, borderRadius: theme.radii.round }} />
                                         </View>
                                     </View>
                                 );

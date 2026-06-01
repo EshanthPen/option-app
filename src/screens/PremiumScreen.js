@@ -217,7 +217,7 @@ export default function PremiumScreen({ navigation, onClose }) {
                             <View style={{
                                 padding: 32, marginBottom: 24,
                                 borderRadius: theme.radii.lg,
-                                backgroundColor: theme.colors.ink,
+                                backgroundColor: '#171717',
                                 overflow: 'hidden',
                             }}>
                                 <View style={{

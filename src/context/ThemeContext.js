@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getTheme } from '../utils/theme';
 
@@ -18,6 +18,17 @@ export const ThemeProvider = ({ children }) => {
         };
         loadTheme();
     }, []);
+
+    useEffect(() => {
+        if (Platform.OS === 'web' && typeof document !== 'undefined') {
+            const root = document.documentElement;
+            if (isDarkMode) {
+                root.classList.add('dark');
+            } else {
+                root.classList.remove('dark');
+            }
+        }
+    }, [isDarkMode]);
 
     const toggleTheme = async () => {
         const newMode = !isDarkMode;

@@ -8,7 +8,7 @@ import {
 import { LineChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { ChevronLeft, RefreshCw, Plus, BookOpen, Trash2, Bell, FileText, Sparkles } from 'lucide-react-native';
+import { ChevronLeft, RefreshCw, Plus, BookOpen, Trash2, Bell, FileText, Sparkles, Calculator, ChevronDown } from 'lucide-react-native';
 import { TopBar } from '../components/DesignKit';
 import * as Notifications from 'expo-notifications';
 import * as Print from 'expo-print';
@@ -20,53 +20,161 @@ import { scheduleGradeChangeNotification } from '../utils/notificationService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { buttonVariants } from '../components/ui/button';
+import { Button as ShadcnButton } from '../components/ui/button';
 import { cn } from '../lib/utils';
+import { ChartContainer, ChartTooltip } from '../components/ui/line-charts-1';
+import { ComposedChart, Line, Area, CartesianGrid, XAxis, YAxis } from 'recharts/lib';
 
 // ── Grade Calculator Modal ───────────────────────────────────────
-function GradeCalculatorModal({ currentGrade, categoryWeights }) {
+function GradeCalculatorModal({ currentGrade = null, categoryWeights = null, classes = [], trigger }) {
+    const { theme } = useTheme();
+    const [selectedClassId, setSelectedClassId] = useState('');
     const [targetGrade, setTargetGrade] = useState('');
     const [weight, setWeight] = useState('');
     const [isCustomWeight, setIsCustomWeight] = useState(false);
 
-    const hasCategories = categoryWeights && Object.keys(categoryWeights).length > 0;
+    const isClassSelector = currentGrade === null && classes.length > 0;
 
     useEffect(() => {
-        if (hasCategories && !weight && !isCustomWeight) {
-            const firstCat = Object.keys(categoryWeights)[0];
-            setWeight((categoryWeights[firstCat] * 100).toString());
+        if (isClassSelector && classes.length > 0 && !selectedClassId) {
+            setSelectedClassId(classes[0].id);
         }
-    }, [categoryWeights, hasCategories, weight, isCustomWeight]);
+    }, [classes, isClassSelector, selectedClassId]);
+
+    const activeClass = isClassSelector ? classes.find(c => c.id === selectedClassId) : null;
+    const activeGrade = currentGrade !== null ? currentGrade : (activeClass ? parseFloat(activeClass.grade) : null);
+    const activeWeights = categoryWeights !== null ? categoryWeights : (activeClass?.categoryWeights || null);
+
+    const hasCategories = activeWeights && Object.keys(activeWeights).length > 0;
+
+    useEffect(() => {
+        if (hasCategories) {
+            const firstCat = Object.keys(activeWeights)[0];
+            setWeight((activeWeights[firstCat] * 100).toString());
+            setIsCustomWeight(false);
+        } else {
+            setWeight('');
+            setIsCustomWeight(false);
+        }
+    }, [activeWeights, hasCategories]);
 
     const target = parseFloat(targetGrade);
     const w = parseFloat(weight);
     
     let requiredScore = null;
-    if (!isNaN(target) && !isNaN(w) && w > 0 && w <= 100 && currentGrade !== null) {
-        requiredScore = (target - currentGrade * (1 - w / 100)) / (w / 100);
+    if (!isNaN(target) && !isNaN(w) && w > 0 && w <= 100 && activeGrade !== null) {
+        requiredScore = (target - activeGrade * (1 - w / 100)) / (w / 100);
     }
 
     if (Platform.OS !== 'web') return null;
 
     return (
         <Dialog>
-            <DialogTrigger className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), "shadow-sm shadow-black/10")}>
-                Calculate Target
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            {trigger ? (
+                <DialogTrigger render={trigger} />
+            ) : (
+                <DialogTrigger render={
+                    <button 
+                        style={{
+                            height: '34px',
+                            padding: '0 14px',
+                            borderRadius: theme.radii.lg,
+                            borderWidth: '1px',
+                            borderStyle: 'solid',
+                            borderColor: theme.colors.border,
+                            backgroundColor: theme.colors.surface2,
+                            color: theme.colors.ink,
+                            fontWeight: '600',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            fontFamily: theme.fonts.s,
+                            transition: 'all 0.15s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            outline: 'none',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(0.95)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
+                    >
+                        <Calculator size={13} color={theme.colors.ink} />
+                        Calculate Target
+                    </button>
+                } />
+            )}
+            <DialogContent 
+                className="sm:max-w-[425px]"
+                style={{
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.ink,
+                    fontFamily: theme.fonts.m,
+                }}
+            >
                 <DialogHeader>
-                    <DialogTitle className="font-sans text-xl tracking-tight text-foreground">Grade Calculator</DialogTitle>
-                    <DialogDescription className="text-muted-foreground font-mono text-xs uppercase tracking-wider mt-1">
+                    <DialogTitle className="font-sans text-xl tracking-tight" style={{ color: theme.colors.ink, fontFamily: theme.fonts.b, fontWeight: '700' }}>Grade Calculator</DialogTitle>
+                    <DialogDescription className="font-mono text-xs uppercase tracking-wider mt-1" style={{ color: theme.colors.ink3, fontFamily: theme.fonts.mono }}>
                         Find out what you need on your final.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
+                    {isClassSelector && (
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="classSelect" className="text-right font-semibold" style={{ color: theme.colors.ink, fontFamily: theme.fonts.s }}>Class</Label>
+                            <select
+                                id="classSelect"
+                                value={selectedClassId}
+                                onChange={(e) => {
+                                    setSelectedClassId(e.target.value);
+                                }}
+                                style={{
+                                    backgroundColor: theme.colors.surface2,
+                                    borderColor: theme.colors.border,
+                                    color: theme.colors.ink,
+                                    borderRadius: theme.radii.lg,
+                                    borderWidth: '1px',
+                                    padding: '8px 10px',
+                                    height: '34px',
+                                    fontFamily: theme.fonts.m,
+                                    fontSize: '13px',
+                                    outline: 'none',
+                                }}
+                                className="col-span-3 w-full text-sm focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none transition-colors"
+                            >
+                                {classes.map(c => (
+                                    <option key={c.id} value={c.id} style={{ backgroundColor: theme.colors.surface2, color: theme.colors.ink }}>
+                                        {c.name} ({(parseFloat(c.grade) || 0).toFixed(1)}%)
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="target" className="text-right font-semibold text-foreground">Target %</Label>
-                        <Input id="target" type="number" value={targetGrade} onChange={(e) => setTargetGrade(e.target.value)} placeholder="90" className="col-span-3 border-2 border-black bg-foreground/5 text-foreground focus-visible:border-[#CCFF00]" />
+                        <Label htmlFor="target" className="text-right font-semibold" style={{ color: theme.colors.ink, fontFamily: theme.fonts.s }}>Target %</Label>
+                        <Input 
+                            id="target" 
+                            type="number" 
+                            value={targetGrade} 
+                            onChange={(e) => setTargetGrade(e.target.value)} 
+                            placeholder="90" 
+                            className="col-span-3" 
+                            style={{
+                                backgroundColor: theme.colors.surface2,
+                                borderColor: theme.colors.border,
+                                color: theme.colors.ink,
+                                borderRadius: theme.radii.lg,
+                                borderWidth: '1px',
+                                padding: '8px 10px',
+                                height: '34px',
+                                fontFamily: theme.fonts.m,
+                                fontSize: '13px',
+                                outline: 'none',
+                            }}
+                        />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="weight" className="text-right font-semibold text-foreground">Weight %</Label>
+                        <Label htmlFor="weight" className="text-right font-semibold" style={{ color: theme.colors.ink, fontFamily: theme.fonts.s }}>Weight %</Label>
                         {hasCategories && !isCustomWeight ? (
                             <select 
                                 id="weight"
@@ -79,34 +187,85 @@ function GradeCalculatorModal({ currentGrade, categoryWeights }) {
                                         setWeight(e.target.value);
                                     }
                                 }}
-                                className="col-span-3 h-8 w-full rounded-none border-2 border-black bg-foreground/5 px-2.5 text-sm text-foreground focus-visible:border-[#CCFF00] focus-visible:outline-none"
+                                style={{
+                                    backgroundColor: theme.colors.surface2,
+                                    borderColor: theme.colors.border,
+                                    color: theme.colors.ink,
+                                    borderRadius: theme.radii.lg,
+                                    borderWidth: '1px',
+                                    padding: '8px 10px',
+                                    height: '34px',
+                                    fontFamily: theme.fonts.m,
+                                    fontSize: '13px',
+                                    outline: 'none',
+                                }}
+                                className="col-span-3 w-full text-sm focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none transition-colors"
                             >
-                                <option value="" disabled>Select category...</option>
-                                {Object.keys(categoryWeights).map(cat => (
-                                    <option key={cat} value={(categoryWeights[cat] * 100).toString()}>
-                                        {cat} ({Math.round(categoryWeights[cat] * 100)}%)
+                                <option value="" disabled style={{ backgroundColor: theme.colors.surface2, color: theme.colors.ink }}>Select category...</option>
+                                {Object.keys(activeWeights).map(cat => (
+                                    <option key={cat} value={(activeWeights[cat] * 100).toString()} style={{ backgroundColor: theme.colors.surface2, color: theme.colors.ink }}>
+                                        {cat} ({Math.round(activeWeights[cat] * 100)}%)
                                     </option>
                                 ))}
-                                <option value="custom">Custom Weight...</option>
+                                <option value="custom" style={{ backgroundColor: theme.colors.surface2, color: theme.colors.ink }}>Custom Weight...</option>
                             </select>
                         ) : (
                             <div className="col-span-3 flex gap-2">
-                                <Input id="weight" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="20" className="flex-1 border-2 border-black bg-foreground/5 text-foreground focus-visible:border-[#CCFF00]" />
+                                <Input 
+                                    id="weight" 
+                                    type="number" 
+                                    value={weight} 
+                                    onChange={(e) => setWeight(e.target.value)} 
+                                    placeholder="20" 
+                                    className="flex-1" 
+                                    style={{
+                                        backgroundColor: theme.colors.surface2,
+                                        borderColor: theme.colors.border,
+                                        color: theme.colors.ink,
+                                        borderRadius: theme.radii.lg,
+                                        borderWidth: '1px',
+                                        padding: '8px 10px',
+                                        height: '34px',
+                                        fontFamily: theme.fonts.m,
+                                        fontSize: '13px',
+                                        outline: 'none',
+                                    }}
+                                />
                                 {hasCategories && (
-                                    <button onClick={() => setIsCustomWeight(false)} className="px-2 border-2 border-black rounded-none text-xs text-muted-foreground hover:bg-foreground/5">
+                                    <button 
+                                        onClick={() => setIsCustomWeight(false)} 
+                                        style={{
+                                            padding: '0 12px',
+                                            height: '34px',
+                                            borderRadius: theme.radii.lg,
+                                            borderWidth: '1px',
+                                            borderStyle: 'solid',
+                                            borderColor: theme.colors.border,
+                                            backgroundColor: theme.colors.surface,
+                                            color: theme.colors.ink,
+                                            fontSize: '12px',
+                                            fontWeight: '600',
+                                            fontFamily: theme.fonts.s,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease',
+                                            outline: 'none',
+                                        }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = theme.colors.surface2; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = theme.colors.surface; }}
+                                    >
                                         Back
                                     </button>
                                 )}
-                            </div>
+                             </div>
                         )}
                     </div>
                     {requiredScore !== null && (
-                        <div className="mt-4 p-4 rounded-none bg-foreground/5 border-2 border-black text-center">
-                            <span className="text-xs font-mono text-muted-foreground uppercase tracking-widest">You Need</span>
-                            <div className={`text-4xl font-bold mt-2 ${requiredScore > 100 ? 'text-destructive' : 'text-[#CCFF00]'}`}>
+                        <div className="mt-4 p-4 text-center border" style={{ backgroundColor: theme.colors.surface2, borderColor: theme.colors.border, borderRadius: theme.radii.lg }}>
+                            <span className="text-xs font-mono uppercase tracking-widest" style={{ color: theme.colors.ink3, fontFamily: theme.fonts.mono }}>You Need</span>
+                            <div className="text-4xl font-bold mt-2" style={{ color: requiredScore > 100 ? theme.colors.red : theme.colors.green, fontFamily: theme.fonts.b, fontWeight: '700' }}>
                                 {requiredScore.toFixed(1)}%
                             </div>
-                            {requiredScore > 100 && <div className="text-xs text-destructive mt-1 font-semibold">Over 100% required!</div>}
+                            {requiredScore > 100 && <div className="text-xs mt-1 font-semibold" style={{ color: theme.colors.red, fontFamily: theme.fonts.s }}>Over 100% required!</div>}
                         </div>
                     )}
                 </div>
@@ -116,6 +275,21 @@ function GradeCalculatorModal({ currentGrade, categoryWeights }) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────
+const getPeriodDisplayText = (period) => {
+    if (!period || !period.endDate) return period?.name || 'Current Period';
+    const diffTime = new Date(period.endDate) - new Date();
+    const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    if (daysLeft < 0) {
+        return `${period.name} (ended)`;
+    } else if (daysLeft === 0) {
+        return `${period.name} (ends today)`;
+    } else if (daysLeft === 1) {
+        return `${period.name} (ends in 1 day)`;
+    } else {
+        return `${period.name} (ends in ${daysLeft} days)`;
+    }
+};
+
 const gradeColor = (pct, theme) => {
     if (pct >= 90) return theme.colors.green;
     if (pct >= 80) return theme.colors.blue;
@@ -225,10 +399,15 @@ export default function GradebookScreen() {
     const [chartWidth, setChartWidth] = useState(0);
     const [fetchError, setFetchError] = useState(false);
 
+    // Period selector states
+    const [periodsList, setPeriodsList] = useState([]);
+    const [activePeriod, setActivePeriod] = useState(null);
+    const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
+
     // Navigation
     const [selectedClass, setSelectedClass] = useState(null);
     const [catFilter, setCatFilter] = useState('All');
-    const [hypothetical, setHypothetical] = useState(false);
+    const [hypothetical, setHypothetical] = useState(true);
     // hypoEdits: per-assignment overrides while hypothetical mode is on
     //   { [assignmentId]: { score: string|number, total: string|number } }
     const [hypoEdits, setHypoEdits] = useState({});
@@ -249,12 +428,20 @@ export default function GradebookScreen() {
     const [newAsgnCat, setNewAsgnCat] = useState('Summative');
     const [newAsgnDate, setNewAsgnDate] = useState('');
 
+    const getDemoPeriods = () => {
+        const d = new Date();
+        d.setDate(d.getDate() + 17);
+        return [{ index: 0, name: 'Final', endDate: d.toISOString() }];
+    };
+
     // Load data
     useFocusEffect(useCallback(() => {
         (async () => {
             try {
-                const [svRaw, manRaw, isDemo] = await Promise.all([
+                const [svRaw, svPeriodsRaw, svActivePeriodIdxRaw, manRaw, isDemo] = await Promise.all([
                     AsyncStorage.getItem('studentVueGrades'),
+                    AsyncStorage.getItem('studentVuePeriods'),
+                    AsyncStorage.getItem('studentVueActivePeriodIndex'),
                     AsyncStorage.getItem(MANUAL_KEY),
                     AsyncStorage.getItem('isDemoData'),
                 ]);
@@ -270,6 +457,19 @@ export default function GradebookScreen() {
                     }
                 }
                 
+                if (svPeriodsRaw) {
+                    const parsedP = JSON.parse(svPeriodsRaw);
+                    setPeriodsList(parsedP);
+                    
+                    const idx = svActivePeriodIdxRaw ? parseInt(svActivePeriodIdxRaw) : 0;
+                    const found = parsedP.find(p => p.index === idx);
+                    setActivePeriod(found || parsedP[0]);
+                } else {
+                    const dp = getDemoPeriods();
+                    setPeriodsList(dp);
+                    setActivePeriod(dp[0]);
+                }
+                
                 if (manRaw) setManClasses(JSON.parse(manRaw));
                 const changes = await getRecentGradeChanges();
                 if (changes) setGradeChanges(changes.changes);
@@ -281,7 +481,10 @@ export default function GradebookScreen() {
     const allClasses = [...svClasses, ...manClasses];
 
     // ── Storage helpers ───────────────────────────────────────────
-    const syncCurrentGrades = async () => {
+    const syncCurrentGrades = async (forcedPeriodIndex = null) => {
+        // Clear all what-if edits when the user manually refreshes
+        setHypoEdits({});
+        setHypoAssignments({});
         try {
             setFetchError(false);
             const isDemo = await AsyncStorage.getItem('isDemoData') === 'true';
@@ -315,19 +518,25 @@ export default function GradebookScreen() {
             const periodsXml = await periodsRes.text();
             if (!periodsXml.includes('Gradebook') && periodsXml.includes('RT_ERROR')) throw new Error('API error');
             
-            const { currentPeriodIndex, currentPeriodName } = parseStudentVuePeriods(periodsXml);
+            const { periods: loadedPeriods, currentPeriodIndex, currentPeriodName } = parseStudentVuePeriods(periodsXml);
             let finalXml = periodsXml;
             
+            const targetPeriodIndex = forcedPeriodIndex !== null ? forcedPeriodIndex : currentPeriodIndex;
+            
+            // Determine active/forced period name
+            const targetPeriodObj = loadedPeriods.find(p => p.index === targetPeriodIndex);
+            const targetPeriodName = targetPeriodObj ? targetPeriodObj.name : currentPeriodName;
+            
             // 2. If the active period is not 0 (e.g. FCPS returning 1st quarter when passing 0), fetch the active period specifically
-            if (currentPeriodIndex !== 0) {
-                const gradesSoap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser}</userID><password>${svPass}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;${currentPeriodIndex}&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
+            if (targetPeriodIndex !== 0) {
+                const gradesSoap = `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><ProcessWebServiceRequest xmlns="http://edupoint.com/webservices/"><userID>${svUser}</userID><password>${svPass}</password><skipLoginLog>1</skipLoginLog><parent>0</parent><webServiceHandleName>PXPWebServices</webServiceHandleName><methodName>Gradebook</methodName><paramStr>&lt;Parms&gt;&lt;ReportPeriod&gt;${targetPeriodIndex}&lt;/ReportPeriod&gt;&lt;/Parms&gt;</paramStr></ProcessWebServiceRequest></soap:Body></soap:Envelope>`;
                 const gradesRes = await fetch(`${base}/api/studentvue`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetUrl: finalUrl, soapPayload: gradesSoap }) });
                 if (gradesRes.ok) {
                     finalXml = await gradesRes.text();
                 }
             }
             
-            const { classes: parsed } = parseStudentVueGradebook(finalXml, currentPeriodName);
+            const { classes: parsed, periods: parsedPeriods } = parseStudentVueGradebook(finalXml, targetPeriodName);
             if (parsed && parsed.length > 0) {
                 const parsedStr = JSON.stringify(parsed);
                 
@@ -337,11 +546,21 @@ export default function GradebookScreen() {
                 await AsyncStorage.setItem('studentVueGrades', parsedStr);
                 setSvClasses(parsed);
                 
+                if (parsedPeriods && parsedPeriods.length > 0) {
+                    await AsyncStorage.setItem('studentVuePeriods', JSON.stringify(parsedPeriods));
+                    setPeriodsList(parsedPeriods);
+                    const matchingPeriod = parsedPeriods.find(p => p.index === targetPeriodIndex);
+                    if (matchingPeriod) {
+                        await AsyncStorage.setItem('studentVueActivePeriodIndex', String(targetPeriodIndex));
+                        setActivePeriod(matchingPeriod);
+                    }
+                }
+                
                 if (changes && changes.length > 0) {
                     setGradeChanges(changes);
                     const msg = changes.length === 1
-                        ? formatChangeMessage(changes[0])
-                        : `${changes.length} grade updates detected`;
+                         ? formatChangeMessage(changes[0])
+                         : `${changes.length} grade updates detected`;
                     if (Platform.OS === 'web') window.alert(`Grade Update: ${msg}`);
                     else Alert.alert('Grade Update', msg);
                     
@@ -514,7 +733,7 @@ export default function GradebookScreen() {
     const overallGPA = () => {
         if (!allClasses.length) return '—';
         const pts = allClasses.reduce((s, c) => {
-            const g = parseFloat(c.grade) || 0;
+            const g = getHypoGrade(c);
             const { wGP } = buildGP(g, c.type);
             return s + wGP;
         }, 0);
@@ -525,7 +744,7 @@ export default function GradebookScreen() {
     const shareReportCard = async () => {
         try {
             const rows = allClasses.map(c => {
-                const g = parseFloat(c.grade) || 0;
+                const g = getHypoGrade(c);
                 const letter = gradeLetter(g);
                 const { wGP, uGP } = buildGP(g, c.type);
                 const color = g >= 90 ? '#22c55e' : g >= 80 ? '#3b82f6' : g >= 70 ? '#f59e0b' : '#ef4444';
@@ -597,8 +816,10 @@ export default function GradebookScreen() {
     };
 
     const getHypoGrade = (cls) => {
-        if (!hypothetical || !cls?.assignments) return null;
-        return calcGrade(applyHypo(cls), cls.categoryWeights);
+        if (!cls) return 0;
+        if (!cls.assignments) return parseFloat(cls.grade) || 0;
+        const computed = calcGrade(applyHypo(cls), cls.categoryWeights);
+        return computed !== null ? computed : (parseFloat(cls.grade) || 0);
     };
 
     // ── Grade impact calc (how much an assignment moved the overall grade) ──
@@ -636,17 +857,15 @@ export default function GradebookScreen() {
 
     return (
         <View style={S.root}>
-            <TopBar
-                title={cls ? cls.name : 'Gradebook'}
-                subtitle={cls
-                    ? (cls.teacher || '')
-                    : `Current Period · ${allClasses.length} class${allClasses.length === 1 ? '' : 'es'}`}
-                actions={
-                    cls ? (
+            {cls ? (
+                <TopBar
+                    title={cls.name}
+                    subtitle={cls.teacher || ''}
+                    actions={
                         <TouchableOpacity
                             onPress={() => {
                                 setSelectedClass(null);
-                                setHypothetical(false);
+                                setHypothetical(true);
                                 setHypoEdits({});
                                 setCatFilter('All');
                             }}
@@ -663,29 +882,40 @@ export default function GradebookScreen() {
                                 Back
                             </Text>
                         </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity
-                            onPress={() => syncCurrentGrades()}
-                            disabled={isSyncing}
-                            style={{
-                                flexDirection: 'row', alignItems: 'center', gap: 6,
-                                paddingHorizontal: 12, paddingVertical: 8,
-                                borderRadius: 10,
-                                backgroundColor: theme.colors.surface,
-                                borderWidth: 1, borderColor: theme.colors.border2,
-                            }}
-                        >
-                            {isSyncing
-                                ? <ActivityIndicator size="small" color={theme.colors.ink3} />
-                                : <RefreshCw size={14} color={theme.colors.ink2} />
-                            }
-                            <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink2 }}>
-                                Sync
-                            </Text>
-                        </TouchableOpacity>
-                    )
-                }
-            />
+                    }
+                />
+            ) : (
+                <View style={S.customHeaderContainer}>
+                    {/* Reload Button */}
+                    <TouchableOpacity
+                        onPress={() => syncCurrentGrades(activePeriod?.index)}
+                        disabled={isSyncing}
+                        style={S.headerSquareBtn}
+                        activeOpacity={0.75}
+                    >
+                        {isSyncing ? (
+                            <ActivityIndicator size="small" color={theme.colors.ink3} />
+                        ) : (
+                            <RefreshCw size={16} color={theme.colors.ink} />
+                        )}
+                    </TouchableOpacity>
+
+                    {/* Period Dropdown Selector */}
+                    <TouchableOpacity
+                        onPress={() => setShowPeriodDropdown(true)}
+                        style={S.periodDropdownSelector}
+                        activeOpacity={0.75}
+                    >
+                        <Text style={S.periodDropdownText}>
+                            {activePeriod ? getPeriodDisplayText(activePeriod) : 'Loading Period...'}
+                        </Text>
+                        <ChevronDown size={14} color={theme.colors.ink3} />
+                    </TouchableOpacity>
+
+                    {/* Spacer to balance the reload button */}
+                    <View style={{ width: 40 }} />
+                </View>
+            )}
 
             {/* Main content container */}
             <View style={{ flex: 1 }}>
@@ -694,33 +924,9 @@ export default function GradebookScreen() {
             {!cls && (
                 <ScrollView
                     style={{ flex: 1 }}
-                    contentContainerStyle={[S.listContent, { maxWidth: 800, alignSelf: 'center', width: '100%' }]}
+                    contentContainerStyle={[S.listContent, { maxWidth: 1400, alignSelf: 'center', width: '100%' }]}
                     showsVerticalScrollIndicator={false}
                 >
-                    {allClasses.length > 0 && (
-                        <View style={S.gpaBanner}>
-                            <View>
-                                <Text style={S.gpaBannerLabel}>WEIGHTED GPA</Text>
-                                <Text style={S.gpaBannerVal}>{overallGPA()}</Text>
-                            </View>
-                            <View>
-                                <Text style={S.gpaBannerLabel}>CLASSES</Text>
-                                <Text style={S.gpaBannerVal}>{allClasses.length}</Text>
-                            </View>
-                        </View>
-                    )}
-
-                    {allClasses.length > 0 && (
-                        <TouchableOpacity
-                            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, padding: 12, marginBottom: 16, ...theme.shadows.sm }}
-                            onPress={shareReportCard}
-                            activeOpacity={0.75}
-                        >
-                            <FileText size={16} color={theme.colors.accent} />
-                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, fontWeight: '600', color: theme.colors.accent }}>Share Report Card</Text>
-                        </TouchableOpacity>
-                    )}
-
                     {allClasses.length === 0 && fetchError && (
                         <View style={S.emptyState}>
                             <Text style={S.emptyIcon}>⚠️</Text>
@@ -737,33 +943,69 @@ export default function GradebookScreen() {
                         </View>
                     )}
 
-                    {allClasses.map((item) => {
-                        const g = parseFloat(item.grade) || 0;
-                        const color = gradeColor(g, theme);
-                        const letter = gradeLetter(g);
-                        return (
-                            <TouchableOpacity key={item.id} style={S.classCard} onPress={() => { setSelectedClass(item); setCatFilter('All'); setHypothetical(false); setHypoEdits({}); }} activeOpacity={0.75}>
-                                <View style={[S.classCardAccent, { backgroundColor: color }]} />
-                                <View style={S.classCardBody}>
-                                    <View style={{ flex: 1 }}>
-                                        <View style={S.classCardTags}>
-                                            <View style={[S.tag, item.type === 'AP' && S.tagAP, item.type === 'HN' && S.tagHN]}>
-                                                <Text style={[S.tagTxt, (item.type === 'AP' || item.type === 'HN') && { color: '#fff' }]}>{item.type || 'ST'}</Text>
-                                            </View>
-                                            {item.period ? <Text style={S.periodTxt}>Period {item.period}</Text> : null}
-                                            {item.isManual && <Text style={[S.periodTxt, { color: theme.colors.blue }]}>Manual</Text>}
+                    {allClasses.length > 0 && (
+                        <View style={S.gridContainer}>
+                            {allClasses.map((item) => {
+                                const g = getHypoGrade(item);
+                                const color = gradeColor(g, theme);
+                                const letter = gradeLetter(g);
+                                const classDisplayName = item.period ? `${item.period} - ${item.name}` : item.name;
+                                return (
+                                    <View key={item.id} style={S.gridCard}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={S.gridCardClassName} numberOfLines={2}>
+                                                {classDisplayName}
+                                            </Text>
+                                            {item.teacher ? (
+                                                <Text style={S.gridCardTeacherName} numberOfLines={1}>
+                                                    {item.teacher}
+                                                </Text>
+                                            ) : null}
                                         </View>
-                                        <Text style={S.className} numberOfLines={2}>{item.name}</Text>
-                                        {item.teacher ? <Text style={S.teacherTxt}>{item.teacher}</Text> : null}
+                                        
+                                        <View style={S.gridCardBottom}>
+                                            <Text style={[S.gridCardGradeText, { color }]}>
+                                                {letter} ({g.toFixed(1)}%)
+                                            </Text>
+                                            <TouchableOpacity
+                                                style={[S.viewBtn, { backgroundColor: theme.colors.red }]}
+                                                onPress={() => {
+                                                    setSelectedClass(item);
+                                                    setCatFilter('All');
+                                                    setHypothetical(true);
+                                                    setHypoEdits({});
+                                                }}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Text style={S.viewBtnText}>View</Text>
+                                            </TouchableOpacity>
+                                        </View>
                                     </View>
-                                    <View style={S.gradeBlock}>
-                                        <Text style={[S.gradeLetterBig, { color }]}>{letter}</Text>
-                                        <Text style={[S.gradePctSmall, { color }]}>{g.toFixed(1)}%</Text>
-                                    </View>
-                                </View>
+                                );
+                            })}
+                        </View>
+                    )}
+
+                    {allClasses.length > 0 && (
+                        <View style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginTop: 20,
+                            paddingHorizontal: 6,
+                            paddingVertical: 12,
+                            borderTopWidth: 1,
+                            borderTopColor: theme.colors.border,
+                        }}>
+                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 }}>
+                                Weighted GPA: <Text style={{ fontFamily: theme.fonts.s, fontWeight: '700', color: theme.colors.ink }}>{overallGPA()}</Text>
+                            </Text>
+                            <TouchableOpacity onPress={shareReportCard} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <FileText size={14} color={theme.colors.red} />
+                                <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, color: theme.colors.red, fontWeight: '600' }}>Export Report Card</Text>
                             </TouchableOpacity>
-                        );
-                    })}
+                        </View>
+                    )}
                     <View style={{ height: 100 }} />
                 </ScrollView>
             )}
@@ -799,33 +1041,21 @@ export default function GradebookScreen() {
                                 </Text>
                             ) : null}
                         </View>
-                        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-                            <GradeCalculatorModal currentGrade={parseFloat(cls.grade)} categoryWeights={cls?.categoryWeights} />
-                            <TouchableOpacity
-                                style={{
-                                    flexDirection: 'row', alignItems: 'center', gap: 6,
-                                    paddingHorizontal: 12, paddingVertical: 8,
-                                    backgroundColor: hypothetical ? theme.colors.blue + '18' : theme.colors.surface,
-                                    borderWidth: 1, borderColor: hypothetical ? theme.colors.blue : theme.colors.border2,
-                                    borderRadius: 10,
-                                }}
-                                onPress={() => {
-                                    const next = !hypothetical;
-                                    setHypothetical(next);
-                                    if (!next) {
-                                        setHypoEdits({});
-                                        setHypoAssignments(prev => ({ ...prev, [cls.id]: [] }));
-                                    }
-                                }}
-                            >
-                                <Sparkles size={14} color={hypothetical ? theme.colors.blue : theme.colors.ink2} />
-                                <Text style={{
-                                    fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600',
-                                    color: hypothetical ? theme.colors.blue : theme.colors.ink2,
-                                }}>
-                                    {hypothetical ? 'Exit hypothetical' : 'What-if mode'}
-                                </Text>
-                            </TouchableOpacity>
+                        {/* What-if mode indicator (always active) */}
+                        <View style={{
+                            flexDirection: 'row', alignItems: 'center', gap: 6,
+                            paddingHorizontal: 10, paddingVertical: 6,
+                            backgroundColor: theme.colors.blue + '12',
+                            borderWidth: 1, borderColor: theme.colors.blue + '30',
+                            borderRadius: 10,
+                        }}>
+                            <Sparkles size={12} color={theme.colors.blue} />
+                            <Text style={{
+                                fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '600',
+                                color: theme.colors.blue,
+                            }}>
+                                What-if mode
+                            </Text>
                         </View>
                     </View>
 
@@ -841,28 +1071,32 @@ export default function GradebookScreen() {
                             flexDirection: 'row', alignItems: 'center', gap: 18,
                             ...theme.shadows.sm,
                         }}>
-                            <Text style={{
-                                fontFamily: theme.fonts.d, fontSize: 52, fontWeight: '700',
-                                color: gColor, letterSpacing: -2, lineHeight: 56,
-                            }}>
-                                {gradeLetter(parseFloat(cls.grade) || 0)}
-                            </Text>
-                            <View style={{ flex: 1 }}>
-                                <Text style={{ fontFamily: theme.fonts.mono, fontSize: 26, fontWeight: '500', color: theme.colors.ink }}>
-                                    {(parseFloat(cls.grade) || 0).toFixed(1)}%
-                                </Text>
-                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>
-                                    Current grade
-                                </Text>
-                                <View style={{ height: 6, backgroundColor: theme.colors.surface2, borderRadius: 3, overflow: 'hidden', marginTop: 10 }}>
-                                    <View style={{ width: `${Math.min(100, parseFloat(cls.grade) || 0)}%`, height: '100%', backgroundColor: gColor, borderRadius: 3 }} />
-                                </View>
-                                {hypothetical && getHypoGrade(cls) !== null && (
-                                    <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, color: theme.colors.blue, fontWeight: '600', marginTop: 6 }}>
-                                        With what-ifs: {getHypoGrade(cls).toFixed(1)}%
-                                    </Text>
-                                )}
-                            </View>
+                            {(() => {
+                                const orig = parseFloat(cls.grade) || 0;
+                                const activeGrade = getHypoGrade(cls);
+                                const isModified = Math.abs(activeGrade - orig) > 0.01;
+                                return (
+                                    <>
+                                        <Text style={{
+                                            fontFamily: theme.fonts.d, fontSize: 52, fontWeight: '700',
+                                            color: gradeColor(activeGrade, theme), letterSpacing: -2, lineHeight: 56,
+                                        }}>
+                                            {gradeLetter(activeGrade)}
+                                        </Text>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 26, fontWeight: '500', color: theme.colors.ink }}>
+                                                {activeGrade.toFixed(1)}%
+                                            </Text>
+                                            <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>
+                                                {isModified ? `Original: ${orig.toFixed(1)}%` : 'Current grade'}
+                                            </Text>
+                                            <View style={{ height: 6, backgroundColor: theme.colors.surface2, borderRadius: 3, overflow: 'hidden', marginTop: 10 }}>
+                                                <View style={{ width: `${Math.min(100, activeGrade)}%`, height: '100%', backgroundColor: gradeColor(activeGrade, theme), borderRadius: 3 }} />
+                                            </View>
+                                        </View>
+                                    </>
+                                );
+                            })()}
                         </View>
 
                         {/* Trend (mini sparkline) */}
@@ -934,9 +1168,9 @@ export default function GradebookScreen() {
                         </View>
                     </View>
 
-                    {/* Grade Trend Chart */}
+                    {/* Grade Trend Chart — uses applyHypo so edits are reflected live */}
                     {(() => {
-                        const graded = (cls.assignments || []).filter(a => {
+                        const graded = applyHypo(cls).filter(a => {
                             const s = numScore(a.score), t = parseFloat(a.total);
                             return !isNaN(s) && !isNaN(t) && t > 0;
                         });
@@ -946,54 +1180,270 @@ export default function GradebookScreen() {
                             const db = b.date ? new Date(b.date) : 0;
                             return da - db;
                         });
-                        const runningGrades = [];
-                        for (let i = 1; i <= sorted.length; i++) {
-                            const slice = sorted.slice(0, i);
+                        
+                        const chartData = [];
+                        let prevGrade = null;
+                        for (let i = 0; i < sorted.length; i++) {
+                            const slice = sorted.slice(0, i + 1);
                             const g = calcGrade(slice, cls.categoryWeights);
-                            runningGrades.push(g !== null ? Math.round(g * 10) / 10 : 0);
+                            const currentGradeVal = g !== null ? Math.round(g * 10) / 10 : 0;
+                            
+                            let effect = 0;
+                            if (i > 0 && prevGrade !== null) {
+                                effect = currentGradeVal - prevGrade;
+                            }
+                            
+                            const a = sorted[i];
+                            chartData.push({
+                                name: a.name,
+                                date: a.date ? a.date.replace(/\/\d{4}$/, '') : `${i + 1}`,
+                                fullDate: a.date || 'Unknown Date',
+                                scoreStr: a.score != null && a.total ? `${a.score}/${a.total}` : 'N/A',
+                                scoreVal: a.score != null ? parseFloat(a.score) : 0,
+                                totalVal: a.total != null ? parseFloat(a.total) : 0,
+                                grade: currentGradeVal,
+                                effect: effect,
+                                category: a.category || 'Summative',
+                            });
+                            
+                            prevGrade = currentGradeVal;
                         }
-                        const labels = sorted.map((a, i) =>
-                            i === 0 || i === sorted.length - 1
-                                ? (a.date ? a.date.replace(/\/\d{4}$/, '') : `${i + 1}`)
-                                : ''
-                        );
-                        return (
-                            <View style={S.gradeTrendCard} onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}>
-                                <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 }}>
-                                    GRADE TREND
-                                </Text>
-                                {chartWidth > 0 && (
-                                    <LineChart
-                                        data={{
-                                            labels,
-                                            datasets: [{ data: runningGrades, strokeWidth: 2 }],
-                                        }}
-                                        width={chartWidth - 28}
-                                        height={140}
-                                        yAxisSuffix="%"
-                                        fromZero={false}
-                                        withInnerLines={false}
-                                        withOuterLines={false}
-                                        withDots={runningGrades.length <= 15}
-                                        chartConfig={{
-                                            backgroundColor: 'transparent',
-                                            backgroundGradientFrom: theme.colors.surface,
-                                            backgroundGradientTo: theme.colors.surface,
-                                            decimalPlaces: 1,
-                                            color: () => gColor,
-                                            labelColor: () => theme.colors.ink3,
-                                            propsForLabels: { fontFamily: theme.fonts.m, fontSize: 10 },
-                                            propsForDots: { r: '3', strokeWidth: '0', fill: gColor },
-                                            fillShadowGradientFrom: gColor,
-                                            fillShadowGradientFromOpacity: 0.15,
-                                            fillShadowGradientTo: gColor,
-                                            fillShadowGradientToOpacity: 0,
-                                        }}
-                                        style={{ borderRadius: 8, paddingRight: 20 }}
-                                    />
-                                )}
-                            </View>
-                        );
+
+                        const GradeChartTooltip = ({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                                const data = payload[0].payload;
+                                const effectVal = data.effect;
+                                const effectStr = effectVal > 0 ? `+${effectVal.toFixed(1)}%` : `${effectVal.toFixed(1)}%`;
+                                const effectColor = effectVal > 0 ? theme.colors.green : effectVal < 0 ? theme.colors.red : theme.colors.ink3;
+                                
+                                return (
+                                    <div style={{
+                                        backgroundColor: theme.colors.surface,
+                                        borderColor: theme.colors.border,
+                                        borderWidth: '1px',
+                                        borderStyle: 'solid',
+                                        borderRadius: theme.radii.lg,
+                                        padding: '12px',
+                                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                                        minWidth: '200px',
+                                        fontFamily: theme.fonts.m,
+                                    }}>
+                                        <div style={{
+                                            fontSize: '11px',
+                                            fontFamily: theme.fonts.mono,
+                                            color: theme.colors.ink3,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '1px',
+                                            marginBottom: '6px',
+                                        }}>
+                                            {data.fullDate}
+                                        </div>
+                                        <div style={{
+                                            fontSize: '13px',
+                                            fontWeight: '700',
+                                            color: theme.colors.ink,
+                                            fontFamily: theme.fonts.s,
+                                            marginBottom: '8px',
+                                            lineHeight: '16px',
+                                        }}>
+                                            {data.name}
+                                        </div>
+                                        <div style={{
+                                            flexDirection: 'row',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            display: 'flex',
+                                            fontSize: '12px',
+                                            color: theme.colors.ink2,
+                                            marginBottom: '4px',
+                                        }}>
+                                            <span>Category:</span>
+                                            <span style={{ fontWeight: '600' }}>{data.category}</span>
+                                        </div>
+                                        <div style={{
+                                            flexDirection: 'row',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            display: 'flex',
+                                            fontSize: '12px',
+                                            color: theme.colors.ink2,
+                                            marginBottom: '4px',
+                                        }}>
+                                            <span>Score:</span>
+                                            <span style={{ fontFamily: theme.fonts.mono, fontWeight: '600' }}>{data.scoreStr}</span>
+                                        </div>
+                                        <div style={{
+                                            flexDirection: 'row',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            display: 'flex',
+                                            fontSize: '12px',
+                                            color: theme.colors.ink2,
+                                            marginBottom: '4px',
+                                        }}>
+                                            <span>Grade After:</span>
+                                            <span style={{ fontWeight: '700', color: gradeColor(data.grade, theme) }}>{data.grade.toFixed(1)}%</span>
+                                        </div>
+                                        <div style={{
+                                            flexDirection: 'row',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            display: 'flex',
+                                            fontSize: '12px',
+                                            color: theme.colors.ink2,
+                                            borderTopWidth: '1px',
+                                            borderTopStyle: 'solid',
+                                            borderTopColor: theme.colors.border,
+                                            paddingTop: '6px',
+                                            marginTop: '6px',
+                                        }}>
+                                            <span>Impact:</span>
+                                            <span style={{ fontWeight: '700', color: effectColor }}>{effectStr}</span>
+                                        </div>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        };
+
+                        if (Platform.OS === 'web') {
+                            const chartConfig = {
+                                grade: {
+                                    label: 'Grade',
+                                    color: gColor,
+                                },
+                            };
+                            return (
+                                <View style={[S.gradeTrendCard, { paddingBottom: 24, height: 260 }]}>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 16 }}>
+                                        GRADE TREND & ASSIGNMENT IMPACT
+                                    </Text>
+                                    <ChartContainer
+                                        config={chartConfig}
+                                        style={{ height: 200, width: '100%' }}
+                                    >
+                                        <ComposedChart
+                                            data={chartData}
+                                            margin={{
+                                                top: 10,
+                                                right: 15,
+                                                left: -10,
+                                                bottom: 5,
+                                            }}
+                                        >
+                                            <defs>
+                                                <linearGradient id="gradeGradient" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor={gColor} stopOpacity={0.2} />
+                                                    <stop offset="100%" stopColor={gColor} stopOpacity={0.0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid
+                                                strokeDasharray="4 4"
+                                                stroke={theme.colors.border}
+                                                strokeOpacity={0.4}
+                                                horizontal={true}
+                                                vertical={false}
+                                            />
+                                            <XAxis
+                                                dataKey="date"
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tick={{ fontSize: 10, fill: theme.colors.ink3, fontFamily: theme.fonts.mono }}
+                                                dy={5}
+                                                tickMargin={8}
+                                            />
+                                            <YAxis
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tick={{ fontSize: 10, fill: theme.colors.ink3, fontFamily: theme.fonts.mono }}
+                                                tickFormatter={(value) => `${value.toFixed(0)}%`}
+                                                domain={['dataMin - 2', 'dataMax + 2']}
+                                                tickMargin={8}
+                                            />
+                                            <ChartTooltip
+                                                content={<GradeChartTooltip />}
+                                                cursor={{
+                                                    stroke: theme.colors.border,
+                                                    strokeWidth: 1,
+                                                    strokeDasharray: '4 4',
+                                                }}
+                                            />
+                                            <Area
+                                                type="monotone"
+                                                dataKey="grade"
+                                                stroke="transparent"
+                                                fill="url(#gradeGradient)"
+                                                strokeWidth={0}
+                                                dot={false}
+                                            />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="grade"
+                                                stroke={gColor}
+                                                strokeWidth={2.5}
+                                                dot={{
+                                                    fill: theme.colors.surface,
+                                                    strokeWidth: 2,
+                                                    r: 4,
+                                                    stroke: gColor,
+                                                }}
+                                                activeDot={{
+                                                    fill: gColor,
+                                                    strokeWidth: 2,
+                                                    r: 6,
+                                                    stroke: theme.colors.surface,
+                                                }}
+                                            />
+                                        </ComposedChart>
+                                    </ChartContainer>
+                                </View>
+                            );
+                        } else {
+                            // Mobile Fallback
+                            const labels = sorted.map((a, i) =>
+                                i === 0 || i === sorted.length - 1
+                                    ? (a.date ? a.date.replace(/\/\d{4}$/, '') : `${i + 1}`)
+                                    : ''
+                            );
+                            const runningGrades = chartData.map(d => d.grade);
+                            return (
+                                <View style={S.gradeTrendCard} onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}>
+                                    <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10 }}>
+                                        GRADE TREND
+                                    </Text>
+                                    {chartWidth > 0 && (
+                                        <LineChart
+                                            data={{
+                                                labels,
+                                                datasets: [{ data: runningGrades, strokeWidth: 2 }],
+                                            }}
+                                            width={chartWidth - 28}
+                                            height={140}
+                                            yAxisSuffix="%"
+                                            fromZero={false}
+                                            withInnerLines={false}
+                                            withOuterLines={false}
+                                            withDots={runningGrades.length <= 15}
+                                            chartConfig={{
+                                                backgroundColor: 'transparent',
+                                                backgroundGradientFrom: theme.colors.surface,
+                                                backgroundGradientTo: theme.colors.surface,
+                                                decimalPlaces: 1,
+                                                color: () => gColor,
+                                                labelColor: () => theme.colors.ink3,
+                                                propsForLabels: { fontFamily: theme.fonts.m, fontSize: 10 },
+                                                propsForDots: { r: '3', strokeWidth: '0', fill: gColor },
+                                                fillShadowGradientFrom: gColor,
+                                                fillShadowGradientFromOpacity: 0.15,
+                                                fillShadowGradientTo: gColor,
+                                                fillShadowGradientToOpacity: 0,
+                                            }}
+                                            style={{ borderRadius: 8, paddingRight: 20 }}
+                                        />
+                                    )}
+                                </View>
+                            );
+                        }
                     })()}
 
                     {/* (Hypothetical toggle moved to header above) */}
@@ -1037,8 +1487,8 @@ export default function GradebookScreen() {
                                 {(cls.isManual || hypothetical) && <Text style={S.emptySub}>Tap + to add an assignment</Text>}
                             </View>
                         )}
-                        {/* TABLE VIEW (matches design) — non-hypothetical mode only */}
-                        {!hypothetical && renderAssignments.length > 0 && (
+                        {/* TABLE VIEW removed — gradebook is always in what-if mode */}
+                        {false && renderAssignments.length > 0 && (
                             <View style={{
                                 marginHorizontal: 32, marginBottom: 14,
                                 backgroundColor: theme.colors.surface,
@@ -1152,8 +1602,8 @@ export default function GradebookScreen() {
                             </View>
                         )}
 
-                        {/* What-if calculator hint card (matches design) */}
-                        {!hypothetical && renderAssignments.length > 0 && (() => {
+                        {/* What-if hint card removed — always in what-if mode */}
+                        {false && renderAssignments.length > 0 && (() => {
                             const curG = parseFloat(cls.grade) || 0;
                             const target = curG >= 90 ? 95 : 90;
                             const pending = (cls.assignments || []).filter(a => isNaN(numScore(a.score))).length;
@@ -1192,7 +1642,7 @@ export default function GradebookScreen() {
                                             borderRadius: 10,
                                         }}
                                     >
-                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: '#fff' }}>
+                                        <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.bg }}>
                                             Try it →
                                         </Text>
                                     </TouchableOpacity>
@@ -1419,7 +1869,7 @@ export default function GradebookScreen() {
             {/* FAB: Add class */}
             {!cls && (
                 <TouchableOpacity style={S.fab} onPress={() => setShowAddClass(true)} activeOpacity={0.85}>
-                    <Plus size={22} color="#fff" />
+                    <Plus size={22} color={theme.colors.bg} />
                 </TouchableOpacity>
             )}
 
@@ -1438,7 +1888,7 @@ export default function GradebookScreen() {
                     }}
                     activeOpacity={0.85}
                 >
-                    <Plus size={22} color="#fff" />
+                    <Plus size={22} color={theme.colors.bg} />
                 </TouchableOpacity>
             )}
 
@@ -1509,6 +1959,53 @@ export default function GradebookScreen() {
                     </KeyboardAvoidingView>
                 </Pressable>
             </Modal>
+
+            {/* PERIOD SELECTION MODAL */}
+            <Modal visible={showPeriodDropdown} transparent animationType="fade" onRequestClose={() => setShowPeriodDropdown(false)}>
+                <Pressable style={S.modalOverlay} onPress={() => setShowPeriodDropdown(false)}>
+                    <View style={S.modalSheet}>
+                        <View style={S.modalHandle} />
+                        <Text style={S.modalTitle}>Select Reporting Period</Text>
+                        <ScrollView style={{ maxHeight: 300 }} contentContainerStyle={{ paddingBottom: 20 }}>
+                            {periodsList.map((p) => (
+                                <TouchableOpacity
+                                    key={p.index}
+                                    style={[
+                                        S.periodSelectItem,
+                                        activePeriod?.index === p.index && { backgroundColor: theme.colors.surface2 }
+                                    ]}
+                                    onPress={() => {
+                                        setActivePeriod(p);
+                                        setShowPeriodDropdown(false);
+                                        syncCurrentGrades(p.index);
+                                    }}
+                                >
+                                    <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
+                                        <Text style={{
+                                            fontFamily: theme.fonts.s,
+                                            fontSize: 14,
+                                            color: activePeriod?.index === p.index ? theme.colors.red : theme.colors.ink,
+                                            fontWeight: activePeriod?.index === p.index ? '700' : '500'
+                                        }}>
+                                            {p.name}
+                                        </Text>
+                                        {p.endDate && (
+                                            <Text style={{
+                                                fontFamily: theme.fonts.m,
+                                                fontSize: 12,
+                                                color: theme.colors.ink3,
+                                                marginTop: 2
+                                            }}>
+                                                Ends {new Date(p.endDate).toLocaleDateString()}
+                                            </Text>
+                                        )}
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                </Pressable>
+            </Modal>
         </View>
     );
 }
@@ -1517,6 +2014,128 @@ export default function GradebookScreen() {
 const getStyles = (theme) => StyleSheet.create({
     root: { flex: 1, backgroundColor: theme.colors.bg },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+    customHeaderContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingTop: 52,
+        paddingBottom: 16,
+        backgroundColor: theme.colors.bg,
+    },
+    headerSquareBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: theme.radii.lg,
+        backgroundColor: theme.colors.surface,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...theme.shadows.sm,
+    },
+    periodDropdownSelector: {
+        flex: 1,
+        height: 40,
+        borderRadius: theme.radii.lg,
+        backgroundColor: theme.colors.surface,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        marginHorizontal: 8,
+        ...theme.shadows.sm,
+    },
+    periodDropdownText: {
+        fontFamily: theme.fonts.s,
+        fontSize: 13,
+        fontWeight: '600',
+        color: theme.colors.ink,
+        textAlign: 'center',
+        flex: 1,
+    },
+    gridContainer: {
+        ...Platform.select({
+            web: {
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                gap: 16,
+                width: '100%',
+            },
+            default: {
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                justifyContent: 'flex-start',
+                marginHorizontal: -6,
+            }
+        })
+    },
+    gridCard: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.radii.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        ...theme.shadows.sm,
+        justifyContent: 'space-between',
+        height: 145,
+        ...Platform.select({
+            web: {
+                padding: 18,
+            },
+            default: {
+                margin: 6,
+                padding: 16,
+                minWidth: 240,
+                flexGrow: 1,
+                flexShrink: 0,
+                flexBasis: '30%',
+            }
+        })
+    },
+    gridCardClassName: {
+        fontFamily: theme.fonts.s,
+        fontSize: 15,
+        fontWeight: '700',
+        color: theme.colors.ink,
+        lineHeight: 20,
+    },
+    gridCardTeacherName: {
+        fontFamily: theme.fonts.m,
+        fontSize: 12,
+        color: theme.colors.ink3,
+        marginTop: 2,
+    },
+    gridCardBottom: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 12,
+    },
+    gridCardGradeText: {
+        fontFamily: theme.fonts.s,
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    viewBtn: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    viewBtnText: {
+        fontFamily: theme.fonts.s,
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#ffffff',
+    },
+    periodSelectItem: {
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+    },
 
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 52, paddingBottom: 12 },
     title: { fontFamily: 'PlayfairDisplay-BlackItalic', fontSize: 36, color: theme.colors.ink, letterSpacing: -1 },
@@ -1552,9 +2171,9 @@ const getStyles = (theme) => StyleSheet.create({
     // Class card — no border, thick color left strip, big italic grade letter
     classCard: {
         backgroundColor: theme.colors.surface,
-        borderRadius: 0,
-        borderWidth: 2,
-        borderColor: '#000000',
+        borderRadius: theme.radii.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
         marginBottom: 10,
         overflow: 'hidden',
         flexDirection: 'row',
@@ -1599,7 +2218,7 @@ const getStyles = (theme) => StyleSheet.create({
     gradeTrendCard: { marginHorizontal: 20, marginBottom: 12, backgroundColor: theme.colors.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, padding: 14, ...theme.shadows.sm },
 
     controlsBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 20, marginBottom: 8 },
-    hypoToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 12, borderRadius: theme.radii.r, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
+    hypoToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 12, borderRadius: theme.radii.lg, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
     hypoToggleActive: { backgroundColor: theme.colors.blue + '10', borderColor: theme.colors.blue + '40' },
     hypoCheckbox: { width: 16, height: 16, borderRadius: 3, borderWidth: 1.5, borderColor: theme.colors.ink3, alignItems: 'center', justifyContent: 'center' },
     hypoLabel: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink2 },
@@ -1623,19 +2242,19 @@ const getStyles = (theme) => StyleSheet.create({
     hypoNameInput: { flex: 1, minWidth: 140, fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '500', color: theme.colors.ink, backgroundColor: theme.colors.blue + '08', borderBottomWidth: 1, borderBottomColor: theme.colors.blue + '40', paddingVertical: 2, paddingHorizontal: 4, borderRadius: 4 },
 
     inputLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8, marginTop: 14, paddingHorizontal: 20 },
-    input: { backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: '#000000', borderRadius: 0, padding: 13, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, marginHorizontal: 20, marginBottom: 0 },
+    input: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 13, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, marginHorizontal: 20, marginBottom: 0 },
     segRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 4 },
     seg: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10, backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.border },
     segActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
     segTxt: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink },
     segTxtActive: { color: theme.colors.bg, fontWeight: '700' },
-    calcBtn: { backgroundColor: '#CCFF00', borderRadius: 0, borderWidth: 2, borderColor: '#000000', padding: 14, alignItems: 'center', marginHorizontal: 20, marginTop: 12, ...theme.shadows.sm },
+    calcBtn: { backgroundColor: theme.colors.accent, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border, padding: 14, alignItems: 'center', marginHorizontal: 20, marginTop: 12, ...theme.shadows.sm },
     calcBtnTxt: { fontFamily: theme.fonts.s, fontSize: 15, color: theme.colors.bg, letterSpacing: 0.5 },
 
-    fab: { position: 'absolute', bottom: 32, right: 24, backgroundColor: '#CCFF00', width: 56, height: 56, borderRadius: 0, borderWidth: 2, borderColor: '#000000', alignItems: 'center', justifyContent: 'center', shadowColor: '#000000', shadowOpacity: 1, shadowRadius: 0, shadowOffset: { width: 4, height: 4 }, elevation: 8 },
+    fab: { position: 'absolute', bottom: 32, right: 24, backgroundColor: theme.colors.accent, width: 56, height: 56, borderRadius: 28, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center', ...theme.shadows.md },
 
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalSheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTopWidth: 2, borderTopColor: '#000000', paddingHorizontal: 0, paddingTop: 12, paddingBottom: 40 },
+    modalSheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radii.xl, borderTopRightRadius: theme.radii.xl, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingHorizontal: 0, paddingTop: 12, paddingBottom: 40 },
     modalHandle: { width: 36, height: 4, backgroundColor: theme.colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
     modalTitle: { fontFamily: theme.fonts.d, fontSize: 22, fontWeight: '700', color: theme.colors.ink, paddingHorizontal: 20, marginBottom: 8 },
 

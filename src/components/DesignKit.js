@@ -9,6 +9,7 @@ import { Search, Bell } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import SearchModal from './SearchModal';
+import SearchDropdown from './ui/SearchDropdown';
 
 // ── Semantic colors (universal across themes) ────────────────────
 export const SEM = {
@@ -45,10 +46,10 @@ export function Card({ children, style, onPress, padding = 16, noBorder, gradien
     const { theme } = useTheme();
     const cardStyle = {
         backgroundColor: theme.colors.surface,
-        borderRadius: 0,
+        borderRadius: theme.radii.lg,
         padding,
-        borderWidth: noBorder ? 0 : 2,
-        borderColor: '#000000',
+        borderWidth: noBorder ? 0 : 1,
+        borderColor: theme.colors.border,
         ...(noBorder ? {} : theme.shadows.md),
         ...style,
     };
@@ -82,11 +83,11 @@ export function Button({
     }[size];
 
     const variants = {
-        primary:   { bg: '#CCFF00',           fg: '#000000',        border: '#000000' },
-        secondary: { bg: theme.colors.surface, fg: theme.colors.ink, border: '#000000' },
+        primary:   { bg: theme.colors.accent, fg: theme.colors.bg, border: theme.colors.border },
+        secondary: { bg: theme.colors.surface2, fg: theme.colors.ink, border: theme.colors.border },
         ghost:     { bg: 'transparent',       fg: theme.colors.ink2, border: 'transparent' },
-        danger:    { bg: SEM.red,             fg: '#fff',           border: SEM.red },
-        accent:    { bg: theme.colors.accent, fg: '#fff',           border: theme.colors.accent },
+        danger:    { bg: theme.colors.red,    fg: '#ffffff',        border: theme.colors.red },
+        accent:    { bg: theme.colors.accent, fg: theme.colors.bg,  border: theme.colors.accent },
         gold:      { bg: SEM.gold,            fg: '#1A1A2E',        border: SEM.gold },
     }[variant];
 
@@ -99,9 +100,9 @@ export function Button({
                 flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
                 gap: 6,
                 backgroundColor: variants.bg,
-                borderColor: '#000000',
-                borderWidth: 2,
-                borderRadius: 0,
+                borderColor: variants.border,
+                borderWidth: variant === 'ghost' ? 0 : 1,
+                borderRadius: theme.radii.lg,
                 paddingVertical: sizes.paddingV,
                 paddingHorizontal: sizes.paddingH,
                 height: sizes.height,
@@ -132,10 +133,10 @@ export function Badge({ children, color, style }) {
     return (
         <View style={[{
             paddingHorizontal: 8, paddingVertical: 3,
-            borderRadius: 0,
-            backgroundColor: 'transparent',
-            borderWidth: 2,
-            borderColor: c,
+            borderRadius: theme.radii.round,
+            backgroundColor: theme.colors.surface2,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
         }, style]}>
             <Text style={{
                 fontFamily: theme.fonts.s,
@@ -158,7 +159,7 @@ export function Badge({ children, color, style }) {
  */
 export function TopBar({
     title, subtitle, actions, style,
-    showSearch = true, showBell = true,
+    showSearch = true, showBell = false,
 }) {
     const { theme } = useTheme();
     const isWeb = Platform.OS === 'web';
@@ -186,6 +187,8 @@ export function TopBar({
                 paddingHorizontal: 32, paddingTop: 20, paddingBottom: 20,
                 backgroundColor: theme.colors.bg,
                 gap: 12,
+                zIndex: 100,
+                position: 'relative',
             }, style]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{
@@ -206,54 +209,26 @@ export function TopBar({
                         </Text>
                     ) : null}
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0, overflow: 'visible' }}>
                     {showSearch && isWeb && (
-                        <TouchableOpacity
-                            onPress={() => setSearchOpen(true)}
-                            activeOpacity={0.85}
-                            style={{
-                                flexDirection: 'row', alignItems: 'center', gap: 8,
-                                paddingHorizontal: 12, paddingVertical: 8,
-                                backgroundColor: theme.colors.bg,
-                                borderWidth: 2, borderColor: '#000000',
-                                borderRadius: 0, width: 260,
-                                ...theme.shadows.sm,
-                            }}
-                        >
-                            <Search size={14} color={theme.colors.ink3} />
-                            <Text style={{
-                                flex: 1, paddingVertical: 0,
-                                fontFamily: theme.fonts.m, fontSize: 13,
-                                color: theme.colors.ink3,
-                            }} numberOfLines={1}>
-                                Search classes, assignments…
-                            </Text>
-                            <View style={{
-                                paddingHorizontal: 5, paddingVertical: 1,
-                                backgroundColor: theme.colors.surface2,
-                                borderRadius: 0,
-                                borderWidth: 1, borderColor: '#000000',
-                            }}>
-                                <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink4 }}>
-                                    ⌘K
-                                </Text>
-                            </View>
-                        </TouchableOpacity>
+                        <View style={{ position: 'relative', overflow: 'visible', zIndex: 200 }}>
+                            <SearchDropdown />
+                        </View>
                     )}
                     {showBell && (
                         <TouchableOpacity style={{
-                            width: 36, height: 36, borderRadius: 0,
+                            width: 36, height: 36, borderRadius: theme.radii.lg,
                             backgroundColor: theme.colors.surface,
-                            borderWidth: 2, borderColor: '#000000',
+                            borderWidth: 1, borderColor: theme.colors.border,
                             alignItems: 'center', justifyContent: 'center', position: 'relative',
                             ...theme.shadows.sm,
                         }}>
                             <Bell size={16} color={theme.colors.ink2} />
                             <View style={{
                                 position: 'absolute', top: 8, right: 8,
-                                width: 7, height: 7, borderRadius: 0,
-                                backgroundColor: SEM.red,
-                                borderWidth: 1.5, borderColor: '#000000',
+                                width: 8, height: 8, borderRadius: 4,
+                                backgroundColor: theme.colors.red,
+                                borderWidth: 1.5, borderColor: theme.colors.surface,
                             }} />
                         </TouchableOpacity>
                     )}
@@ -349,9 +324,9 @@ export function TabPills({ tabs, value, onChange, style }) {
             flexDirection: 'row',
             backgroundColor: theme.colors.surface2,
             padding: 3,
-            borderRadius: 0,
-            borderWidth: 2,
-            borderColor: '#000000',
+            borderRadius: theme.radii.lg,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
             ...theme.shadows.sm,
             gap: 4,
         }, style]}>
@@ -367,10 +342,10 @@ export function TabPills({ tabs, value, onChange, style }) {
                         style={{
                             paddingHorizontal: 12,
                             paddingVertical: 6,
-                            borderRadius: 0,
+                            borderRadius: theme.radii.lg - 2,
                             backgroundColor: active ? theme.colors.surface : 'transparent',
-                            borderWidth: active ? 2 : 0,
-                            borderColor: '#000000',
+                            borderWidth: active ? 1 : 0,
+                            borderColor: theme.colors.border,
                         }}
                     >
                         <Text style={{

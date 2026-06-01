@@ -36,13 +36,13 @@ interface SignInPageProps {
 // --- SUB-COMPONENTS ---
 
 const GlassInputWrapper = ({ children }: { children: React.ReactNode }) => (
-  <div className="rounded-none border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-foreground/5 backdrop-blur-sm transition-colors focus-within:border-[#CCFF00]">
+  <div className="rounded-[var(--radius)] border border-border shadow-sm bg-foreground/5 backdrop-blur-sm transition-colors focus-within:border-ring">
     {children}
   </div>
 );
 
 const TestimonialCard = ({ testimonial, delay }: { testimonial: Testimonial, delay: string }) => (
-  <div className={`animate-testimonial ${delay} flex items-start gap-3 rounded-none bg-card/40 dark:bg-zinc-800/40 backdrop-blur-xl border-2 border-black p-5 w-64`}>
+  <div className={`animate-testimonial ${delay} flex items-start gap-3 rounded-[var(--radius)] bg-card/40 dark:bg-zinc-800/40 backdrop-blur-xl border border-border p-5 w-64 shadow-md`}>
     <img src={testimonial.avatarSrc} className="h-10 w-10 object-cover rounded-2xl" alt="avatar" />
     <div className="text-sm leading-snug">
       <p className="flex items-center gap-1 font-medium">{testimonial.name}</p>
@@ -100,10 +100,10 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                   <input type="checkbox" name="rememberMe" className="custom-checkbox" />
                   <span className="text-foreground/90">Keep me signed in</span>
                 </label>
-                <a href="#" onClick={(e) => { e.preventDefault(); onResetPassword?.(); }} className="hover:underline text-[#CCFF00] transition-colors">Reset password</a>
+                <a href="#" onClick={(e) => { e.preventDefault(); onResetPassword?.(); }} className="hover:underline text-primary transition-colors">Reset password</a>
               </div>
 
-              <button type="submit" className="animate-element animate-delay-600 w-full rounded-none border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-primary py-4 font-bold text-primary-foreground hover:bg-primary/90 transition-colors">
+              <button type="submit" className="animate-element animate-delay-600 w-full rounded-[var(--radius)] border border-border shadow-sm bg-primary py-4 font-bold text-primary-foreground hover:bg-primary/90 transition-colors">
                 Sign In
               </button>
             </form>
@@ -113,13 +113,13 @@ export const SignInPage: React.FC<SignInPageProps> = ({
               <span className="px-4 text-sm text-muted-foreground bg-background absolute">Or continue with</span>
             </div>
 
-            <button onClick={onGoogleSignIn} className="animate-element animate-delay-800 w-full flex items-center justify-center gap-3 border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] rounded-none py-4 hover:bg-secondary transition-colors">
+            <button onClick={onGoogleSignIn} className="animate-element animate-delay-800 w-full flex items-center justify-center gap-3 border border-border shadow-sm rounded-[var(--radius)] py-4 hover:bg-secondary transition-colors">
                 <GoogleIcon />
                 Continue with Google
             </button>
 
             <p className="animate-element animate-delay-900 text-center text-sm text-muted-foreground">
-              New to our platform? <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount?.(); }} className="text-[#CCFF00] hover:underline transition-colors">Create Account</a>
+              New to our platform? <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount?.(); }} className="text-primary hover:underline transition-colors">Create Account</a>
             </p>
           </div>
         </div>
@@ -128,7 +128,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
       {/* Right column: hero image + testimonials */}
       {heroImageSrc && (
         <section className="hidden md:block flex-1 relative p-4">
-          <div className="animate-slide-right animate-delay-300 absolute inset-4 rounded-none bg-cover bg-center border-2 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]" style={{ backgroundImage: `url(${heroImageSrc})` }}></div>
+          <div className="animate-slide-right animate-delay-300 absolute inset-4 rounded-[var(--radius)] bg-cover bg-center border border-border shadow-md" style={{ backgroundImage: `url(${heroImageSrc})` }}></div>
           {testimonials.length > 0 && (
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4 px-8 w-full justify-center">
               <TestimonialCard testimonial={testimonials[0]} delay="animate-delay-1000" />

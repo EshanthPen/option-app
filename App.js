@@ -44,7 +44,6 @@ import WelcomeScreen from './src/screens/WelcomeScreen';
 import SetupSchoologyScreen from './src/screens/SetupSchoologyScreen';
 import SetupSISScreen from './src/screens/SetupSISScreen';
 import SearchModal from './src/components/ui/SearchModal';
-import SyncStatusBar from './src/components/navigation/SyncStatusBar';
 
 function MainApp() {
   const { theme, isDarkMode } = useTheme();
@@ -249,13 +248,6 @@ function MainApp() {
             onGuestMode={handleGuestMode}
           />
         )}
-
-        {Platform.OS === 'web' && (session || guestMode) && setupStep === 'done' && (
-          <>
-            <SearchModal />
-            <SyncStatusBar />
-          </>
-        )}
       </NavigationContainer>
 
       {/* Email Verified Global Success Modal */}
@@ -306,7 +298,7 @@ const dynamicStyles = (theme) => StyleSheet.create({
     borderRadius: theme.radii.lg || 0,
     padding: 28,
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: theme.colors.border,
     width: '100%',
     maxWidth: 400,
@@ -331,10 +323,10 @@ const dynamicStyles = (theme) => StyleSheet.create({
   successBtn: {
     backgroundColor: theme.colors.ink,
     paddingVertical: 14,
-    borderRadius: theme.radii.r || 0,
+    borderRadius: theme.radii.lg || 0,
     width: '100%',
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: theme.colors.border,
     ...theme.shadows.sm,
   },

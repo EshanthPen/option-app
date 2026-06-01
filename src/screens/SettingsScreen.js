@@ -126,7 +126,7 @@ export default function SettingsScreen({ navigation, isGuest, onSignOut }) {
                                     style={{
                                         flexDirection: 'row', alignItems: 'center', gap: 10,
                                         padding: 12, marginBottom: 2,
-                                        borderRadius: 10,
+                                        borderRadius: theme.radii.lg,
                                         backgroundColor: active ? theme.colors.surface : 'transparent',
                                         borderWidth: 1,
                                         borderColor: active ? theme.colors.border : 'transparent',
@@ -289,7 +289,7 @@ export default function SettingsScreen({ navigation, isGuest, onSignOut }) {
                                     {isPro ? (
                                         <View style={{
                                             flexDirection: 'row', gap: 24, marginTop: 18,
-                                            padding: 14, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 10,
+                                            padding: 14, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: theme.radii.lg,
                                         }}>
                                             <View>
                                                 <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>Plan</Text>
@@ -434,7 +434,7 @@ function AccountTab({ theme, userName, setUserName, userEmail, initials, isPro, 
             <Card padding={20} style={{ marginBottom: 14 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                     <View style={{
-                        width: 64, height: 64, borderRadius: 32,
+                        width: 64, height: 64, borderRadius: theme.radii.round,
                         backgroundColor: theme.colors.ink,
                         alignItems: 'center', justifyContent: 'center',
                     }}>

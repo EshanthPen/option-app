@@ -15,6 +15,18 @@ import { useTheme } from '../context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 
+const withOpacity = (hex, opacity) => {
+    if (!hex) return 'transparent';
+    let cleanHex = hex.replace('#', '');
+    if (cleanHex.length === 3) {
+        cleanHex = cleanHex.split('').map(char => char + char).join('');
+    }
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+};
+
 const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
     const { theme } = useTheme();
     const styles = getStyles(theme);
@@ -31,9 +43,9 @@ const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
                 <View style={styles.content}>
                     <View style={styles.heroSection}>
                         <View style={styles.logoBadge}>
-                            <Sparkles size={24} color="#fff" />
+                            <Sparkles size={24} color={theme.colors.ink} />
                         </View>
-                        <Text style={[styles.title, { fontFamily: theme.fonts.sansSemiBold }]}>Option</Text>
+                        <Text style={[styles.title, { fontFamily: theme.fonts.s }]}>Option</Text>
                         <Text style={styles.subtitle}>
                             Your academic life,{"\n"}
                             <Text style={styles.highlight}>automated & optimized.</Text>
@@ -46,7 +58,7 @@ const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
                             onPress={() => setAuthModalVisible(true)}
                         >
                             <Text style={styles.buttonText}>Get Started</Text>
-                            <ArrowRight size={20} color="#fff" />
+                            <ArrowRight size={20} color={theme.colors.ink} />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -112,13 +124,13 @@ const getStyles = (theme) => StyleSheet.create({
     logoBadge: {
         width: 60,
         height: 60,
-        borderRadius: 0,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        borderRadius: theme.radii.lg,
+        backgroundColor: withOpacity(theme.colors.ink, 0.1),
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 24,
-        borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.4)',
+        borderWidth: 1,
+        borderColor: theme.colors.border,
     },
     title: {
         fontSize: 72,
@@ -128,7 +140,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     subtitle: {
         fontSize: 28,
-        color: 'rgba(255,255,255,0.7)',
+        color: withOpacity(theme.colors.ink, 0.7),
         marginTop: 12,
         lineHeight: 36,
         fontWeight: '500',
@@ -143,9 +155,9 @@ const getStyles = (theme) => StyleSheet.create({
     primaryButton: {
         backgroundColor: 'transparent',
         height: 64,
-        borderRadius: 0,
-        borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.4)',
+        borderRadius: theme.radii.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -159,21 +171,21 @@ const getStyles = (theme) => StyleSheet.create({
     },
     guestButton: {
         height: 52,
-        borderRadius: 0,
+        borderRadius: theme.radii.lg,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.3)',
+        borderColor: theme.colors.border,
     },
     guestButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: 'rgba(255,255,255,0.7)',
+        color: withOpacity(theme.colors.ink, 0.7),
     },
     footerText: {
         textAlign: 'center',
-        color: 'rgba(255,255,255,0.4)',
+        color: withOpacity(theme.colors.ink, 0.4),
         fontSize: 14,
     },
     modalOverlay: {
@@ -182,11 +194,11 @@ const getStyles = (theme) => StyleSheet.create({
     },
     modalContent: {
         backgroundColor: theme.colors.bg,
-        borderTopLeftRadius: 0,
-        borderTopRightRadius: 0,
-        borderTopWidth: 2,
-        borderLeftWidth: 2,
-        borderRightWidth: 2,
+        borderTopLeftRadius: theme.radii.xl,
+        borderTopRightRadius: theme.radii.xl,
+        borderTopWidth: 1,
+        borderLeftWidth: 1,
+        borderRightWidth: 1,
         borderColor: theme.colors.border,
         height: height * 0.85,
         ...theme.shadows.md,
@@ -198,7 +210,7 @@ const getStyles = (theme) => StyleSheet.create({
     closeBar: {
         width: 40,
         height: 5,
-        borderRadius: 0,
+        borderRadius: 2.5,
         backgroundColor: theme.colors.ink3,
     }
 });

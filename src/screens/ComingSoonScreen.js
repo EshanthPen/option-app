@@ -35,7 +35,7 @@ const getStyles = (theme) => StyleSheet.create({
     headerContainer: { marginBottom: 24 },
     header: { fontFamily: theme.fonts.d, fontSize: 32, fontWeight: '700', color: theme.colors.ink, letterSpacing: -0.5 },
     subtitle: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, textTransform: 'uppercase', letterSpacing: 1, marginTop: 4, lineHeight: 18 },
-    card: { backgroundColor: theme.colors.surface, padding: 20, borderRadius: 0, marginBottom: 15, borderWidth: 2, borderColor: '#000000', borderLeftWidth: 4, ...theme.shadows.sm },
+    card: { backgroundColor: theme.colors.surface, padding: 20, borderRadius: theme.radii.lg, marginBottom: 15, borderWidth: 1, borderColor: theme.colors.border, borderLeftWidth: 4, ...theme.shadows.sm },
     cardTitle: { fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '700', color: theme.colors.ink, marginBottom: 5 },
     cardDesc: { fontFamily: theme.fonts.s, fontSize: 14, color: theme.colors.ink2, lineHeight: 20 }
 });

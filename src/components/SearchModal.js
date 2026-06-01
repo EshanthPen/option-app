@@ -199,7 +199,7 @@ export default function SearchModal({ visible, onClose }) {
                     style={{
                         width: '90%', maxWidth: 560,
                         backgroundColor: theme.colors.surface,
-                        borderRadius: 14,
+                        borderRadius: theme.radii.lg,
                         borderWidth: 1, borderColor: theme.colors.border,
                         ...theme.shadows.lg,
                         overflow: 'hidden',
@@ -272,7 +272,7 @@ export default function SearchModal({ visible, onClose }) {
                                             }}
                                         >
                                             <View style={{
-                                                width: 32, height: 32, borderRadius: 7,
+                                                width: 32, height: 32, borderRadius: theme.radii.lg - 3,
                                                 backgroundColor: theme.colors.surface2,
                                                 alignItems: 'center', justifyContent: 'center',
                                             }}>
@@ -295,7 +295,7 @@ export default function SearchModal({ visible, onClose }) {
                                             <View style={{
                                                 paddingHorizontal: 6, paddingVertical: 2,
                                                 backgroundColor: theme.colors.surface2,
-                                                borderRadius: 4,
+                                                borderRadius: theme.radii.lg - 6,
                                             }}>
                                                 <Text style={{
                                                     fontFamily: theme.fonts.mono, fontSize: 9,

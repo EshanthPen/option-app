@@ -345,7 +345,7 @@ const getStyles = (theme) => StyleSheet.create({
     // Icon
     iconWrap: { marginBottom: 24 },
     iconBox: {
-        width: 64, height: 64, borderRadius: 18,
+        width: 64, height: 64, borderRadius: theme.radii.lg,
         backgroundColor: theme.colors.green + '14',
         borderWidth: 1, borderColor: theme.colors.green + '30',
         alignItems: 'center', justifyContent: 'center',
@@ -360,32 +360,32 @@ const getStyles = (theme) => StyleSheet.create({
     label: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8, marginTop: 12 },
     input: {
         backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14,
+        borderRadius: theme.radii.lg, paddingHorizontal: 14, paddingVertical: 14,
         fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink,
     },
     picker: {
         flexDirection: 'row', alignItems: 'center',
         backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14,
+        borderRadius: theme.radii.lg, paddingHorizontal: 14, paddingVertical: 14,
     },
     pickerText: { flex: 1, fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink },
     pickerPlaceholder: { color: theme.colors.ink3 },
 
     // Banners
-    infoBanner: { backgroundColor: theme.colors.blue + '08', borderWidth: 1, borderColor: theme.colors.blue + '40', borderRadius: 10, padding: 12, marginTop: 12 },
+    infoBanner: { backgroundColor: theme.colors.blue + '08', borderWidth: 1, borderColor: theme.colors.blue + '40', borderRadius: theme.radii.lg, padding: 12, marginTop: 12 },
     infoBannerText: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.blue, lineHeight: 16 },
-    resultBanner: { borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 16, marginBottom: 4 },
+    resultBanner: { borderWidth: 1, borderRadius: theme.radii.lg, padding: 12, marginTop: 16, marginBottom: 4 },
     resultText: { fontFamily: theme.fonts.m, fontSize: 13, fontWeight: '600', lineHeight: 18 },
 
     // Buttons
     primaryBtn: {
-        backgroundColor: theme.colors.ink, borderRadius: 12, height: 52,
+        backgroundColor: theme.colors.ink, borderRadius: theme.radii.lg, height: 52,
         alignItems: 'center', justifyContent: 'center',
         marginTop: 16, marginBottom: 12, ...theme.shadows?.sm,
     },
     primaryBtnText: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700', color: theme.colors.bg },
     continueBtn: {
-        backgroundColor: theme.colors.green, borderRadius: 12, height: 52,
+        backgroundColor: theme.colors.green, borderRadius: theme.radii.lg, height: 52,
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
         marginTop: 16, marginBottom: 12, ...theme.shadows?.sm,
     },

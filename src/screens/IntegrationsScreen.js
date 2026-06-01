@@ -549,7 +549,7 @@ export default function IntegrationsScreen() {
                                 <Card key={item.id} padding={20} style={{ width: '47%', flexGrow: 1, minWidth: 280 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
                                         <View style={{
-                                            width: 48, height: 48, borderRadius: 10,
+                                            width: 48, height: 48, borderRadius: theme.radii.lg,
                                             backgroundColor: iconColor + '18',
                                             alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                         }}>
@@ -582,12 +582,12 @@ export default function IntegrationsScreen() {
                             );
                         })}
                     </View>
-
+ 
                     {/* ── Demo data loader ── */}
                     <Card padding={20} style={{ marginBottom: 20 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
                             <View style={{
-                                width: 40, height: 40, borderRadius: 10,
+                                width: 40, height: 40, borderRadius: theme.radii.lg,
                                 backgroundColor: SEM.purple + '18',
                                 alignItems: 'center', justifyContent: 'center',
                             }}>
@@ -617,17 +617,17 @@ export default function IntegrationsScreen() {
                                     if (Platform.OS === 'web') window.alert(`Failed: ${e.message}`);
                                     else Alert.alert('Error', e.message);
                                 } finally { setIsMockLoading(false); }
-                            }}
+                             }}
                         >
                             Load demo data
                         </Button>
                     </Card>
-
+ 
                     {/* ── Developer API placeholder (matches design) ── */}
                     <Card padding={20}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                             <View style={{
-                                width: 40, height: 40, borderRadius: 10,
+                                width: 40, height: 40, borderRadius: theme.radii.lg,
                                 backgroundColor: theme.colors.surface2,
                                 alignItems: 'center', justifyContent: 'center',
                             }}>
@@ -645,7 +645,7 @@ export default function IntegrationsScreen() {
                         <View style={{
                             backgroundColor: theme.colors.surface2,
                             paddingVertical: 10, paddingHorizontal: 14,
-                            borderRadius: 8,
+                            borderRadius: theme.radii.lg,
                             flexDirection: 'row', alignItems: 'center', gap: 10,
                         }}>
                             <Text style={{ flex: 1, fontFamily: theme.fonts.mono, fontSize: 12, color: theme.colors.ink2 }} numberOfLines={1}>
@@ -910,24 +910,24 @@ const getStyles = (theme) => StyleSheet.create({
     },
     tileConnected: { borderColor: theme.colors.green + '40' },
     tileTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
-    tileIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    tileIcon: { width: 40, height: 40, borderRadius: theme.radii.lg, alignItems: 'center', justifyContent: 'center' },
     tileName: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.ink, marginBottom: 2 },
     tileDesc: { fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3 },
-    statusDot: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    addDot: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surface2 },
-    soonBadge: { backgroundColor: theme.colors.surface2, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border },
+    statusDot: { width: 20, height: 20, borderRadius: theme.radii.round, alignItems: 'center', justifyContent: 'center' },
+    addDot: { width: 28, height: 28, borderRadius: theme.radii.round, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.surface2 },
+    soonBadge: { backgroundColor: theme.colors.surface2, paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border },
     soonText: { fontFamily: theme.fonts.m, fontSize: 9, color: theme.colors.ink3, fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
 
     // Demo
     demoCard: { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 16, ...theme.shadows.sm },
     demoLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.purple, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, fontWeight: '600' },
     demoDesc: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, lineHeight: 16, marginBottom: 10 },
-    demoBtn: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.purple + '30', borderRadius: theme.radii.r, paddingVertical: 10, alignItems: 'center' },
+    demoBtn: { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.purple + '30', borderRadius: theme.radii.lg, paddingVertical: 10, alignItems: 'center' },
     demoBtnText: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.purple },
 
     // Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-    modalSheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 40 },
+    modalSheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: theme.radii.xl, borderTopRightRadius: theme.radii.xl, padding: 20, paddingBottom: 40 },
     modalHandle: { width: 36, height: 4, backgroundColor: theme.colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
     modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
     modalTitle: { fontFamily: theme.fonts.s, fontSize: 18, fontWeight: '700', color: theme.colors.ink },
@@ -935,21 +935,21 @@ const getStyles = (theme) => StyleSheet.create({
 
     // Fields
     fieldLabel: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6, marginTop: 12 },
-    fieldInput: { backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12, fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink },
-    picker: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, padding: 12 },
+    fieldInput: { backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 12, fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink },
+    picker: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, padding: 12 },
 
     // Banners
-    infoBanner: { marginTop: 10, padding: 10, borderRadius: theme.radii.r, borderWidth: 1 },
+    infoBanner: { marginTop: 10, padding: 10, borderRadius: theme.radii.lg, borderWidth: 1 },
     infoBannerText: { fontFamily: theme.fonts.m, fontSize: 12, lineHeight: 16 },
-    resultBanner: { marginTop: 12, padding: 10, borderRadius: theme.radii.r, borderWidth: 1 },
+    resultBanner: { marginTop: 12, padding: 10, borderRadius: theme.radii.lg, borderWidth: 1 },
     resultText: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '600', lineHeight: 16 },
 
-    connectedChip: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
+    connectedChip: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: theme.radii.round },
     connectedText: { fontFamily: theme.fonts.m, fontSize: 12, fontWeight: '600' },
 
     // Buttons
-    actionBtn: { backgroundColor: theme.colors.ink, borderRadius: theme.radii.r, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', marginTop: 8, ...theme.shadows.sm },
+    actionBtn: { backgroundColor: theme.colors.ink, borderRadius: theme.radii.lg, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', marginTop: 8, ...theme.shadows.sm },
     actionBtnText: { fontFamily: theme.fonts.s, fontSize: 14, fontWeight: '600', color: theme.colors.bg },
-    secondaryBtn: { backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.r, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+    secondaryBtn: { backgroundColor: theme.colors.bg, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radii.lg, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
     secondaryBtnText: { fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink },
 });

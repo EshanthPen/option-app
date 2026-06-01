@@ -1,45 +1,45 @@
 export const THEME_PRESETS = {
     brutalist: {
-        name: 'Brutalist',
-        description: 'High contrast, pure monochrome',
+        name: 'Clean Grayscale',
+        description: 'Soft, elegant grayscale UI',
         light: {
             bg: '#FFFFFF',
-            surface: '#FAFAFA',
-            surface2: '#F4F4F5',
-            border: '#000000', // Hard black borders
-            border2: '#27272A',
-            ink: '#000000',
-            ink2: '#3F3F46',
-            ink3: '#71717A',
+            surface: '#FFFFFF',
+            surface2: '#F5F5F5',
+            border: '#E5E5E5',
+            border2: '#A1A1A1',
+            ink: '#0A0A0A',
+            ink2: '#171717',
+            ink3: '#737373',
             ink4: '#A1A1AA',
-            red: '#EF4444',
+            red: '#E7000B',
             orange: '#F97316',
             green: '#10B981',
-            blue: '#3B82F6',
+            blue: '#2563EF',
             purple: '#7C3AED',
-            accent: '#000000',
+            accent: '#171717',
         },
         dark: {
-            bg: '#000000',        // True black background
-            surface: '#0A0A0A',   
-            surface2: '#171717',  
-            border: '#262626',    // Sharp borders
-            border2: '#404040',
-            ink: '#FAFAFA',       
-            ink2: '#A1A1AA',      
-            ink3: '#71717A',      
+            bg: '#0A0A0A',
+            surface: '#0A0A0A',
+            surface2: '#262626',
+            border: '#262626',
+            border2: '#525252',
+            ink: '#FAFAFA',
+            ink2: '#FAFAFA',
+            ink3: '#A1A1A1',
             ink4: '#52525B',
-            red: '#EF4444',
+            red: '#E7000B',
             orange: '#F97316',
             green: '#10B981',
-            blue: '#3B82F6',
+            blue: '#2563EF',
             purple: '#A78BFA',
-            accent: '#FFFFFF',
+            accent: '#FAFAFA',
         },
     }
 };
 
-// Sharp, zero-blur offset shadows 
+// Soft modern shadows
 const shadows = {
     none: {
         shadowColor: 'transparent',
@@ -49,18 +49,18 @@ const shadows = {
         elevation: 0,
     },
     sm: {
-        shadowColor: '#000',
-        shadowOffset: { width: 2, height: 2 },
-        shadowOpacity: 1, // Solid opacity, no blur
-        shadowRadius: 0,
-        elevation: 2,
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
     },
     md: {
-        shadowColor: '#000',
-        shadowOffset: { width: 4, height: 4 },
-        shadowOpacity: 1,
-        shadowRadius: 0,
-        elevation: 4,
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 6,
+        elevation: 3,
     },
 };
 
@@ -77,7 +77,7 @@ export const getTheme = (isDark) => {
             logo: 'PlayfairDisplay-Bold',
         },
         shadows,
-        radii: { r: 0, lg: 4, xl: 8, round: 9999 }, // Tighter, sharper corners
+        radii: { r: 0, lg: 10, xl: 16, round: 9999 }, // Soft rounded corners matching 0.625rem
     };
 };
 

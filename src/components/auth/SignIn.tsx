@@ -29,10 +29,10 @@ export default function SignIn({ onAuthSuccess, onGuestMode }) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
-        className="w-full max-w-md p-8 glass-panel rounded-xl"
+        className="w-full max-w-md p-8 glass-panel rounded-[var(--radius)]"
       >
         <div className="flex flex-col items-center mb-8">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-foreground/5 mb-4 shadow-sm">
+          <div className="flex h-12 w-12 items-center justify-center rounded-[var(--radius)] border border-border bg-foreground/5 mb-4 shadow-sm">
             <Sparkles className="h-6 w-6 text-primary" />
           </div>
           <h1 className="text-3xl font-serif font-bold text-center">Option</h1>
@@ -40,11 +40,11 @@ export default function SignIn({ onAuthSuccess, onGuestMode }) {
             Your academic life, automated & optimized.
           </p>
         </div>
-
+ 
         <div className="space-y-4">
           <button 
             onClick={handleGoogleAuth}
-            className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-primary text-primary-foreground font-medium rounded-md hover:bg-primary/90 transition-colors shadow-sm"
+            className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-primary text-primary-foreground font-medium rounded-[var(--radius)] hover:bg-primary/90 transition-colors shadow-sm"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 48 48">
                 <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s12-5.373 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-2.641-.21-5.236-.611-7.743z" />
@@ -57,7 +57,7 @@ export default function SignIn({ onAuthSuccess, onGuestMode }) {
           
           <button 
             onClick={onGuestMode}
-            className="w-full py-3 px-4 border border-border text-foreground font-medium rounded-md hover:bg-foreground/5 transition-colors shadow-sm"
+            className="w-full py-3 px-4 border border-border text-foreground font-medium rounded-[var(--radius)] hover:bg-foreground/5 transition-colors shadow-sm"
           >
             Continue as Guest
           </button>

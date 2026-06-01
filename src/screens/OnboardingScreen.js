@@ -273,7 +273,7 @@ const styles = (theme) =>
         },
         buttonInner: {
             height: 52,
-            borderRadius: theme.radii.r,
+            borderRadius: theme.radii.lg,
             backgroundColor: theme.colors.ink,
             flexDirection: 'row',
             alignItems: 'center',

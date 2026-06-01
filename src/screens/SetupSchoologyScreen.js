@@ -297,7 +297,7 @@ const getStyles = (theme) => StyleSheet.create({
     // Icon
     iconWrap: { marginBottom: 24 },
     iconBox: {
-        width: 64, height: 64, borderRadius: 18,
+        width: 64, height: 64, borderRadius: theme.radii.lg,
         backgroundColor: theme.colors.orange + '14',
         borderWidth: 1, borderColor: theme.colors.orange + '30',
         alignItems: 'center', justifyContent: 'center',
@@ -311,7 +311,7 @@ const getStyles = (theme) => StyleSheet.create({
     // Hint box
     hintBox: {
         backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: 12, padding: 14, marginBottom: 24,
+        borderRadius: theme.radii.lg, padding: 14, marginBottom: 24,
     },
     hintTitle: { fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '600', color: theme.colors.ink2, marginBottom: 4 },
     hintText: { fontFamily: theme.fonts.m, fontSize: 12, color: theme.colors.ink3, lineHeight: 18 },
@@ -320,23 +320,23 @@ const getStyles = (theme) => StyleSheet.create({
     label: { fontFamily: theme.fonts.m, fontSize: 10, color: theme.colors.ink3, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 },
     input: {
         backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
-        borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14,
+        borderRadius: theme.radii.lg, paddingHorizontal: 14, paddingVertical: 14,
         fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink, marginBottom: 16,
     },
 
     // Banners
-    resultBanner: { borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 16 },
+    resultBanner: { borderWidth: 1, borderRadius: theme.radii.lg, padding: 12, marginBottom: 16 },
     resultText: { fontFamily: theme.fonts.m, fontSize: 13, fontWeight: '600', lineHeight: 18 },
 
     // Buttons
     primaryBtn: {
-        backgroundColor: theme.colors.ink, borderRadius: 12, height: 52,
+        backgroundColor: theme.colors.ink, borderRadius: theme.radii.lg, height: 52,
         alignItems: 'center', justifyContent: 'center',
         marginBottom: 12, ...theme.shadows?.sm,
     },
     primaryBtnText: { fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '700', color: theme.colors.bg },
     continueBtn: {
-        backgroundColor: theme.colors.green, borderRadius: 12, height: 52,
+        backgroundColor: theme.colors.green, borderRadius: theme.radii.lg, height: 52,
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
         marginBottom: 12, ...theme.shadows?.sm,
     },

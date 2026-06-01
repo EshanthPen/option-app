@@ -230,7 +230,7 @@ const getStyles = (theme) => StyleSheet.create({
     container: { flex: 1, backgroundColor: 'transparent', justifyContent: 'center', padding: 20 },
     card: {
         backgroundColor: theme.colors.surface,
-        borderRadius: 20,
+        borderRadius: theme.radii.lg,
         padding: 28,
         borderWidth: 1,
         borderColor: theme.colors.border,
@@ -244,7 +244,7 @@ const getStyles = (theme) => StyleSheet.create({
         marginBottom: 20,
         letterSpacing: -0.3,
     },
-    statusBanner: { padding: 12, borderRadius: 10, marginBottom: 16, borderWidth: 1 },
+    statusBanner: { padding: 12, borderRadius: theme.radii.lg, marginBottom: 16, borderWidth: 1 },
     errorBanner: { backgroundColor: theme.colors.red + '10', borderColor: theme.colors.red + '40' },
     successBanner: { backgroundColor: theme.colors.green + '10', borderColor: theme.colors.green + '40' },
     statusText: { fontFamily: theme.fonts.m, fontSize: 13, textAlign: 'center', fontWeight: '600', color: theme.colors.ink, lineHeight: 18 },
@@ -253,7 +253,7 @@ const getStyles = (theme) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: theme.colors.bg,
-        borderRadius: 12,
+        borderRadius: theme.radii.lg,
         paddingHorizontal: 14,
         height: 52,
         borderWidth: 1,
@@ -266,7 +266,7 @@ const getStyles = (theme) => StyleSheet.create({
     forgotText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },
     button: {
         backgroundColor: theme.colors.ink,
-        borderRadius: 12,
+        borderRadius: theme.radii.lg,
         height: 52,
         alignItems: 'center',
         justifyContent: 'center',
@@ -278,7 +278,7 @@ const getStyles = (theme) => StyleSheet.create({
     dividerLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
     dividerText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },
     googleBtn: {
-        borderRadius: 12,
+        borderRadius: theme.radii.lg,
         height: 52,
         borderWidth: 1,
         borderColor: theme.colors.border,
@@ -289,7 +289,7 @@ const getStyles = (theme) => StyleSheet.create({
     },
     googleInner: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 8 },
     googleIconWrap: {
-        width: 36, height: 36, borderRadius: 8,
+        width: 36, height: 36, borderRadius: theme.radii.lg,
         backgroundColor: theme.colors.bg,
         alignItems: 'center', justifyContent: 'center',
         borderWidth: 1, borderColor: theme.colors.border,
@@ -300,14 +300,14 @@ const getStyles = (theme) => StyleSheet.create({
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
     verifyPopup: {
         backgroundColor: theme.colors.surface,
-        borderRadius: 20, padding: 28,
+        borderRadius: theme.radii.lg, padding: 28,
         alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border,
         width: '100%', maxWidth: 400, ...theme.shadows.lg,
     },
-    checkIconBox: { marginBottom: 16, backgroundColor: theme.colors.green + '10', padding: 14, borderRadius: 16 },
+    checkIconBox: { marginBottom: 16, backgroundColor: theme.colors.green + '10', padding: 14, borderRadius: theme.radii.lg },
     verifyTitle: { fontFamily: theme.fonts.d, fontSize: 24, color: theme.colors.ink, marginBottom: 8, textAlign: 'center' },
     verifyText: { fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink3, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
-    verifyBtn: { backgroundColor: theme.colors.ink, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center', ...theme.shadows.sm },
+    verifyBtn: { backgroundColor: theme.colors.ink, paddingVertical: 14, borderRadius: theme.radii.lg, width: '100%', alignItems: 'center', ...theme.shadows.sm },
     verifyBtnText: { fontFamily: theme.fonts.s, color: theme.colors.bg, fontSize: 15, fontWeight: '700' },
 });
 
