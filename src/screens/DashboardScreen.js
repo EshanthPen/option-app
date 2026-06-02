@@ -50,8 +50,8 @@ function FocusTimerWidget({ theme }) {
     return (
         <View style={{
             backgroundColor: theme.colors.surface,
-            borderRadius: theme.radii.lg,
-            borderWidth: 1, borderColor: theme.colors.border,
+            borderRadius: theme.radii.r,
+            borderWidth: 2, borderColor: theme.colors.border,
             padding: 20,
             ...theme.shadows.md,
             overflow: 'hidden',
@@ -117,9 +117,17 @@ function FocusTimerWidget({ theme }) {
     );
 }
 
-const SEM = { red: '#E03E3E', orange: '#D97706', green: '#16A34A', blue: '#2563EB', purple: '#7C3AED', gold: '#FFB800' };
+// SEM colors now derived from theme tokens so they adapt to light/dark mode
+const makeSEM = (theme) => ({
+    red:    theme.colors.red,
+    orange: theme.colors.orange,
+    green:  theme.colors.green,
+    blue:   theme.colors.blue,
+    purple: theme.colors.purple,
+    gold:   '#FFB800',
+});
 
-const gradeColor = (pct) => {
+const makeGradeColor = (SEM) => (pct) => {
     if (pct >= 90) return SEM.green;
     if (pct >= 80) return SEM.blue;
     if (pct >= 70) return SEM.orange;
@@ -189,8 +197,8 @@ function StatCard({ label, value, sub, color, icon: Icon, onPress, theme }) {
         <TouchableOpacity
             style={{
                 flex: 1, padding: 16,
-                borderRadius: theme.radii.lg,
-                borderWidth: 1, borderColor: theme.colors.border,
+                borderRadius: theme.radii.r,
+                borderWidth: 2, borderColor: theme.colors.border,
                 ...theme.shadows.sm,
             }}
             onPress={onPress}
@@ -209,6 +217,8 @@ function StatCard({ label, value, sub, color, icon: Icon, onPress, theme }) {
 export default function DashboardScreen() {
     const { theme } = useTheme();
     const navigation = useNavigation();
+    const SEM = makeSEM(theme);
+    const gradeColor = makeGradeColor(SEM);
 
     const [classes, setClasses] = useState([]);
     const [periodName, setPeriodName] = useState('');
@@ -360,7 +370,7 @@ export default function DashboardScreen() {
                                     <CalendarDays size={18} color={theme.colors.ink} strokeWidth={2.4} />
                                     <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink }}>Up Next</Text>
                                     {urgentCount > 0 && (
-                                        <View style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.colors.red, paddingHorizontal: 8, paddingVertical: 2, borderRadius: theme.radii.round }}>
+                                        <View style={{ backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: SEM.red, paddingHorizontal: 8, paddingVertical: 2, borderRadius: theme.radii.r }}>
                                             <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '700', color: SEM.red }}>{urgentCount} urgent</Text>
                                         </View>
                                     )}
@@ -377,17 +387,17 @@ export default function DashboardScreen() {
                                     <View key={i} style={{
                                         flexDirection: 'row',
                                         backgroundColor: theme.colors.surface,
-                                        borderRadius: theme.radii.lg,
-                                        borderWidth: 1, borderColor: theme.colors.border,
+                                        borderRadius: theme.radii.r,
+                                        borderWidth: 2, borderColor: theme.colors.border,
                                         marginBottom: 8, overflow: 'hidden',
                                         ...theme.shadows.sm,
                                     }}>
                                         <View style={{ width: 3, backgroundColor: a.courseColor }} />
                                         <View style={{ flex: 1, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                                             <View style={{
-                                                width: 38, height: 38, borderRadius: theme.radii.lg,
-                                                backgroundColor: 'transparent',
-                                                borderWidth: 1, borderColor: a.courseColor,
+                                                width: 38, height: 38, borderRadius: theme.radii.r,
+                                                backgroundColor: theme.colors.surface,
+                                                borderWidth: 2, borderColor: a.courseColor,
                                                 alignItems: 'center', justifyContent: 'center', flexShrink: 0
                                             }}>
                                                 <AssignmentIcon weight={a.category || a.weight} color={a.courseColor} size={16} />
@@ -412,11 +422,11 @@ export default function DashboardScreen() {
                                 <View style={{
                                     padding: 42, alignItems: 'center',
                                     backgroundColor: theme.colors.surface,
-                                    borderRadius: theme.radii.lg,
-                                    borderWidth: 1, borderColor: theme.colors.border,
+                                    borderRadius: theme.radii.r,
+                                    borderWidth: 2, borderColor: theme.colors.border,
                                     ...theme.shadows.sm,
                                 }}>
-                                    <View style={{ width: 48, height: 48, borderRadius: theme.radii.round, backgroundColor: theme.colors.surface2, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                                    <View style={{ width: 48, height: 48, borderRadius: theme.radii.r, backgroundColor: theme.colors.surface2, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
                                         <Sparkles size={24} color={theme.colors.ink3} strokeWidth={1.5} />
                                     </View>
                                     <Text style={{ fontFamily: theme.fonts.s, fontSize: 16, fontWeight: '600', color: theme.colors.ink, marginBottom: 6 }}>All Caught Up</Text>
@@ -439,8 +449,8 @@ export default function DashboardScreen() {
                                 </View>
                                 <View style={{
                                     backgroundColor: theme.colors.surface,
-                                    borderRadius: theme.radii.lg,
-                                    borderWidth: 1, borderColor: theme.colors.border,
+                                    borderRadius: theme.radii.r,
+                                    borderWidth: 2, borderColor: theme.colors.border,
                                     overflow: 'hidden',
                                     ...theme.shadows.sm,
                                 }}>
@@ -448,7 +458,7 @@ export default function DashboardScreen() {
                                         <View key={i} style={{
                                             flexDirection: 'row', alignItems: 'center',
                                             padding: 14, gap: 14,
-                                            borderBottomWidth: i < recentScores.length - 1 ? 1 : 0,
+                                            borderBottomWidth: i < recentScores.length - 1 ? 2 : 0,
                                             borderBottomColor: theme.colors.border,
                                         }}>
                                             <View style={{ width: 3, height: 32, backgroundColor: a.courseColor, borderRadius: theme.radii.round, flexShrink: 0 }} />
@@ -460,7 +470,7 @@ export default function DashboardScreen() {
                                                 {a.score != null && a.total ? `${a.score}/${a.total}` : ''}
                                             </Text>
                                             {a.pct != null && (
-                                                <View style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: gradeColor(a.pct), paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.radii.round }}>
+                                                <View style={{ backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: gradeColor(a.pct), paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.radii.r }}>
                                                     <Text style={{ fontFamily: theme.fonts.s, fontSize: 11, fontWeight: '700', color: gradeColor(a.pct) }}>{a.pct}%</Text>
                                                 </View>
                                             )}
@@ -479,12 +489,12 @@ export default function DashboardScreen() {
                             onPress={() => navigation.navigate('Focus')}
                             activeOpacity={0.85}
                             style={{
-                                 padding: 20, borderRadius: theme.radii.lg,
-                                 backgroundColor: theme.colors.surface,
-                                 borderWidth: 1, borderColor: theme.colors.border,
-                                 ...theme.shadows.md,
-                                 overflow: 'hidden',
-                             }}
+                                padding: 20, borderRadius: theme.radii.r,
+                                backgroundColor: theme.colors.surface,
+                                borderWidth: 2, borderColor: theme.colors.border,
+                                ...theme.shadows.md,
+                                overflow: 'hidden',
+                            }}
                         >
                             <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
                                                 <View>
@@ -496,12 +506,12 @@ export default function DashboardScreen() {
                                         {focusScoreNum >= 70 ? '↑ ' : focusScoreNum >= 50 ? '→ ' : '↓ '}{focusLabel || 'Keep going'}
                                     </Text>
                                 </View>
-                                 <View style={{
-                                     width: 52, height: 52, borderRadius: theme.radii.round,
-                                     backgroundColor: 'transparent',
-                                     borderWidth: 1, borderColor: focusScoreColor,
-                                     alignItems: 'center', justifyContent: 'center'
-                                 }}>
+                                <View style={{
+                                    width: 52, height: 52, borderRadius: theme.radii.r,
+                                    backgroundColor: theme.colors.surface,
+                                    borderWidth: 2, borderColor: focusScoreColor,
+                                    alignItems: 'center', justifyContent: 'center'
+                                }}>
                                     <Target size={22} color={focusScoreColor} strokeWidth={2.4} />
                                 </View>
                             </View>
@@ -540,8 +550,8 @@ export default function DashboardScreen() {
                             </View>
                             <View style={{
                                 backgroundColor: theme.colors.surface,
-                                borderRadius: theme.radii.lg,
-                                borderWidth: 1, borderColor: theme.colors.border,
+                                borderRadius: theme.radii.r,
+                                borderWidth: 2, borderColor: theme.colors.border,
                                 padding: 16,
                                 ...theme.shadows.md,
                             }}>
@@ -586,14 +596,14 @@ export default function DashboardScreen() {
                                         <View key={i} style={{
                                             flexDirection: 'row', alignItems: 'center', gap: 12,
                                             backgroundColor: theme.colors.surface,
-                                            borderRadius: theme.radii.lg, padding: 14, marginBottom: 8,
-                                            borderWidth: 1, borderColor: theme.colors.border,
+                                            borderRadius: theme.radii.r, padding: 14, marginBottom: 8,
+                                            borderWidth: 2, borderColor: theme.colors.border,
                                             ...theme.shadows.sm,
                                         }}>
                                             <View style={{
-                                                width: 36, height: 36, borderRadius: theme.radii.round,
-                                                backgroundColor: 'transparent',
-                                                borderWidth: 1, borderColor: SEM.red,
+                                                width: 36, height: 36, borderRadius: theme.radii.r,
+                                                backgroundColor: theme.colors.surface,
+                                                borderWidth: 2, borderColor: SEM.red,
                                                 alignItems: 'center', justifyContent: 'center', flexShrink: 0
                                             }}>
                                                 <AlertTriangle size={18} color={SEM.red} strokeWidth={2} />
@@ -602,7 +612,7 @@ export default function DashboardScreen() {
                                                 <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '600', color: theme.colors.ink }} numberOfLines={1}>{c.name}</Text>
                                                 <Text style={{ fontFamily: theme.fonts.m, fontSize: 11, color: theme.colors.ink3, marginTop: 2 }}>Needs {(83 - c.grade).toFixed(1)}% to reach B</Text>
                                             </View>
-                                            <View style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: col, paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radii.round }}>
+                                            <View style={{ backgroundColor: theme.colors.surface, borderWidth: 2, borderColor: col, paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radii.r }}>
                                                 <Text style={{ fontFamily: theme.fonts.s, fontSize: 13, fontWeight: '700', color: col }}>{Number(c.grade).toFixed(1)}%</Text>
                                             </View>
                                         </View>
@@ -625,9 +635,9 @@ export default function DashboardScreen() {
                                             key={nudge.id || idx}
                                             style={{
                                                 backgroundColor: theme.colors.surface,
-                                                borderRadius: theme.radii.lg, padding: 14, marginBottom: 8,
+                                                borderRadius: theme.radii.r, padding: 14, marginBottom: 8,
                                                 flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-                                                borderWidth: 1, borderColor: theme.colors.border,
+                                                borderWidth: 2, borderColor: theme.colors.border,
                                                 ...theme.shadows.sm,
                                             }}
                                             onPress={() => {
@@ -640,9 +650,9 @@ export default function DashboardScreen() {
                                             activeOpacity={0.75}
                                         >
                                             <View style={{
-                                                width: 32, height: 32, borderRadius: theme.radii.round,
-                                                backgroundColor: 'transparent',
-                                                borderWidth: 1, borderColor: nColor,
+                                                width: 32, height: 32, borderRadius: theme.radii.r,
+                                                backgroundColor: theme.colors.surface,
+                                                borderWidth: 2, borderColor: nColor,
                                                 alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2
                                             }}>
                                                 {nudge.type === 'warning' ? <AlertCircle size={16} color={nColor} /> :
@@ -672,9 +682,9 @@ export default function DashboardScreen() {
                                         <View key={idx} style={{
                                             flex: 1,
                                             backgroundColor: theme.colors.surface,
-                                            borderRadius: theme.radii.lg, padding: 14,
+                                            borderRadius: theme.radii.r, padding: 14,
                                             alignItems: 'center',
-                                            borderWidth: 1, borderColor: theme.colors.border,
+                                            borderWidth: 2, borderColor: theme.colors.border,
                                             ...theme.shadows.sm,
                                         }}>
                                             <Text style={{ fontSize: 28, marginBottom: 6 }}>{ach.icon}</Text>
@@ -719,9 +729,9 @@ function WeeklyPerformanceChart({ classes, theme }) {
         return Array.from({ length: N }, (_, i) => +(start + (cur - start) * (i / (N - 1))).toFixed(1));
     }, [classes]);
 
-    const SEM_GREEN = '#16A34A';
-    const SEM_RED = '#E03E3E';
-    const SEM_BLUE = '#2563EB';
+    const SEM_GREEN = theme.colors.green;
+    const SEM_RED = theme.colors.red;
+    const SEM_BLUE = theme.colors.blue;
 
     if (points.length < 2) return null;
 
@@ -748,8 +758,8 @@ function WeeklyPerformanceChart({ classes, theme }) {
     return (
         <View style={{
             backgroundColor: theme.colors.surface,
-            borderRadius: theme.radii.lg,
-            borderWidth: 1, borderColor: theme.colors.border,
+            borderRadius: theme.radii.r,
+            borderWidth: 2, borderColor: theme.colors.border,
             padding: 20,
             ...theme.shadows.md,
         }}>
@@ -768,8 +778,8 @@ function WeeklyPerformanceChart({ classes, theme }) {
                 <View style={{
                     paddingHorizontal: 10, paddingVertical: 4,
                     backgroundColor: 'transparent',
-                    borderWidth: 1, borderColor: trendColor,
-                    borderRadius: theme.radii.round,
+                    borderWidth: 2, borderColor: trendColor,
+                    borderRadius: theme.radii.r,
                 }}>
                     <Text style={{ fontFamily: theme.fonts.s, fontSize: 12, fontWeight: '700', color: trendColor }}>
                         {trend >= 0 ? '↑' : '↓'} {Math.abs(trend).toFixed(1)}%
@@ -786,7 +796,7 @@ function WeeklyPerformanceChart({ classes, theme }) {
                         <View key={v} style={{
                             position: 'absolute', left: 24, right: 0, top: y,
                             borderTopWidth: 1, borderTopColor: theme.colors.border2,
-                            borderStyle: 'dashed', opacity: 0.3,
+                            borderStyle: 'dashed',
                         }}>
                             <Text style={{
                                 position: 'absolute', left: -22, top: -7,

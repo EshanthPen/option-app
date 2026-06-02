@@ -47,7 +47,8 @@ function CustomSidebar({ state, navigation, collapsed, setCollapsed, userName, u
         .split(' ').filter(Boolean).map(s => s[0]).join('').slice(0, 2).toUpperCase() || 'U';
 
     const proLabel = subscription?.isBeta ? 'Beta' : isPro ? 'Premium' : 'Free';
-    const proColor = isPro ? '#7C3AED' : theme.colors.ink3;
+    const proColor = isPro ? theme.colors.purple : theme.colors.ink3;
+    const GOLD = '#FFB800';
 
     const renderItem = (n) => {
         const routeIndex = state.routes.findIndex(r => r.name === n.name);
@@ -61,7 +62,7 @@ function CustomSidebar({ state, navigation, collapsed, setCollapsed, userName, u
         };
 
         const iconColor = n.highlight && !isFocused
-            ? '#FFB800'
+            ? GOLD
             : isFocused
             ? theme.colors.ink
             : theme.colors.ink3;
@@ -83,7 +84,7 @@ function CustomSidebar({ state, navigation, collapsed, setCollapsed, userName, u
                 {isFocused && (
                     <View style={{
                         position: 'absolute', left: -12, top: 8, bottom: 8,
-                        width: 3, backgroundColor: theme.colors.ink, borderRadius: 2,
+                        width: 3, backgroundColor: theme.colors.ink, borderRadius: 0,
                     }} />
                 )}
                 <n.icon
@@ -95,7 +96,7 @@ function CustomSidebar({ state, navigation, collapsed, setCollapsed, userName, u
                     <Text style={[
                         styles.navLabel(theme),
                         isFocused && styles.navLabelFocused(theme),
-                        n.highlight && !isFocused && { color: '#FFB800' },
+                        n.highlight && !isFocused && { color: GOLD },
                     ]}>
                         {n.label}
                     </Text>
@@ -103,10 +104,13 @@ function CustomSidebar({ state, navigation, collapsed, setCollapsed, userName, u
                 {/* AI pill badge */}
                 {isWeb && !collapsed && n.highlight && !isFocused && n.name === 'AI' && (
                     <View style={{
-                        backgroundColor: '#FFB800' + '1A',
-                        paddingHorizontal: 6, paddingVertical: 2, borderRadius: 99, marginLeft: 'auto',
+                        backgroundColor: GOLD + '1A',
+                        paddingHorizontal: 6, paddingVertical: 2,
+                        borderRadius: theme.radii.r,
+                        borderWidth: 2, borderColor: GOLD,
+                        marginLeft: 'auto',
                     }}>
-                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#FFB800', letterSpacing: 0.5 }}>AI</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: GOLD, letterSpacing: 0.5 }}>AI</Text>
                     </View>
                 )}
             </TouchableOpacity>
@@ -297,7 +301,7 @@ const styles = {
     sidebar: (theme, W) => ({
         position: 'absolute', top: 0, left: 0, bottom: 0, width: W,
         backgroundColor: theme.colors.surface,
-        borderRightWidth: 1, borderRightColor: theme.colors.border,
+        borderRightWidth: 2, borderRightColor: theme.colors.border,
         paddingTop: 20, paddingBottom: 16, paddingHorizontal: 12,
         alignItems: 'center',
         zIndex: 100,
@@ -307,7 +311,7 @@ const styles = {
         marginBottom: 28, width: '100%', paddingLeft: 4,
     },
     logoMark: (theme) => ({
-        width: 32, height: 32, backgroundColor: theme.colors.ink, borderRadius: 8, flexShrink: 0,
+        width: 32, height: 32, backgroundColor: theme.colors.ink, borderRadius: theme.radii.r, flexShrink: 0,
         alignItems: 'center', justifyContent: 'center',
     }),
     logoText: (theme) => ({
@@ -327,15 +331,13 @@ const styles = {
     navItem: (theme) => ({
         flexDirection: 'row', alignItems: 'center', gap: 10,
         paddingVertical: 9, paddingHorizontal: 12,
-        borderRadius: 10, position: 'relative', width: '100%',
+        borderRadius: theme.radii.r, position: 'relative', width: '100%',
     }),
     navItemFocused: (theme) => ({
         backgroundColor: theme.colors.surface2,
-        shadowColor: theme.colors.ink,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 2,
+        borderWidth: 2,
+        borderColor: theme.colors.border,
+        ...theme.shadows.sm,
     }),
     navLabel: (theme) => ({
         fontFamily: theme.fonts.m, fontSize: 14, fontWeight: '500',
@@ -346,16 +348,19 @@ const styles = {
     }),
     collapseBtn: (theme) => ({
         flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-        paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.colors.border,
+        paddingVertical: 8, borderTopWidth: 2, borderTopColor: theme.colors.border,
         marginTop: 8, width: '100%',
     }),
     userPill: (theme) => ({
         flexDirection: 'row', alignItems: 'center', gap: 10,
-        padding: 10, marginTop: 8, borderRadius: 10,
-        backgroundColor: theme.colors.surface2, width: '100%',
+        padding: 10, marginTop: 8, borderRadius: theme.radii.r,
+        backgroundColor: theme.colors.surface2,
+        borderWidth: 2, borderColor: theme.colors.border,
+        width: '100%',
+        ...theme.shadows.sm,
     }),
     userAvatar: (theme) => ({
-        width: 28, height: 28, borderRadius: 14,
+        width: 28, height: 28, borderRadius: theme.radii.r,
         backgroundColor: theme.colors.ink,
         alignItems: 'center', justifyContent: 'center', flexShrink: 0,
     }),

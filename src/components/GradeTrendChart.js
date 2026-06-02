@@ -342,7 +342,7 @@ const renderSparkBars = (grades, theme) => {
                             width: 6,
                             height,
                             backgroundColor: isLast ? theme.colors.ink : theme.colors.ink3,
-                            borderRadius: 2,
+                            borderRadius: 0,
                             borderWidth: isLast ? 2 : 1,
                             borderColor: theme.colors.ink,
                         }}
@@ -357,12 +357,12 @@ const renderSparkBars = (grades, theme) => {
 const getStyles = (theme) => StyleSheet.create({
     card: {
         backgroundColor: theme.colors.surface,
-        borderWidth: 1,
+        borderWidth: 2,
         borderColor: theme.colors.border,
-        borderRadius: theme.radii?.lg || 14,
+        borderRadius: theme.radii.r,
         padding: 20,
         marginBottom: 16,
-        ...(theme.shadows?.sm || {}),
+        ...(theme.shadows?.md || {}),
     },
     // Empty state
     emptyTitle: {
@@ -403,8 +403,8 @@ const getStyles = (theme) => StyleSheet.create({
     trendBadge: {
         paddingHorizontal: 10,
         paddingVertical: 4,
-        borderRadius: 8,
-        borderWidth: 1,
+        borderRadius: theme.radii.r,
+        borderWidth: 2,
         borderColor: theme.colors.border,
     },
     trendArrow: {
@@ -420,13 +420,14 @@ const getStyles = (theme) => StyleSheet.create({
     rangeBtn: {
         paddingHorizontal: 14,
         paddingVertical: 6,
-        borderRadius: 8,
-        borderWidth: 1,
+        borderRadius: theme.radii.r,
+        borderWidth: 2,
         borderColor: theme.colors.border,
         backgroundColor: theme.colors.surface,
     },
     rangeBtnActive: {
         backgroundColor: theme.colors.ink,
+        borderColor: theme.colors.border,
     },
     rangeTxt: {
         fontFamily: theme.fonts.s,
@@ -440,21 +441,21 @@ const getStyles = (theme) => StyleSheet.create({
     chartWrap: {
         alignItems: 'center',
         marginBottom: 16,
-        borderWidth: 1,
+        borderWidth: 2,
         borderColor: theme.colors.border,
-        borderRadius: 10,
+        borderRadius: theme.radii.r,
         overflow: 'hidden',
     },
     chart: {
-        borderRadius: 8,
+        borderRadius: theme.radii.r,
     },
     chartPlaceholder: {
         height: 100,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1,
+        borderWidth: 2,
         borderColor: theme.colors.border,
-        borderRadius: 10,
+        borderRadius: theme.radii.r,
         borderStyle: 'dashed',
         marginBottom: 16,
     },

@@ -16,7 +16,7 @@ interface Action {
 }
 
 export default function SearchModal({ onNavigate }: { onNavigate?: (route: string) => void }) {
-  const navigation = useNavigation();
+  const navigation: any = useNavigation();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Action[]>([]);

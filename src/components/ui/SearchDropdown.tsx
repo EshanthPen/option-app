@@ -27,7 +27,7 @@ interface Action {
 }
 
 export default function SearchDropdown() {
-  const navigation = useNavigation()
+  const navigation: any = useNavigation()
   const { theme, isDarkMode } = useTheme()
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)

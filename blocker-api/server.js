@@ -13,6 +13,19 @@ const HOSTS_PATH = '/etc/hosts';
 const APP_TAG_START = '# --- OPTION APP BLOCKER START ---';
 const APP_TAG_END = '# --- OPTION APP BLOCKER END ---';
 
+// Friendly status endpoint for root GET requests
+app.get('/', (req, res) => {
+    res.json({
+        status: 'online',
+        message: 'Option Blocker API is running. The main frontend application is hosted on port 8081.',
+        endpoints: {
+            block: 'POST /block',
+            unblock: 'POST /unblock'
+        }
+    });
+});
+
+
 // Utility to clear existing blocks
 const clearExistingBlocks = (content) => {
     const lines = content.split('\n');

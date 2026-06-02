@@ -46,9 +46,9 @@ export function Card({ children, style, onPress, padding = 16, noBorder, gradien
     const { theme } = useTheme();
     const cardStyle = {
         backgroundColor: theme.colors.surface,
-        borderRadius: theme.radii.lg,
+        borderRadius: theme.radii.r,
         padding,
-        borderWidth: noBorder ? 0 : 1,
+        borderWidth: noBorder ? 0 : 2,
         borderColor: theme.colors.border,
         ...(noBorder ? {} : theme.shadows.md),
         ...style,
@@ -83,12 +83,12 @@ export function Button({
     }[size];
 
     const variants = {
-        primary:   { bg: theme.colors.accent, fg: theme.colors.bg, border: theme.colors.border },
-        secondary: { bg: theme.colors.surface2, fg: theme.colors.ink, border: theme.colors.border },
-        ghost:     { bg: 'transparent',       fg: theme.colors.ink2, border: 'transparent' },
-        danger:    { bg: theme.colors.red,    fg: '#ffffff',        border: theme.colors.red },
-        accent:    { bg: theme.colors.accent, fg: theme.colors.bg,  border: theme.colors.accent },
-        gold:      { bg: SEM.gold,            fg: '#1A1A2E',        border: SEM.gold },
+        primary:   { bg: theme.colors.accent,   fg: theme.colors.bg,  border: theme.colors.border },
+        secondary: { bg: theme.colors.surface,  fg: theme.colors.ink, border: theme.colors.border },
+        ghost:     { bg: 'transparent',         fg: theme.colors.ink2, border: 'transparent' },
+        danger:    { bg: SEM.red,               fg: theme.colors.bg,  border: SEM.red },
+        accent:    { bg: theme.colors.accent,   fg: theme.colors.bg,  border: theme.colors.accent },
+        gold:      { bg: SEM.gold,              fg: theme.colors.bg,  border: SEM.gold },
     }[variant];
 
     return (
@@ -101,8 +101,8 @@ export function Button({
                 gap: 6,
                 backgroundColor: variants.bg,
                 borderColor: variants.border,
-                borderWidth: variant === 'ghost' ? 0 : 1,
-                borderRadius: theme.radii.lg,
+                borderWidth: 2,
+                borderRadius: theme.radii.r,
                 paddingVertical: sizes.paddingV,
                 paddingHorizontal: sizes.paddingH,
                 height: sizes.height,
@@ -211,24 +211,52 @@ export function TopBar({
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0, overflow: 'visible' }}>
                     {showSearch && isWeb && (
-                        <View style={{ position: 'relative', overflow: 'visible', zIndex: 200 }}>
-                            <SearchDropdown />
-                        </View>
+                        <TouchableOpacity
+                            onPress={() => setSearchOpen(true)}
+                            activeOpacity={0.85}
+                            style={{
+                                flexDirection: 'row', alignItems: 'center', gap: 8,
+                                paddingHorizontal: 12, paddingVertical: 8,
+                                backgroundColor: theme.colors.bg,
+                                borderWidth: 2, borderColor: theme.colors.border,
+                                borderRadius: theme.radii.r, width: 260,
+                                ...theme.shadows.sm,
+                            }}
+                        >
+                            <Search size={14} color={theme.colors.ink3} />
+                            <Text style={{
+                                flex: 1, paddingVertical: 0,
+                                fontFamily: theme.fonts.m, fontSize: 13,
+                                color: theme.colors.ink3,
+                            }} numberOfLines={1}>
+                                Search classes, assignments…
+                            </Text>
+                            <View style={{
+                                paddingHorizontal: 5, paddingVertical: 1,
+                                backgroundColor: theme.colors.surface2,
+                                borderRadius: theme.radii.r,
+                                borderWidth: 1, borderColor: theme.colors.border,
+                            }}>
+                                <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.ink4 }}>
+                                    ⌘K
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
                     )}
                     {showBell && (
                         <TouchableOpacity style={{
-                            width: 36, height: 36, borderRadius: theme.radii.lg,
+                            width: 36, height: 36, borderRadius: theme.radii.r,
                             backgroundColor: theme.colors.surface,
-                            borderWidth: 1, borderColor: theme.colors.border,
+                            borderWidth: 2, borderColor: theme.colors.border,
                             alignItems: 'center', justifyContent: 'center', position: 'relative',
                             ...theme.shadows.sm,
                         }}>
                             <Bell size={16} color={theme.colors.ink2} />
                             <View style={{
                                 position: 'absolute', top: 8, right: 8,
-                                width: 8, height: 8, borderRadius: 4,
-                                backgroundColor: theme.colors.red,
-                                borderWidth: 1.5, borderColor: theme.colors.surface,
+                                width: 7, height: 7, borderRadius: 0,
+                                backgroundColor: SEM.red,
+                                borderWidth: 1.5, borderColor: theme.colors.border,
                             }} />
                         </TouchableOpacity>
                     )}
@@ -307,7 +335,7 @@ export function Switch({ on, onToggle, size = 'md' }) {
         >
             <View style={{
                 width: dims.knob, height: dims.knob, borderRadius: dims.knob / 2,
-                backgroundColor: '#fff',
+                backgroundColor: theme.colors.bg,
                 position: 'absolute',
                 top: (dims.h - dims.knob) / 2,
                 left: dims.knobLeft,
@@ -324,8 +352,8 @@ export function TabPills({ tabs, value, onChange, style }) {
             flexDirection: 'row',
             backgroundColor: theme.colors.surface2,
             padding: 3,
-            borderRadius: theme.radii.lg,
-            borderWidth: 1,
+            borderRadius: 0,
+            borderWidth: 2,
             borderColor: theme.colors.border,
             ...theme.shadows.sm,
             gap: 4,
@@ -344,7 +372,7 @@ export function TabPills({ tabs, value, onChange, style }) {
                             paddingVertical: 6,
                             borderRadius: theme.radii.lg - 2,
                             backgroundColor: active ? theme.colors.surface : 'transparent',
-                            borderWidth: active ? 1 : 0,
+                            borderWidth: active ? 2 : 0,
                             borderColor: theme.colors.border,
                         }}
                     >
@@ -370,7 +398,7 @@ export function EmptyState({ icon: Icon, title, message, action }) {
         <Card padding={32} style={{ alignItems: 'center', justifyContent: 'center' }}>
             {Icon && (
                 <View style={{
-                    width: 56, height: 56, borderRadius: 28,
+                    width: 56, height: 56, borderRadius: theme.radii.r,
                     backgroundColor: theme.colors.surface2,
                     alignItems: 'center', justifyContent: 'center',
                     marginBottom: 14,
