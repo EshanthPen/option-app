@@ -41,6 +41,7 @@ import { PremiumProvider } from './src/context/PremiumContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './src/supabaseClient';
 import WelcomeScreen from './src/screens/WelcomeScreen';
+import SetupWizard from './src/screens/SetupWizard';
 import SearchModal from './src/components/ui/SearchModal';
 
 function MainApp() {
@@ -50,6 +51,7 @@ function MainApp() {
   const [loading, setLoading] = React.useState(true);
   const [isAuthenticating, setIsAuthenticating] = React.useState(false);
   const [showVerifiedModal, setShowVerifiedModal] = React.useState(false);
+  const [needsSetup, setNeedsSetup] = React.useState(false);
 
 
   React.useEffect(() => {
@@ -70,7 +72,11 @@ function MainApp() {
       setSession(session);
       if (session) {
         setIsAuthenticating(false);
-        // Only trigger setup flow on fresh sign-in events, not on token refreshes
+        // Check if setup has been completed
+        const setupDone = await AsyncStorage.getItem('setup_complete');
+        if (!setupDone) {
+          setNeedsSetup(true);
+        }
       }
 
       if (session?.user?.user_metadata) {
@@ -178,6 +184,7 @@ function MainApp() {
   const handleGuestMode = async () => {
     await AsyncStorage.setItem('@OptionApp_GuestMode', 'true');
     setGuestMode(true);
+    setNeedsSetup(true); // Trigger setup for guest mode too
   };
 
   const handleSignOut = async () => {
@@ -186,11 +193,20 @@ function MainApp() {
     await supabase.auth.signOut();
   };
 
+  const handleSetupComplete = async () => {
+    await AsyncStorage.setItem('setup_complete', 'true');
+    setNeedsSetup(false);
+  };
+
   return (
     <>
       <NavigationContainer linking={linking} theme={navigationTheme}>
         {(session || guestMode) ? (
-          <TabNavigator isGuest={guestMode && !session} onSignOut={handleSignOut} />
+          needsSetup ? (
+            <SetupWizard onComplete={handleSetupComplete} />
+          ) : (
+            <TabNavigator isGuest={guestMode && !session} onSignOut={handleSignOut} />
+          )
         ) : (
           <WelcomeScreen
             onAuthStart={() => setIsAuthenticating(true)}

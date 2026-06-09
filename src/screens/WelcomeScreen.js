@@ -56,21 +56,13 @@ const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
                 <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
                     {/* Hero Section */}
                     <View style={styles.heroSection}>
-<<<<<<< Updated upstream
-                        <View style={styles.logoBadge}>
-                            <Sparkles size={24} color={theme.colors.ink} />
-                        </View>
-                        <Text style={[styles.title, { fontFamily: theme.fonts.s }]}>Option</Text>
-                        <Text style={styles.subtitle}>
-=======
                         <View style={[styles.logoBadge, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
                             <Sparkles size={24} color={theme.colors.ink} />
                         </View>
-                        <Text style={[styles.title, { color: theme.colors.ink, fontFamily: theme.fonts.sansSemiBold }]}>
+                        <Text style={[styles.title, { color: theme.colors.ink, fontFamily: theme.fonts.s }]}>
                             Option
                         </Text>
                         <Text style={[styles.subtitle, { color: theme.colors.ink2 }]}>
->>>>>>> Stashed changes
                             Your academic life,{"\n"}
                             <Text style={{ color: theme.colors.ink, fontWeight: '700' }}>automated & optimized.</Text>
                         </Text>
@@ -104,13 +96,8 @@ const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
                             style={[styles.primaryButton, { borderColor: theme.colors.border, backgroundColor: theme.colors.ink }]}
                             onPress={() => setAuthModalVisible(true)}
                         >
-<<<<<<< Updated upstream
-                            <Text style={styles.buttonText}>Get Started</Text>
-                            <ArrowRight size={20} color={theme.colors.ink} />
-=======
                             <Text style={[styles.buttonText, { color: theme.colors.bg }]}>Log In</Text>
                             <ArrowRight size={20} color={theme.colors.bg} />
->>>>>>> Stashed changes
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -159,9 +146,6 @@ const WelcomeScreen = ({ onAuthStart, onAuthReset, onGuestMode }) => {
     );
 };
 
-<<<<<<< Updated upstream
-const getStyles = (theme) => StyleSheet.create({
-=======
 const FeatureCard = ({ icon, title, description, theme }) => (
     <View style={[styles.featureCard, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
         <View style={[styles.featureIcon, { backgroundColor: theme.colors.bg }]}>
@@ -173,7 +157,6 @@ const FeatureCard = ({ icon, title, description, theme }) => (
 );
 
 const styles = StyleSheet.create({
->>>>>>> Stashed changes
     container: {
         flex: 1,
     },
@@ -189,49 +172,15 @@ const styles = StyleSheet.create({
     logoBadge: {
         width: 60,
         height: 60,
-<<<<<<< Updated upstream
-        borderRadius: theme.radii.lg,
-        backgroundColor: withOpacity(theme.colors.ink, 0.1),
-=======
         borderRadius: 20,
->>>>>>> Stashed changes
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 24,
         borderWidth: 1,
-<<<<<<< Updated upstream
-        borderColor: theme.colors.border,
-=======
->>>>>>> Stashed changes
     },
     title: {
         fontSize: 48,
         fontWeight: '900',
-<<<<<<< Updated upstream
-        color: theme.colors.ink,
-        letterSpacing: -2,
-    },
-    subtitle: {
-        fontSize: 28,
-        color: withOpacity(theme.colors.ink, 0.7),
-        marginTop: 12,
-        lineHeight: 36,
-        fontWeight: '500',
-    },
-    highlight: {
-        color: theme.colors.ink,
-        fontWeight: '700',
-    },
-    footer: {
-        gap: 20,
-    },
-    primaryButton: {
-        backgroundColor: 'transparent',
-        height: 64,
-        borderRadius: theme.radii.lg,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
-=======
         letterSpacing: -1.5,
         textAlign: 'center',
     },
@@ -250,27 +199,10 @@ const styles = StyleSheet.create({
         padding: 16,
         borderRadius: 16,
         borderWidth: 1,
->>>>>>> Stashed changes
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        ...theme.shadows.sm,
     },
-<<<<<<< Updated upstream
-    buttonText: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: theme.colors.ink,
-    },
-    guestButton: {
-        height: 52,
-        borderRadius: theme.radii.lg,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: theme.colors.border,
-=======
     featureIcon: {
         width: 40,
         height: 40,
@@ -310,19 +242,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
->>>>>>> Stashed changes
     },
     guestButtonText: {
         fontSize: 15,
         fontWeight: '600',
-<<<<<<< Updated upstream
-        color: withOpacity(theme.colors.ink, 0.7),
-    },
-    footerText: {
-        textAlign: 'center',
-        color: withOpacity(theme.colors.ink, 0.4),
-        fontSize: 14,
-=======
     },
     securityBadge: {
         flexDirection: 'row',
@@ -333,27 +256,15 @@ const styles = StyleSheet.create({
     },
     footerText: {
         fontSize: 12,
->>>>>>> Stashed changes
     },
     modalOverlay: {
         flex: 1,
         justifyContent: 'flex-end',
     },
     modalContent: {
-<<<<<<< Updated upstream
-        backgroundColor: theme.colors.bg,
-        borderTopLeftRadius: theme.radii.xl,
-        borderTopRightRadius: theme.radii.xl,
-        borderTopWidth: 1,
-        borderLeftWidth: 1,
-        borderRightWidth: 1,
-        borderColor: theme.colors.border,
-=======
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
->>>>>>> Stashed changes
         height: height * 0.85,
-        ...theme.shadows.md,
     },
     modalHeader: {
         alignItems: 'center',
@@ -363,8 +274,10 @@ const styles = StyleSheet.create({
         width: 40,
         height: 5,
         borderRadius: 2.5,
-        backgroundColor: theme.colors.ink3,
+        backgroundColor: theme => theme.colors.ink3,
     }
 });
+
+const getStyles = (theme) => styles;
 
 export default WelcomeScreen;

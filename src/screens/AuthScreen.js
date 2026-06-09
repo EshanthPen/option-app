@@ -38,11 +38,8 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
             // Determine the correct redirect URL based on platform
             let redirectUrl;
             if (Platform.OS === 'web') {
-                // For web, redirect back to the current URL
                 redirectUrl = window.location.origin;
             } else {
-                // For native, use the Expo proxy redirect URL
-                // This avoids pop-up blockers and works reliably
                 redirectUrl = 'https://auth.expo.io/option-app';
             }
 
@@ -57,37 +54,28 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
 
             if (data?.url) {
                 if (Platform.OS === 'web') {
-                    // On web, redirect the current window to the Google OAuth URL.
-                    // This avoids pop-up blockers/CF problems completely.
                     window.location.assign(data.url);
                 } else {
-                    // On native, open a browser session and handle the deep link
                     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
                     if (result.type === 'success' && result.url) {
-                        // The URL should contain the session info, which Supabase detects automatically
-                        // via detectSessionInUrl in supabaseClient.js.
-                        // We can also manually extract tokens from the hash if needed, 
-                        // but the listener in App.js is usually enough.
                         const url = new URL(result.url);
                         const hash = url.hash.substring(1);
                         const params = new URLSearchParams(hash);
                         const access_token = params.get('access_token');
                         const refresh_token = params.get('refresh_token');
                         
-                        if (access_token && refresh_token)FUL tasks) {
+                        if (access_token && refresh_token) {
                             await supabase.auth.setSession({
                                 access_token,
                                 refresh_token,
                             });
                         }
 
-                        // Trigger auth start/success for modal dismiss
                         if (onAuthStart) onAuthStart();
                         setTimeout(() => {
                             if (onAuthSuccess) onAuthSuccess();
                         }, 500);
                     } else {
-                        // User cancelled or failed
                         throw new Error('Google sign-in was cancelled or failed');
                     }
                 }
@@ -322,19 +310,11 @@ const getStyles = (theme) => StyleSheet.create({
         alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border,
         width: '100%', maxWidth: 400,
     },
-<<<<<<< Updated upstream
-    checkIconBox: { marginBottom: 16, backgroundColor: theme.colors.green + '10', padding: 14, borderRadius: theme.radii.lg },
-    verifyTitle: { fontFamily: theme.fonts.d, fontSize: 24, color: theme.colors.ink, marginBottom: 8, textAlign: 'center' },
-    verifyText: { fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink3, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
-    verifyBtn: { backgroundColor: theme.colors.ink, paddingVertical: 14, borderRadius: theme.radii.lg, width: '100%', alignItems: 'center', ...theme.shadows.sm },
-    verifyBtnText: { fontFamily: theme.fonts.s, color: theme.colors.bg, fontSize: 15, fontWeight: '700' },
-=======
     checkIconBox: { marginBottom: 16, backgroundColor: theme.colors.green + '10', padding: 14, borderRadius: 16 },
     verifyTitle: { fontSize: 24, fontWeight: '700', color: theme.colors.ink, marginBottom: 8, textAlign: 'center' },
     verifyText: { fontSize: 14, color: theme.colors.ink3, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
     verifyBtn: { backgroundColor: theme.colors.ink, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center' },
     verifyBtnText: { color: theme.colors.bg, fontSize: 15, fontWeight: '700' },
->>>>>>> Stashed changes
 });
 
 export default AuthScreen;
