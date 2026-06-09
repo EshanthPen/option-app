@@ -8,15 +8,13 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
-    Image,
     Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabaseClient';
 import { useTheme } from '../context/ThemeContext';
-import { Mail, Lock, User, ArrowRight, BookOpen, Eye, EyeOff, CheckCircle2 } from 'lucide-react-native';
+import { Mail, Lock, User, Eye, EyeOff, CheckCircle2 } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -37,38 +35,60 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
         setGoogleLoading(true);
         setStatus({ message: '', type: '' });
         try {
-            const redirectUrl = AuthSession.makeRedirectUri({ useProxy: false });
+            // Determine the correct redirect URL based on platform
+            let redirectUrl;
+            if (Platform.OS === 'web') {
+                // For web, redirect back to the current URL
+                redirectUrl = window.location.origin;
+            } else {
+                // For native, use the Expo proxy redirect URL
+                // This avoids pop-up blockers and works reliably
+                redirectUrl = 'https://auth.expo.io/option-app';
+            }
+
             const { data, error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
                     redirectTo: redirectUrl,
-                    skipBrowserRedirect: true,
                 },
             });
+            
             if (error) throw error;
+
             if (data?.url) {
-                const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-                if (result.type === 'success' && result.url) {
-                    // Extract tokens from the redirect URL
-                    const url = new URL(result.url);
-                    const params = new URLSearchParams(url.hash?.substring(1) || url.search?.substring(1));
-                    const accessToken = params.get('access_token');
-                    const refreshToken = params.get('refresh_token');
-                    if (accessToken && refreshToken) {
-                        const { error: sessionError } = await supabase.auth.setSession({
-                            access_token: accessToken,
-                            refresh_token: refreshToken,
-                        });
-                        if (sessionError) throw sessionError;
-                        if (onAuthStart) onAuthStart();
-                        setTimeout(() => { if (onAuthSuccess) onAuthSuccess(); }, 500);
-                    } else {
-                        // Try to get session directly (web flow)
-                        const { data: sessionData } = await supabase.auth.getSession();
-                        if (sessionData?.session) {
-                            if (onAuthStart) onAuthStart();
-                            setTimeout(() => { if (onAuthSuccess) onAuthSuccess(); }, 500);
+                if (Platform.OS === 'web') {
+                    // On web, redirect the current window to the Google OAuth URL.
+                    // This avoids pop-up blockers/CF problems completely.
+                    window.location.assign(data.url);
+                } else {
+                    // On native, open a browser session and handle the deep link
+                    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+                    if (result.type === 'success' && result.url) {
+                        // The URL should contain the session info, which Supabase detects automatically
+                        // via detectSessionInUrl in supabaseClient.js.
+                        // We can also manually extract tokens from the hash if needed, 
+                        // but the listener in App.js is usually enough.
+                        const url = new URL(result.url);
+                        const hash = url.hash.substring(1);
+                        const params = new URLSearchParams(hash);
+                        const access_token = params.get('access_token');
+                        const refresh_token = params.get('refresh_token');
+                        
+                        if (access_token && refresh_token)FUL tasks) {
+                            await supabase.auth.setSession({
+                                access_token,
+                                refresh_token,
+                            });
                         }
+
+                        // Trigger auth start/success for modal dismiss
+                        if (onAuthStart) onAuthStart();
+                        setTimeout(() => {
+                            if (onAuthSuccess) onAuthSuccess();
+                        }, 500);
+                    } else {
+                        // User cancelled or failed
+                        throw new Error('Google sign-in was cancelled or failed');
                     }
                 }
             }
@@ -120,7 +140,7 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
             }
         } catch (error) {
             let message = error.message;
-            if (message.includes('rate limit')) message = "Too many attempts. Please wait a minute.";
+            if (message.includes('rate limit')) message = "Too many attempts. Please wait a moment.";
             setStatus({ message, type: 'error' });
             if (onAuthReset) onAuthReset();
         } finally {
@@ -131,7 +151,7 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
     return (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={S.container}>
             <View style={S.card}>
-                <Text style={S.title}>{isLogin ? 'Please sign in' : 'Create Account'}</Text>
+                <Text style={S.title}>{isLogin ? 'Log In' : 'Create Account'}</Text>
 
                 {status.message ? (
                     <View style={[S.statusBanner, status.type === 'error' ? S.errorBanner : S.successBanner]}>
@@ -149,7 +169,7 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
 
                     <View style={S.inputContainer}>
                         <Mail size={18} color={theme.colors.ink3} />
-                        <TextInput style={S.input} placeholder="Username or email" placeholderTextColor={theme.colors.ink3} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+                        <TextInput style={S.input} placeholder="Email address" placeholderTextColor={theme.colors.ink3} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
                     </View>
 
                     <View style={S.inputContainer}>
@@ -162,7 +182,7 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
 
                     {isLogin && (
                         <TouchableOpacity style={S.forgotBtn}>
-                            <Text style={S.forgotText}>forgot password?</Text>
+                            <Text style={S.forgotText}>Forgot password?</Text>
                         </TouchableOpacity>
                     )}
 
@@ -170,7 +190,9 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                         {loading ? (
                             <ActivityIndicator color={theme.colors.bg} />
                         ) : (
-                            <Text style={S.buttonText}>{isLogin ? 'Login' : 'Create Account'}</Text>
+                            <View style={S.buttonInner}>
+                                <Text style={S.buttonText}>{isLogin ? 'Log In' : 'Create Account'}</Text>
+                            </View>
                         )}
                     </TouchableOpacity>
 
@@ -188,11 +210,9 @@ const AuthScreen = ({ onAuthSuccess, onAuthStart, onAuthReset }) => {
                         ) : (
                             <View style={S.googleInner}>
                                 <View style={S.googleIconWrap}>
-                                    <Text style={{ fontSize: 18 }}>G</Text>
+                                    <Text style={{ fontSize: 18, fontWeight: 'bold' }}>G</Text>
                                 </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={S.googleText}>Sign in with Google</Text>
-                                </View>
+                                <Text style={S.googleText}>Sign in with Google</Text>
                             </View>
                         )}
                     </TouchableOpacity>
@@ -234,20 +254,17 @@ const getStyles = (theme) => StyleSheet.create({
         padding: 28,
         borderWidth: 1,
         borderColor: theme.colors.border,
-        ...theme.shadows.md,
     },
     title: {
-        fontFamily: theme.fonts.d,
         fontSize: 26,
         fontWeight: '700',
         color: theme.colors.ink,
         marginBottom: 20,
-        letterSpacing: -0.3,
     },
     statusBanner: { padding: 12, borderRadius: theme.radii.lg, marginBottom: 16, borderWidth: 1 },
     errorBanner: { backgroundColor: theme.colors.red + '10', borderColor: theme.colors.red + '40' },
     successBanner: { backgroundColor: theme.colors.green + '10', borderColor: theme.colors.green + '40' },
-    statusText: { fontFamily: theme.fonts.m, fontSize: 13, textAlign: 'center', fontWeight: '600', color: theme.colors.ink, lineHeight: 18 },
+    statusText: { fontSize: 13, textAlign: 'center', fontWeight: '600', color: theme.colors.ink, lineHeight: 18 },
     form: { gap: 12 },
     inputContainer: {
         flexDirection: 'row',
@@ -260,10 +277,10 @@ const getStyles = (theme) => StyleSheet.create({
         borderColor: theme.colors.border,
         gap: 10,
     },
-    input: { flex: 1, fontFamily: theme.fonts.m, fontSize: 15, color: theme.colors.ink, height: '100%' },
+    input: { flex: 1, fontSize: 15, color: theme.colors.ink, height: '100%' },
     eyeIcon: { padding: 4 },
-    forgotBtn: { alignSelf: 'center', paddingVertical: 2 },
-    forgotText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },
+    forgotBtn: { alignSelf: 'flex-end', paddingVertical: 4 },
+    forgotText: { fontSize: 13, color: theme.colors.ink3 },
     button: {
         backgroundColor: theme.colors.ink,
         borderRadius: theme.radii.lg,
@@ -271,12 +288,12 @@ const getStyles = (theme) => StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginTop: 4,
-        ...theme.shadows.sm,
     },
-    buttonText: { color: theme.colors.bg, fontFamily: theme.fonts.s, fontSize: 17, fontWeight: '700' },
+    buttonInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+    buttonText: { color: theme.colors.bg, fontSize: 17, fontWeight: '700' },
     dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 },
     dividerLine: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-    dividerText: { fontFamily: theme.fonts.m, fontSize: 13, color: theme.colors.ink3 },
+    dividerText: { fontSize: 13, color: theme.colors.ink3 },
     googleBtn: {
         borderRadius: theme.radii.lg,
         height: 52,
@@ -284,31 +301,40 @@ const getStyles = (theme) => StyleSheet.create({
         borderColor: theme.colors.border,
         backgroundColor: theme.colors.surface,
         justifyContent: 'center',
-        paddingHorizontal: 4,
-        ...theme.shadows.sm,
+        paddingHorizontal: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
     },
-    googleInner: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 8 },
+    googleInner: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
     googleIconWrap: {
         width: 36, height: 36, borderRadius: theme.radii.lg,
         backgroundColor: theme.colors.bg,
         alignItems: 'center', justifyContent: 'center',
         borderWidth: 1, borderColor: theme.colors.border,
     },
-    googleText: { fontFamily: theme.fonts.m, fontSize: 15, color: theme.colors.ink2, fontWeight: '500' },
-    switchButton: { marginTop: 8, alignItems: 'center', paddingVertical: 8 },
-    switchText: { fontFamily: theme.fonts.m, color: theme.colors.ink3, fontSize: 13 },
+    googleText: { fontSize: 15, color: theme.colors.ink2, fontWeight: '500', flex: 1, textAlign: 'center' },
+    switchButton: { marginTop: 16, alignItems: 'center', paddingVertical: 8 },
+    switchText: { color: theme.colors.ink3, fontSize: 13, textAlign: 'center' },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
     verifyPopup: {
         backgroundColor: theme.colors.surface,
         borderRadius: theme.radii.lg, padding: 28,
         alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border,
-        width: '100%', maxWidth: 400, ...theme.shadows.lg,
+        width: '100%', maxWidth: 400,
     },
+<<<<<<< Updated upstream
     checkIconBox: { marginBottom: 16, backgroundColor: theme.colors.green + '10', padding: 14, borderRadius: theme.radii.lg },
     verifyTitle: { fontFamily: theme.fonts.d, fontSize: 24, color: theme.colors.ink, marginBottom: 8, textAlign: 'center' },
     verifyText: { fontFamily: theme.fonts.m, fontSize: 14, color: theme.colors.ink3, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
     verifyBtn: { backgroundColor: theme.colors.ink, paddingVertical: 14, borderRadius: theme.radii.lg, width: '100%', alignItems: 'center', ...theme.shadows.sm },
     verifyBtnText: { fontFamily: theme.fonts.s, color: theme.colors.bg, fontSize: 15, fontWeight: '700' },
+=======
+    checkIconBox: { marginBottom: 16, backgroundColor: theme.colors.green + '10', padding: 14, borderRadius: 16 },
+    verifyTitle: { fontSize: 24, fontWeight: '700', color: theme.colors.ink, marginBottom: 8, textAlign: 'center' },
+    verifyText: { fontSize: 14, color: theme.colors.ink3, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+    verifyBtn: { backgroundColor: theme.colors.ink, paddingVertical: 14, borderRadius: 12, width: '100%', alignItems: 'center' },
+    verifyBtnText: { color: theme.colors.bg, fontSize: 15, fontWeight: '700' },
+>>>>>>> Stashed changes
 });
 
 export default AuthScreen;
